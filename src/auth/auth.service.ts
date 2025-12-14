@@ -2,23 +2,32 @@ import { Injectable, UnauthorizedException, ConflictException, BadRequestExcepti
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { OAuth2Client } from 'google-auth-library';
 import { User, UserRole, InstructorStatus } from '../schemas/user.schema';
 import { PasswordReset } from '../schemas/password-reset.schema';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterInstructorDto } from './dto/register-instructor.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { EmailService } from '../common/services/email.service';
 
 @Injectable()
 export class AuthService {
+  private googleClient: OAuth2Client | null;
+
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(PasswordReset.name) private passwordResetModel: Model<PasswordReset>,
     private jwtService: JwtService,
     private emailService: EmailService,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    this.googleClient = clientId ? new OAuth2Client(clientId) : null;
+  }
 
   async register(registerDto: RegisterDto) {
     const { email, password, firstName, lastName, role } = registerDto;
@@ -161,6 +170,80 @@ export class AuthService {
       user: this.sanitizeUser(user),
       token,
       message: 'Login successful',
+    };
+  }
+
+  async googleLogin(googleDto: GoogleLoginDto) {
+    const { idToken, role } = googleDto;
+
+    if (!this.googleClient) {
+      throw new UnauthorizedException('Google login is not configured');
+    }
+
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+
+    let payload;
+    try {
+      const ticket = await this.googleClient.verifyIdToken({
+        idToken,
+        audience: clientId,
+      });
+      payload = ticket.getPayload();
+    } catch (error) {
+      console.error('Google token verification failed:', error);
+      throw new UnauthorizedException('Invalid Google token');
+    }
+
+    if (!payload || !payload.email) {
+      throw new UnauthorizedException('Unable to retrieve Google account');
+    }
+
+    const email = payload.email.toLowerCase();
+    const firstName = payload.given_name || 'User';
+    const lastName = payload.family_name || 'Google';
+    const picture = payload.picture;
+    const googleId = payload.sub;
+    const emailVerified = Boolean(payload.email_verified);
+
+    let user = await this.userModel.findOne({ email });
+
+    // If user exists, update provider info and verification
+    if (user) {
+      user.googleId = user.googleId || googleId;
+      user.provider = 'google';
+      if (emailVerified && !user.emailVerified) {
+        user.emailVerified = true;
+      }
+    } else {
+      // Create new user with role preference
+      const desiredRole = role === UserRole.INSTRUCTOR ? UserRole.INSTRUCTOR : UserRole.STUDENT;
+      const randomPassword = crypto.randomBytes(32).toString('hex');
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+      user = await this.userModel.create({
+        email,
+        password: hashedPassword,
+        firstName,
+        lastName,
+        role: desiredRole,
+        instructorStatus: desiredRole === UserRole.INSTRUCTOR ? InstructorStatus.PENDING : undefined,
+        profilePhotoUrl: picture,
+        emailVerified,
+        googleId,
+        provider: 'google',
+        mustSetPassword: false,
+      });
+    }
+
+    user.lastLogin = new Date();
+    await user.save();
+
+    const token = this.generateToken(user);
+
+    return {
+      user: this.sanitizeUser(user),
+      token,
+      message: 'Google login successful',
     };
   }
 

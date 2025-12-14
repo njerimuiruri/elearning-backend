@@ -55,6 +55,12 @@ export class User extends Document {
   @Prop({ required: true })
   password: string;
 
+  @Prop({ default: null })
+  googleId: string;
+
+  @Prop({ default: 'local' })
+  provider: string;
+
   @Prop({ enum: UserRole, default: UserRole.STUDENT })
   role: UserRole;
 

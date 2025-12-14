@@ -18,6 +18,7 @@ import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterInstructorDto } from './dto/register-instructor.dto';
+import { GoogleLoginDto } from './dto/google-login.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { User } from '../schemas/user.schema';
@@ -44,6 +45,13 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Post('google')
+  @ApiOperation({ summary: 'Login or register with Google for students and instructors' })
+  @ApiResponse({ status: 200, description: 'Google login successful, returns JWT token' })
+  async googleLogin(@Body() body: GoogleLoginDto) {
+    return this.authService.googleLogin(body);
   }
 
   @Post('logout')
