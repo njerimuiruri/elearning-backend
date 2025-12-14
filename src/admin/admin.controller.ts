@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -9,19 +10,29 @@ import { UserRole } from '../schemas/user.schema';
 import { CreateStudentDto, BulkCreateStudentsDto } from './dto/student.dto';
 
 @Controller('api/admin')
+@ApiTags('Admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
+@ApiBearerAuth('jwt-auth')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
   // Dashboard Statistics
   @Get('stats')
+  @ApiOperation({ summary: 'Get dashboard statistics (Admin only)' })
+  @ApiResponse({ status: 200, description: 'Dashboard stats including user counts, course stats, etc.' })
   async getDashboardStats() {
     return this.adminService.getDashboardStats();
   }
 
   // User Management
   @Get('users')
+  @ApiOperation({ summary: 'Get all users with filters (Admin only)' })
+  @ApiQuery({ name: 'role', required: false, description: 'Filter by role' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
+  @ApiQuery({ name: 'page', required: false, type: 'number', description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, type: 'number', description: 'Results per page' })
+  @ApiResponse({ status: 200, description: 'List of users' })
   async getAllUsers(
     @Query('role') role?: string,
     @Query('status') status?: string,

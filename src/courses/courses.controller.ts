@@ -40,6 +40,9 @@ export class CourseController {
   @Get('instructor/my-courses')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Get all courses created by instructor' })
+  @ApiResponse({ status: 200, description: 'List of instructor courses' })
   async getInstructorCourses(@CurrentUser() user: any) {
     return this.courseService.getInstructorCourses(user._id);
   }
@@ -50,6 +53,11 @@ export class CourseController {
   @Post('/:id/submit')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Submit course for admin approval (Instructor only)' })
+  @ApiParam({ name: 'id', description: 'Course ID' })
+  @ApiResponse({ status: 200, description: 'Course submitted for approval' })
+  @ApiResponse({ status: 404, description: 'Course not found' })
   async submitCourse(
     @Param('id') id: string,
     @CurrentUser() user: any,
@@ -91,6 +99,11 @@ export class CourseController {
   @Put('/:id/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Approve a course (Admin only)' })
+  @ApiParam({ name: 'id', description: 'Course ID' })
+  @ApiResponse({ status: 200, description: 'Course approved' })
+  @ApiResponse({ status: 403, description: 'Only admins can approve' })
   async approveCourse(
     @Param('id') id: string,
     @CurrentUser() user: any,

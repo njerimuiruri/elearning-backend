@@ -12,12 +12,15 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { QuestionAnswerService } from './question-answer.service';
 import { EmailService } from '../common/services/email.service';
 
 @Controller('questions')
+@ApiTags('Questions')
 @UseGuards(JwtAuthGuard)
+@ApiBearerAuth('jwt-auth')
 export class QuestionAnswerController {
   constructor(
     private qaService: QuestionAnswerService,
@@ -28,6 +31,9 @@ export class QuestionAnswerController {
    * Student asks a question about a lesson/module
    */
   @Post('ask')
+  @ApiOperation({ summary: 'Post a new question about a lesson' })
+  @ApiResponse({ status: 201, description: 'Question posted successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid question data' })
   @HttpCode(HttpStatus.CREATED)
   async askQuestion(
     @Body() body: {
