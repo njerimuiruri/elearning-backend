@@ -98,9 +98,17 @@ export class AuthService {
     // Send notification to admin about pending instructor registration
     try {
       const adminUsers = await this.userModel.find({ role: UserRole.ADMIN });
-      for (const admin of adminUsers) {
+      const adminEmails = adminUsers.map(admin => admin.email);
+      
+      // Also add the default admin email to ensure notifications are received
+      const defaultAdminEmail = 'faith.muiruri@strathmore.edu';
+      if (!adminEmails.includes(defaultAdminEmail)) {
+        adminEmails.push(defaultAdminEmail);
+      }
+      
+      for (const adminEmail of adminEmails) {
         await this.emailService.sendInstructorRegistrationNotificationToAdmin(
-          admin.email,
+          adminEmail,
           `${firstName} ${lastName}`,
           email,
           institution,
@@ -139,10 +147,8 @@ export class AuthService {
       throw new UnauthorizedException('Your account has been deactivated. Please contact support.');
     }
 
-    // Check if instructor is approved
-    if (user.role === UserRole.INSTRUCTOR && user.instructorStatus !== InstructorStatus.APPROVED) {
-      throw new UnauthorizedException('Your instructor account is pending approval. You will be notified once approved.');
-    }
+    // Allow instructors to login regardless of approval status
+    // The frontend will handle redirection based on instructorStatus
 
     // Update last login
     user.lastLogin = new Date();

@@ -1,7 +1,10 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
 import { CurrentUser } from '../decorators/current-user.decorator';
+import { UserRole } from '../schemas/user.schema';
 
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
@@ -11,7 +14,7 @@ export class MessagesController {
   @Post()
   async sendMessage(
     @CurrentUser() user: any,
-    @Body() body: { receiverId: string; content: string; courseId?: string; moduleIndex?: number },
+    @Body() body: { receiverId: string; content: string; courseId?: string; moduleIndex?: number; attachments?: string[] },
   ) {
     const message = await this.messagesService.sendMessage(
       user._id,
@@ -19,6 +22,7 @@ export class MessagesController {
       body.content,
       body.courseId,
       body.moduleIndex,
+      body.attachments,
     );
 
     return {
@@ -94,6 +98,19 @@ export class MessagesController {
     return {
       success: true,
       data: result,
+    };
+  }
+
+  // Admin routes
+  @Get('admin/all-conversations')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getAllConversationsForAdmin() {
+    const conversations = await this.messagesService.getAllConversationsForAdmin();
+
+    return {
+      success: true,
+      data: conversations,
     };
   }
 }

@@ -3,8 +3,13 @@ import { CourseLevel } from '../../schemas/course.schema';
 
 class QuestionDto {
   @IsString()
-  @IsNotEmpty()
-  text: string;
+  @IsOptional()
+  text?: string;
+
+  // Frontend sometimes sends "question" instead of "text"; allow it and normalize before saving
+  @IsString()
+  @IsOptional()
+  question?: string;
 
   @IsEnum(['multiple-choice', 'essay', 'true-false'])
   type: string;
@@ -23,6 +28,24 @@ class QuestionDto {
   @IsString()
   @IsOptional()
   explanation?: string;
+}
+
+class AssessmentDto {
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsArray()
+  @IsOptional()
+  questions?: QuestionDto[];
+
+  @IsNumber()
+  @IsOptional()
+  passingScore?: number;
 }
 
 class ModuleDto {
@@ -48,6 +71,9 @@ class ModuleDto {
   @IsArray()
   @IsOptional()
   questions?: QuestionDto[];
+
+  @IsOptional()
+  moduleAssessment?: AssessmentDto;
 }
 
 export class CreateCourseDto {
@@ -71,6 +97,9 @@ export class CreateCourseDto {
   @IsOptional()
   modules?: ModuleDto[];
 
+  @IsOptional()
+  finalAssessment?: AssessmentDto;
+
   @IsString()
   @IsOptional()
   thumbnailUrl?: string;
@@ -78,6 +107,14 @@ export class CreateCourseDto {
   @IsString()
   @IsOptional()
   courseTemplate?: string;
+
+  @IsArray()
+  @IsOptional()
+  requirements?: string[];
+
+  @IsArray()
+  @IsOptional()
+  targetAudience?: string[];
 }
 
 export class UpdateCourseDto {
@@ -101,9 +138,20 @@ export class UpdateCourseDto {
   @IsOptional()
   modules?: ModuleDto[];
 
+  @IsOptional()
+  finalAssessment?: AssessmentDto;
+
   @IsString()
   @IsOptional()
   thumbnailUrl?: string;
+
+  @IsArray()
+  @IsOptional()
+  requirements?: string[];
+
+  @IsArray()
+  @IsOptional()
+  targetAudience?: string[];
 }
 
 export class SubmitCourseDto {

@@ -9,6 +9,8 @@ import { Progress, ProgressSchema } from '../schemas/progress.schema';
 import { Certificate, CertificateSchema } from '../schemas/certificate.schema';
 import { Discussion, DiscussionSchema } from '../schemas/discussion.schema';
 import { EmailReminder, EmailReminderSchema } from '../schemas/email-reminder.schema';
+import { InstructorReview, InstructorReviewSchema } from '../schemas/instructor-review.schema';
+import { EmailService } from '../common/services/email.service';
 
 @Module({
   imports: [
@@ -20,9 +22,10 @@ import { EmailReminder, EmailReminderSchema } from '../schemas/email-reminder.sc
       { name: Certificate.name, schema: CertificateSchema },
       { name: Discussion.name, schema: DiscussionSchema },
       { name: EmailReminder.name, schema: EmailReminderSchema },
+      { name: InstructorReview.name, schema: InstructorReviewSchema },
     ]),
   ],
-  providers: [CourseService],
+  providers: [CourseService, EmailService],
   controllers: [CourseController],
   exports: [CourseService],
 })

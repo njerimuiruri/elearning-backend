@@ -36,6 +36,43 @@ class Question {
   explanation?: string;
 }
 
+class Lesson {
+  @Prop({ required: true })
+  title: string;
+
+  @Prop()
+  content?: string;
+
+  @Prop()
+  videoUrl?: string;
+
+  @Prop()
+  duration?: string;
+
+  @Prop([String])
+  topics?: string[];
+
+  @Prop({ type: [Question], default: [] })
+  questions?: Question[];
+}
+
+class Assessment {
+  @Prop({ required: true })
+  title: string;
+
+  @Prop()
+  description?: string;
+
+  @Prop({ type: [Question], default: [] })
+  questions: Question[];
+
+  @Prop({ default: 70 })
+  passingScore: number; // Percentage
+
+  @Prop({ default: 0 })
+  order: number;
+}
+
 class Module {
   @Prop({ required: true })
   title: string;
@@ -52,8 +89,14 @@ class Module {
   @Prop()
   duration: number; // in minutes
 
+  @Prop({ type: [Lesson], default: [] })
+  lessons?: Lesson[];
+
   @Prop({ type: [Question], default: [] })
   questions: Question[];
+
+  @Prop({ type: Assessment, required: false })
+  moduleAssessment?: Assessment;
 
   @Prop({ default: 0 })
   order: number;
@@ -82,6 +125,9 @@ export class Course extends Document {
   @Prop({ type: [Module], default: [] })
   modules: Module[];
 
+  @Prop({ type: Assessment, required: false })
+  finalAssessment?: Assessment;
+
   @Prop({ default: 0 })
   totalPoints: number;
 
@@ -105,6 +151,12 @@ export class Course extends Document {
 
   @Prop({ default: 0 })
   completionRate: number;
+
+  @Prop({ type: [String], default: [] })
+  requirements: string[];
+
+  @Prop({ type: [String], default: [] })
+  targetAudience: string[];
 
   @Prop({ default: null })
   submittedAt?: Date;

@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import * as crypto from 'crypto';
 
 @Schema({ timestamps: true })
 export class Certificate extends Document {
@@ -14,6 +15,9 @@ export class Certificate extends Document {
 
   @Prop({ required: true })
   certificateNumber: string;
+
+  @Prop({ type: String, unique: true, default: () => crypto.randomUUID() })
+  publicId: string; // UUID for public URLs
 
   @Prop({ required: true })
   issuedDate: Date;
@@ -46,4 +50,5 @@ export const CertificateSchema = SchemaFactory.createForClass(Certificate);
 CertificateSchema.index({ studentId: 1 });
 CertificateSchema.index({ courseId: 1 });
 CertificateSchema.index({ certificateNumber: 1 }, { unique: true });
+CertificateSchema.index({ publicId: 1 }, { unique: true });
 CertificateSchema.index({ issuedDate: -1 });

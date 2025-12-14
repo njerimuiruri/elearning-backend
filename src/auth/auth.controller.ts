@@ -11,6 +11,7 @@ import {
   UploadedFile,
 } from '@nestjs/common';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { diskStorage } from 'multer';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
@@ -30,6 +31,7 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 @Controller('api/auth')
+@ApiTags('Auth')
 export class AuthController {
   constructor(
     private authService: AuthService,
@@ -37,12 +39,18 @@ export class AuthController {
   ) {}
 
   @Post('login')
+  @ApiOperation({ summary: 'Login user' })
+  @ApiResponse({ status: 200, description: 'Login successful, returns JWT token' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Logout user' })
+  @ApiResponse({ status: 200, description: 'Logout successful' })
   async logout(@CurrentUser() user: User) {
     // Update last logout time
     await this.usersService.updateUser(user._id.toString(), {

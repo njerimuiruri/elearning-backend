@@ -20,11 +20,42 @@ export class EmailService {
     });
   }
 
+  async sendMessageNotification(toEmail: string, subject: string, htmlContent: string, plainTextContent: string) {
+    if (!toEmail) {
+      return { success: false, message: 'No recipient email provided' };
+    }
+
+    const attempts = 3;
+    let lastError: any = null;
+
+    for (let i = 1; i <= attempts; i++) {
+      try {
+        await this.transporter.sendMail({
+          from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+          to: toEmail,
+          subject,
+          html: htmlContent,
+          text: plainTextContent,
+        });
+
+        return { success: true, message: `Message email sent to ${toEmail}` };
+      } catch (error) {
+        lastError = error;
+        console.error(`Attempt ${i} failed sending message notification email:`, error);
+        if (i < attempts) {
+          await new Promise((resolve) => setTimeout(resolve, 800));
+        }
+      }
+    }
+
+    return { success: false, message: lastError?.message || 'Failed to send message email' };
+  }
+
   async sendInstructorApprovalEmail(email: string, firstName: string, isApproved: boolean) {
     const subject = isApproved ? 'Your Instructor Application Approved' : 'Your Instructor Application Rejected';
 
     const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
-    const loginUrl = `${frontendUrl}/auth/login`;
+    const loginUrl = `${frontendUrl}/login`;
 
     const htmlContent = isApproved
       ? `
@@ -133,7 +164,7 @@ E-Learning Platform System
   async sendStudentRegistrationEmail(email: string, firstName: string, temporaryPassword: string) {
     const subject = 'Welcome to Arin Publishing Academy - Your Account Has Been Created';
     const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
-    const loginUrl = `${frontendUrl}/auth/login`;
+    const loginUrl = `${frontendUrl}/login`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
@@ -557,6 +588,454 @@ E-Learning Platform Team
     } catch (error) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
+    }
+  }
+
+  // Course-related Emails
+  async sendCourseSubmissionNotificationToAdmin(
+    adminEmail: string,
+    instructorName: string,
+    instructorEmail: string,
+    courseTitle: string,
+    courseCategory: string,
+    courseDescription: string,
+    moduleCount: number,
+    courseId: string,
+  ) {
+    const subject = `New Course Submission - ${courseTitle}`;
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const adminDashboardUrl = `${frontendUrl}/admin/courses`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #16a34a; border-bottom: 3px solid #16a34a; padding-bottom: 10px;">New Course Submission</h2>
+        <p>A new course has been submitted for your review.</p>
+        
+        <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #16a34a; margin-top: 0;">Course Details</h3>
+          <p><strong>Course Title:</strong> ${courseTitle}</p>
+          <p><strong>Instructor:</strong> ${instructorName} (${instructorEmail})</p>
+          <p><strong>Category:</strong> ${courseCategory}</p>
+          <p><strong>Description:</strong> ${courseDescription}</p>
+          <p><strong>Number of Modules:</strong> ${moduleCount}</p>
+          <p><strong>Course ID:</strong> ${courseId}</p>
+        </div>
+        
+        <p style="margin-top: 20px;">
+          <a href="${adminDashboardUrl}" style="display:inline-block;padding:12px 24px;background:#16a34a;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">Review in Admin Dashboard</a>
+        </p>
+        
+        <p>Please review and approve or reject this course submission.</p>
+        <p>Best regards,<br/>E-Learning Platform System</p>
+      </div>
+    `;
+
+    const plainTextContent = `
+New Course Submission
+
+A new course has been submitted for your review.
+
+Course Details:
+Title: ${courseTitle}
+Instructor: ${instructorName} (${instructorEmail})
+Category: ${courseCategory}
+Description: ${courseDescription}
+Number of Modules: ${moduleCount}
+Course ID: ${courseId}
+
+Review Link: ${adminDashboardUrl}
+
+Please review and approve or reject this course submission.
+
+Best regards,
+E-Learning Platform System
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: adminEmail,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true, message: `Course submission notification sent to admin` };
+    } catch (error) {
+      console.error('Error sending email:', error);
+      throw new Error(`Failed to send email: ${error.message}`);
+    }
+  }
+
+  async sendCourseApprovalEmailToInstructor(
+    email: string,
+    firstName: string,
+    courseTitle: string,
+  ) {
+    const subject = `Your Course Has Been Approved! 🎉`;
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const coursePageUrl = `${frontendUrl}/courses`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #16a34a; border-bottom: 3px solid #16a34a; padding-bottom: 10px;">Course Approved! 🎉</h2>
+        <p>Dear <strong>${firstName}</strong>,</p>
+        
+        <p>Congratulations! Your course <strong>"${courseTitle}"</strong> has been <strong>APPROVED</strong> and is now published on our platform.</p>
+        
+        <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #16a34a; margin-top: 0;">What's Next?</h3>
+          <ul>
+            <li>Your course is now visible on the platform homepage</li>
+            <li>Students can discover and enroll in your course</li>
+            <li>You can track student progress and engagement</li>
+            <li>Monitor student completions and assessments</li>
+          </ul>
+        </div>
+        
+        <p>
+          <a href="${coursePageUrl}" style="display:inline-block;padding:12px 24px;background:#16a34a;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">View Your Course</a>
+        </p>
+        
+        <p>Thank you for creating quality educational content!</p>
+        <p>Best regards,<br/>E-Learning Platform Team</p>
+      </div>
+    `;
+
+    const plainTextContent = `
+Course Approved! 🎉
+
+Dear ${firstName},
+
+Congratulations! Your course "${courseTitle}" has been APPROVED and is now published on our platform.
+
+What's Next?
+- Your course is now visible on the platform homepage
+- Students can discover and enroll in your course
+- You can track student progress and engagement
+- Monitor student completions and assessments
+
+View Your Course: ${coursePageUrl}
+
+Thank you for creating quality educational content!
+
+Best regards,
+E-Learning Platform Team
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true, message: `Course approval email sent to ${email}` };
+    } catch (error) {
+      console.error('Error sending email:', error);
+      throw new Error(`Failed to send email: ${error.message}`);
+    }
+  }
+
+  async sendCourseRejectionEmailToInstructor(
+    email: string,
+    firstName: string,
+    courseTitle: string,
+    rejectionReason: string,
+  ) {
+    const subject = `Course Submission - Feedback Required`;
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const courseEditorUrl = `${frontendUrl}/instructor/courses`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #dc2626; border-bottom: 3px solid #dc2626; padding-bottom: 10px;">Course Submission - Feedback Required</h2>
+        <p>Dear <strong>${firstName}</strong>,</p>
+        
+        <p>Thank you for submitting <strong>"${courseTitle}"</strong>. We've reviewed your course and have some feedback that needs to be addressed before it can be published.</p>
+        
+        <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #dc2626; margin-top: 0;">Feedback</h3>
+          <p>${rejectionReason}</p>
+        </div>
+        
+        <h3 style="color: #1f2937; margin-top: 20px;">What You Can Do:</h3>
+        <ul>
+          <li>Review the feedback provided above</li>
+          <li>Make the necessary updates to your course</li>
+          <li>Resubmit your course for review</li>
+          <li>We'll prioritize reviewing your updated submission</li>
+        </ul>
+        
+        <p style="margin-top: 20px;">
+          <a href="${courseEditorUrl}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">Edit Your Course</a>
+        </p>
+        
+        <p>If you have any questions about the feedback, please contact our support team.</p>
+        <p>Best regards,<br/>E-Learning Platform Team</p>
+      </div>
+    `;
+
+    const plainTextContent = `
+Course Submission - Feedback Required
+
+Dear ${firstName},
+
+Thank you for submitting "${courseTitle}". We've reviewed your course and have some feedback that needs to be addressed before it can be published.
+
+Feedback:
+${rejectionReason}
+
+What You Can Do:
+- Review the feedback provided above
+- Make the necessary updates to your course
+- Resubmit your course for review
+- We'll prioritize reviewing your updated submission
+
+Edit Your Course: ${courseEditorUrl}
+
+If you have any questions about the feedback, please contact our support team.
+
+Best regards,
+E-Learning Platform Team
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true, message: `Course rejection email sent to ${email}` };
+    } catch (error) {
+      console.error('Error sending email:', error);
+      throw new Error(`Failed to send email: ${error.message}`);
+    }
+  }
+
+  async sendSimpleEmail(email: string, subject: string, htmlContent: string) {
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+      });
+      return { success: true, message: `Email sent to ${email}` };
+    } catch (error) {
+      console.error('Error sending email:', error);
+      throw new Error(`Failed to send email: ${error.message}`);
+    }
+  }
+
+  /**
+   * Send notification to instructor when student asks a question
+   */
+  async sendQuestionNotificationToInstructor(emailData: any, courseId: string) {
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const dashboardUrl = `${frontendUrl}/instructor/dashboard`;
+    const questionUrl = `${frontendUrl}/instructor/questions/${courseId}`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #2563eb; border-bottom: 3px solid #2563eb; padding-bottom: 10px;">New Question from Student</h2>
+        
+        <p>Dear Instructor,</p>
+        
+        <p>A student in your course has asked a question and is waiting for your response.</p>
+        
+        <div style="background-color: #eff6ff; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #2563eb; margin-top: 0;">Question Details</h3>
+          <p><strong>Student:</strong> ${emailData.studentName}</p>
+          <p><strong>Question Title:</strong> ${emailData.questionTitle}</p>
+          <p><strong>Category:</strong> ${emailData.category || 'General'}</p>
+          <p><strong>Priority:</strong> ${emailData.priority || 'Medium'}</p>
+        </div>
+        
+        <p><strong>Question:</strong></p>
+        <p style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 15px 0;">
+          ${emailData.content}
+        </p>
+        
+        <p>Please log in to your instructor dashboard to view and respond to this question.</p>
+        
+        <p style="margin-top: 20px;">
+          <a href="${dashboardUrl}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">Go to Dashboard</a>
+        </p>
+        
+        <p style="font-size: 12px; color: #666; margin-top: 30px;">
+          This is an automated notification. Please do not reply to this email. Use your instructor dashboard to respond.
+        </p>
+        
+        <p>Best regards,<br/>E-Learning Platform Team</p>
+      </div>
+    `;
+
+    const plainTextContent = `
+New Question from Student
+
+Dear Instructor,
+
+A student in your course has asked a question and is waiting for your response.
+
+Question Details:
+Student: ${emailData.studentName}
+Question Title: ${emailData.questionTitle}
+Category: ${emailData.category || 'General'}
+Priority: ${emailData.priority || 'Medium'}
+
+Question:
+${emailData.content}
+
+Please log in to your instructor dashboard to view and respond to this question.
+
+Dashboard URL: ${dashboardUrl}
+
+Best regards,
+E-Learning Platform Team
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: emailData.instructorEmail,
+        subject: `New Question: ${emailData.questionTitle}`,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending question notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send notification to student when instructor responds
+   */
+  async sendResponseNotificationToStudent(emailData: any, instructorId: string) {
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const dashboardUrl = `${frontendUrl}/student/dashboard`;
+    const questionUrl = `${frontendUrl}/student/questions/${emailData.questionId}`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #10b981; border-bottom: 3px solid #10b981; padding-bottom: 10px;">Your Question Has Been Answered!</h2>
+        
+        <p>Dear ${emailData.studentName},</p>
+        
+        <p>Your instructor has responded to your question! Log in to view the full response.</p>
+        
+        <div style="background-color: #f0fdf4; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #10b981; margin-top: 0;">Your Question</h3>
+          <p><strong>${emailData.questionTitle}</strong></p>
+        </div>
+        
+        <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #d97706; margin-top: 0;">Instructor's Response</h3>
+          <p>${emailData.response}</p>
+        </div>
+        
+        <p>You can:</p>
+        <ul>
+          <li>View the full conversation in your dashboard</li>
+          <li>Add follow-up questions or feedback</li>
+          <li>Rate the response to help us improve</li>
+        </ul>
+        
+        <p style="margin-top: 20px;">
+          <a href="${questionUrl}" style="display:inline-block;padding:12px 24px;background:#10b981;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">View Full Response</a>
+        </p>
+        
+        <p style="font-size: 12px; color: #666; margin-top: 30px;">
+          This is an automated notification. Please log in to your account to continue the conversation.
+        </p>
+        
+        <p>Best regards,<br/>E-Learning Platform Team</p>
+      </div>
+    `;
+
+    const plainTextContent = `
+Your Question Has Been Answered!
+
+Dear ${emailData.studentName},
+
+Your instructor has responded to your question! Log in to view the full response.
+
+Your Question:
+${emailData.questionTitle}
+
+Instructor's Response:
+${emailData.response}
+
+You can:
+- View the full conversation in your dashboard
+- Add follow-up questions or feedback
+- Rate the response to help us improve
+
+View Full Response: ${questionUrl}
+
+Best regards,
+E-Learning Platform Team
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: emailData.studentEmail,
+        subject: `Answer: ${emailData.questionTitle}`,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending response notification:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send admin notification about flagged questions
+   */
+  async sendFlaggedQuestionNotificationToAdmin(adminEmail: string, flagData: any) {
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const adminDashboardUrl = `${frontendUrl}/admin/questions/${flagData.questionId}`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #dc2626; border-bottom: 3px solid #dc2626; padding-bottom: 10px;">Question Flagged for Review</h2>
+        
+        <p>A question has been flagged and requires your attention.</p>
+        
+        <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #dc2626; margin-top: 0;">Flagged Question</h3>
+          <p><strong>Title:</strong> ${flagData.title}</p>
+          <p><strong>Student:</strong> ${flagData.studentName}</p>
+          <p><strong>Reason:</strong> ${flagData.reason}</p>
+          <p><strong>Notes:</strong> ${flagData.notes || 'None'}</p>
+        </div>
+        
+        <p style="margin-top: 20px;">
+          <a href="${adminDashboardUrl}" style="display:inline-block;padding:12px 24px;background:#dc2626;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">Review in Admin Dashboard</a>
+        </p>
+        
+        <p>Best regards,<br/>E-Learning Platform System</p>
+      </div>
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: adminEmail,
+        subject: `[ALERT] Question Flagged for Review: ${flagData.title}`,
+        html: htmlContent,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending flag notification:', error);
+      throw error;
     }
   }
 }

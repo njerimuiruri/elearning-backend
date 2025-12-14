@@ -46,6 +46,11 @@ export class AdminController {
     return this.adminService.updateUserStatus(id, false);
   }
 
+  @Post('courses/migrate')
+  async migrateCoursesToNewSchema() {
+    return this.adminService.migrateCourses();
+  }
+
   @Delete('users/:id')
   async deleteUser(@Param('id') id: string) {
     return this.adminService.deleteUser(id);
@@ -173,5 +178,81 @@ export class AdminController {
     @Query('endDate') endDate?: string,
   ) {
     return this.adminService.getRevenueAnalytics({ startDate, endDate });
+  }
+
+  // Course Management
+  @Get('courses/pending')
+  async getPendingCourses(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getPendingCourses({ page, limit });
+  }
+
+  @Get('courses')
+  async getAllCourses(
+    @Query('status') status?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getAllCourses({ status, page, limit });
+  }
+
+  @Get('courses/:id')
+  async getAdminCourse(@Param('id') id: string) {
+    return this.adminService.getCourseById(id);
+  }
+
+  @Put('courses/:id/approve')
+  async approveCourse(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+    @Body('feedback') feedback?: string,
+  ) {
+    return this.adminService.approvePendingCourse(id, user._id);
+  }
+
+  @Put('courses/:id/reject')
+  async rejectCourse(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+  ) {
+    return this.adminService.rejectPendingCourse(id, reason);
+  }
+
+  @Delete('courses/:id')
+  async deleteCourse(@Param('id') id: string) {
+    return this.adminService.deleteCourse(id);
+  }
+
+  // Reminder System
+  @Get('reminders/students-not-finished')
+  async getStudentsNotFinished(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getStudentsNotFinished({ page, limit });
+  }
+
+  @Post('reminders/send-to-student/:enrollmentId')
+  async sendReminderToStudent(
+    @Param('enrollmentId') enrollmentId: string,
+    @Body('message') message?: string,
+  ) {
+    return this.adminService.sendReminderToStudent(enrollmentId, message);
+  }
+
+  @Post('reminders/send-bulk')
+  async sendRemindersToMultiple(
+    @Body() body: { enrollmentIds: string[]; message?: string },
+  ) {
+    return this.adminService.sendRemindersToMultipleStudents(body.enrollmentIds, body.message);
+  }
+
+  @Post('reminders/send-all')
+  async sendRemindersToAll(
+    @Body() body: { message?: string },
+  ) {
+    return this.adminService.sendRemindersToAllNotFinished(body.message);
   }
 }

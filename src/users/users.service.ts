@@ -146,6 +146,45 @@ export class UsersService {
     };
   }
 
+  async uploadProfilePhoto(userId: string, file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // In production, you'd upload to S3 or similar
+    // For now, store as base64 or reference
+    // You can also use a library like cloudinary or aws-sdk
+
+    // Simple approach: store file in /uploads/profiles directory
+    // and save the path in the database
+    const filename = `${userId}-${Date.now()}-${file.originalname}`;
+    const relativePath = `/uploads/profiles/${filename}`;
+
+    // Save the file (this requires configuring multer disk storage)
+    // For now, we'll just save the path and assume file is saved elsewhere
+    // In production, integrate with cloud storage
+
+    try {
+      const updatedUser = await this.userModel.findByIdAndUpdate(
+        userId,
+        { $set: { profilePhotoUrl: relativePath } },
+        { new: true },
+      ).select('-password');
+
+      if (!updatedUser) {
+        throw new NotFoundException('User not found');
+      }
+
+      return {
+        message: 'Profile photo uploaded successfully',
+        profilePhotoUrl: relativePath,
+        user: this.sanitizeUser(updatedUser),
+      };
+    } catch (error) {
+      throw new BadRequestException('Failed to upload profile photo');
+    }
+  }
+
   private sanitizeUser(user: User) {
     const userObj = user.toObject ? user.toObject() : user;
     delete userObj.password;

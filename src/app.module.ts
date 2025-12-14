@@ -10,6 +10,10 @@ import { UsersModule } from './users/users.module';
 import { AdminModule } from './admin/admin.module';
 import { CoursesModule } from './courses/courses.module';
 import { MessagesModule } from './messages/messages.module';
+import { CommonModule } from './common/common.module';
+import { CertificateModule } from './certificates/certificate.module';
+import { QuestionsModule } from './questions/questions.module';
+import { NotesModule } from './notes/notes.module';
 
 @Module({
   imports: [
@@ -32,6 +36,10 @@ import { MessagesModule } from './messages/messages.module';
     AdminModule,
     CoursesModule,
     MessagesModule,
+    CommonModule,
+    CertificateModule,
+    QuestionsModule,
+    NotesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

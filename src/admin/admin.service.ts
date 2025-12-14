@@ -4,6 +4,7 @@ import { Model } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { User, UserRole, InstructorStatus, FellowshipStatus } from '../schemas/user.schema';
+import { Course } from '../schemas/course.schema';
 import { PasswordReset } from '../schemas/password-reset.schema';
 import { EmailService } from '../common/services/email.service';
 
@@ -11,6 +12,7 @@ import { EmailService } from '../common/services/email.service';
 export class AdminService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
+    @InjectModel(Course.name) private courseModel: Model<Course>,
     @InjectModel(PasswordReset.name) private passwordResetModel: Model<PasswordReset>,
     private emailService: EmailService,
   ) {}
@@ -204,6 +206,20 @@ export class AdminService {
       console.error('Failed to send instructor approval email:', error);
     }
 
+    // Send notification to admin email
+    try {
+      await this.emailService.sendInstructorRegistrationNotificationToAdmin(
+        'faith.muiruri@strathmore.edu',
+        `${instructor.firstName} ${instructor.lastName}`,
+        instructor.email,
+        instructor.institution || 'Not provided',
+        `Status: APPROVED`,
+        instructor._id.toString(),
+      );
+    } catch (error) {
+      console.error('Failed to send admin notification:', error);
+    }
+
     return {
       message: 'Instructor approved successfully',
       instructor,
@@ -241,6 +257,20 @@ export class AdminService {
     } catch (error) {
       // Log but do not block rejection flow
       console.error('Failed to send instructor rejection email:', error);
+    }
+
+    // Send notification to admin email
+    try {
+      await this.emailService.sendInstructorRegistrationNotificationToAdmin(
+        'faith.muiruri@strathmore.edu',
+        `${instructor.firstName} ${instructor.lastName}`,
+        instructor.email,
+        instructor.institution || 'Not provided',
+        `Status: REJECTED - Reason: ${reason}`,
+        instructor._id.toString(),
+      );
+    } catch (error) {
+      console.error('Failed to send admin notification:', error);
     }
 
     return {
@@ -678,5 +708,489 @@ export class AdminService {
       startDate,
       endDate,
     };
+  }
+
+  // Course Management
+  async getPendingCourses(filters: { page?: number; limit?: number } = {}) {
+    const { page = 1, limit = 20 } = filters;
+    const query = { status: 'submitted' };
+    const skip = (page - 1) * limit;
+
+    const [courses, total] = await Promise.all([
+      this.courseModel
+        .find(query)
+        .populate('instructorId', 'firstName lastName email institution')
+        .sort({ submittedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.courseModel.countDocuments(query),
+    ]);
+
+    return {
+      courses,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async approveCourse(courseId: string, adminId: string, feedback?: string) {
+    // Update course status to approved and published
+    const updatedCourse = await this.courseModel.findByIdAndUpdate(
+      courseId,
+      {
+        status: 'approved',
+        approvedBy: adminId,
+        approvedAt: new Date(),
+      },
+      { new: true },
+    ).populate('instructorId');
+
+    if (!updatedCourse) {
+      throw new NotFoundException('Course not found');
+    }
+
+    const instructorId = updatedCourse.instructorId as any;
+
+    // Send approval email to instructor
+    try {
+      await this.emailService.sendCourseApprovalEmailToInstructor(
+        instructorId.email,
+        instructorId.firstName,
+        updatedCourse.title,
+      );
+    } catch (error) {
+      console.error('Failed to send course approval email:', error);
+      // Don't block the approval if email fails
+    }
+
+    // Send notification to admin email
+    try {
+      await this.emailService.sendInstructorRegistrationNotificationToAdmin(
+        'faith.muiruri@strathmore.edu',
+        `${instructorId.firstName} ${instructorId.lastName}`,
+        instructorId.email,
+        updatedCourse.title,
+        `Course APPROVED`,
+        updatedCourse._id.toString(),
+      );
+    } catch (error) {
+      console.error('Failed to send admin notification:', error);
+    }
+
+    return {
+      message: 'Course approved successfully',
+      course: updatedCourse,
+    };
+  }
+
+  async rejectCourse(courseId: string, reason: string) {
+    if (!reason || reason.trim().length === 0) {
+      throw new BadRequestException('Rejection reason is required');
+    }
+
+    // Update course status to rejected
+    const updatedCourse = await this.courseModel.findByIdAndUpdate(
+      courseId,
+      {
+        status: 'rejected',
+        rejectionReason: reason,
+      },
+      { new: true },
+    ).populate('instructorId');
+
+    if (!updatedCourse) {
+      throw new NotFoundException('Course not found');
+    }
+
+    const instructorId = updatedCourse.instructorId as any;
+
+    // Send rejection email to instructor
+    try {
+      await this.emailService.sendCourseRejectionEmailToInstructor(
+        instructorId.email,
+        instructorId.firstName,
+        updatedCourse.title,
+        reason,
+      );
+    } catch (error) {
+      console.error('Failed to send course rejection email:', error);
+      // Don't block the rejection if email fails
+    }
+
+    // Send notification to admin email
+    try {
+      await this.emailService.sendInstructorRegistrationNotificationToAdmin(
+        'faith.muiruri@strathmore.edu',
+        `${instructorId.firstName} ${instructorId.lastName}`,
+        instructorId.email,
+        updatedCourse.title,
+        `Course REJECTED - Reason: ${reason}`,
+        updatedCourse._id.toString(),
+      );
+    } catch (error) {
+      console.error('Failed to send admin notification:', error);
+    }
+
+    return {
+      message: 'Course rejected successfully',
+      course: updatedCourse,
+    };
+  }
+
+  async approvePendingCourse(courseId: string, adminId: string) {
+    const course = await this.courseModel.findById(courseId).populate('instructorId');
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    if (course.status !== 'submitted') {
+      throw new BadRequestException('Only submitted courses can be approved');
+    }
+
+    const updatedCourse = await this.courseModel.findByIdAndUpdate(
+      courseId,
+      {
+        status: 'published', // Automatically publish course when approved
+        approvedBy: adminId,
+        approvedAt: new Date(),
+        publishedAt: new Date(),
+      },
+      { new: true },
+    ).populate('instructorId');
+
+    if (!updatedCourse) {
+      throw new NotFoundException('Course not found');
+    }
+
+    // Send approval email to instructor
+    try {
+      const instructor = updatedCourse.instructorId as any;
+      await this.emailService.sendCourseApprovedEmail(
+        instructor.email,
+        `${instructor.firstName} ${instructor.lastName}`,
+        updatedCourse.title,
+      );
+    } catch (error) {
+      console.error('Failed to send course approval email to instructor:', error);
+      // Don't fail the approval if email fails
+    }
+
+    return {
+      message: 'Course approved successfully',
+      course: updatedCourse,
+    };
+  }
+
+  async rejectPendingCourse(courseId: string, reason: string) {
+    const course = await this.courseModel.findById(courseId).populate('instructorId');
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    if (course.status !== 'submitted') {
+      throw new BadRequestException('Only submitted courses can be rejected');
+    }
+
+    const updatedCourse = await this.courseModel.findByIdAndUpdate(
+      courseId,
+      {
+        status: 'rejected',
+        rejectionReason: reason,
+        rejectedAt: new Date(),
+      },
+      { new: true },
+    ).populate('instructorId');
+
+    if (!updatedCourse) {
+      throw new NotFoundException('Course not found');
+    }
+
+    // Send rejection email to instructor
+    try {
+      const instructor = updatedCourse.instructorId as any;
+      await this.emailService.sendCourseRejectedEmail(
+        instructor.email,
+        `${instructor.firstName} ${instructor.lastName}`,
+        updatedCourse.title,
+        reason,
+      );
+    } catch (error) {
+      console.error('Failed to send course rejection email to instructor:', error);
+      // Don't block the rejection if email fails
+    }
+
+    return {
+      message: 'Course rejected successfully',
+      course: updatedCourse,
+    };
+  }
+
+  async getAllCourses(filters: { status?: string; page?: number; limit?: number } = {}) {
+    const { status, page = 1, limit = 20 } = filters;
+    const query: any = {};
+
+    if (status) {
+      query.status = status;
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [courses, total] = await Promise.all([
+      this.courseModel
+        .find(query)
+        .populate('instructorId', 'firstName lastName email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.courseModel.countDocuments(query),
+    ]);
+
+    return {
+      courses,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getCourseById(courseId: string) {
+    const course = await this.courseModel
+      .findById(courseId)
+      .populate('instructorId', 'firstName lastName email institution')
+      .exec();
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    // Convert to plain object if needed and ensure all data is included
+    const courseData = course.toObject ? course.toObject() : course;
+    return courseData;
+  }
+
+  async migrateCourses() {
+    try {
+      // Find all courses
+      const courses = await this.courseModel.find({}).exec();
+      let migratedCount = 0;
+      let alreadyMigratedCount = 0;
+
+      for (const course of courses) {
+        let needsUpdate = false;
+
+        // Check if modules need migration (don't have lessons array)
+        if (course.modules && course.modules.length > 0) {
+          const updatedModules = course.modules.map((module: any) => {
+            if (!module.lessons || !Array.isArray(module.lessons)) {
+              needsUpdate = true;
+              return {
+                ...module.toObject ? module.toObject() : module,
+                lessons: [], // Add empty lessons array
+              };
+            }
+            return module;
+          });
+
+          if (needsUpdate) {
+            await this.courseModel.findByIdAndUpdate(
+              course._id,
+              { modules: updatedModules },
+              { new: true }
+            );
+            migratedCount++;
+          } else {
+            alreadyMigratedCount++;
+          }
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Course migration completed',
+        totalCourses: courses.length,
+        migratedCourses: migratedCount,
+        alreadyMigrated: alreadyMigratedCount,
+      };
+    } catch (error) {
+      console.error('Migration error:', error);
+      throw new BadRequestException(`Migration failed: ${error.message}`);
+    }
+  }
+
+  async deleteCourse(courseId: string) {
+    const course = await this.courseModel.findById(courseId).populate('instructorId');
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    // Delete the course
+    await this.courseModel.findByIdAndDelete(courseId);
+
+    // Send deletion notification email to instructor
+    try {
+      const instructor = course.instructorId as any;
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const dashboardUrl = `${frontendUrl}/instructor/dashboard`;
+
+      const htmlContent = `
+        <h2>Course Deletion Notification</h2>
+        <p>Dear ${instructor.firstName} ${instructor.lastName},</p>
+        <p>We are writing to inform you that your course <strong>"${course.title}"</strong> has been deleted by an administrator.</p>
+        <p><strong>Reason:</strong> Administrative action</p>
+        <p>If you believe this was done in error or have any questions, please contact our support team.</p>
+        <p>You can visit your instructor dashboard to create new courses:</p>
+        <p>
+          <a href="${dashboardUrl}" style="display:inline-block;padding:10px 20px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">Go to Dashboard</a>
+        </p>
+        <p>Best regards,<br/>E-Learning Platform Team</p>
+      `;
+
+      await this.emailService.sendSimpleEmail(
+        instructor.email,
+        `Course Deleted: ${course.title}`,
+        htmlContent,
+      ).catch(() => {
+        console.log('Failed to send course deletion email to instructor');
+      });
+    } catch (error) {
+      console.error('Error sending course deletion email:', error);
+      // Don't fail the deletion if email fails
+    }
+
+    return {
+      message: 'Course deleted successfully',
+      courseId,
+    };
+  }
+
+  // Student Reminder System
+  async getStudentsNotFinished(filters: { page?: number; limit?: number } = {}) {
+    const { page = 1, limit = 50 } = filters;
+    const skip = (page - 1) * limit;
+
+    const Enrollment = this.userModel.db.model('Enrollment');
+
+    // Find enrollments where isCompleted is false
+    const enrollments = await Enrollment.find({ isCompleted: false })
+      .populate('userId', 'firstName lastName email institution')
+      .populate('courseId', 'title')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Enrollment.countDocuments({ isCompleted: false });
+
+    return {
+      students: enrollments.map(e => ({
+        studentId: e.userId._id,
+        studentName: `${e.userId.firstName} ${e.userId.lastName}`,
+        email: e.userId.email,
+        institution: e.userId.institution,
+        courseId: e.courseId._id,
+        courseTitle: e.courseId.title,
+        enrollmentId: e._id,
+        progress: e.progress || 0,
+        completedModules: e.completedModules || 0,
+        enrolledAt: e.createdAt,
+        lastAccessedAt: e.lastAccessedAt,
+      })),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  async sendReminderToStudent(enrollmentId: string, message?: string) {
+    const Enrollment = this.userModel.db.model('Enrollment');
+
+    const enrollment = await Enrollment.findById(enrollmentId)
+      .populate('userId', 'firstName lastName email')
+      .populate('courseId', 'title');
+
+    if (!enrollment) {
+      throw new NotFoundException('Enrollment not found');
+    }
+
+    const student = enrollment.userId;
+    const course = enrollment.courseId;
+    const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/student`;
+
+    const customMessage = message || `We noticed you haven't finished "${course.title}" yet. Continue your learning journey and complete the course to earn your certificate!`;
+
+    const htmlContent = `
+      <h2>Complete Your Course!</h2>
+      <p>Hi ${student.firstName},</p>
+      <p>${customMessage}</p>
+      <p>
+        <a href="${dashboardUrl}" style="display:inline-block;padding:10px 20px;background:#10b981;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">Continue Learning</a>
+      </p>
+      <p>Progress: ${enrollment.progress || 0}% Complete</p>
+      <p>Best regards,<br/>E-Learning Platform Team</p>
+    `;
+
+    try {
+      await this.emailService.sendSimpleEmail(
+        student.email,
+        `Reminder: Complete "${course.title}" Course`,
+        htmlContent,
+      );
+    } catch (error) {
+      console.error('Failed to send reminder email:', error);
+      throw new BadRequestException('Failed to send reminder email');
+    }
+
+    return {
+      message: 'Reminder sent successfully',
+      student: student.email,
+      course: course.title,
+    };
+  }
+
+  async sendRemindersToMultipleStudents(enrollmentIds: string[], message?: string) {
+    const Enrollment = this.userModel.db.model('Enrollment');
+
+    const results: Array<{ message: string; student: any; course: any }> = [];
+    const failed: Array<{ enrollmentId: string; error: string }> = [];
+
+    for (const enrollmentId of enrollmentIds) {
+      try {
+        const result = await this.sendReminderToStudent(enrollmentId, message);
+        results.push(result);
+      } catch (error) {
+        failed.push({ enrollmentId, error: error.message });
+      }
+    }
+
+    return {
+      sent: results.length,
+      failed: failed.length,
+      results,
+      failedDetails: failed,
+    };
+  }
+
+  async sendRemindersToAllNotFinished(message?: string) {
+    const Enrollment = this.userModel.db.model('Enrollment');
+
+    const enrollments = await Enrollment.find({ isCompleted: false })
+      .populate('userId', 'firstName lastName email')
+      .populate('courseId', 'title');
+
+    return this.sendRemindersToMultipleStudents(
+      enrollments.map(e => e._id),
+      message,
+    );
   }
 }
