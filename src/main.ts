@@ -11,9 +11,29 @@ async function bootstrap() {
   
   const app = await NestFactory.create(AppModule);
   
+  // CORS Configuration - Allow multiple origins
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    process.env.FRONTEND_URL,
+  ].filter(Boolean); // Remove undefined values
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`⚠️ CORS blocked origin: ${origin}`);
+        callback(null, false);
+      }
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    exposedHeaders: ['Content-Disposition'],
   });
   
   // Increase payload size limit for course creation with large module data

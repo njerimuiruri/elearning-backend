@@ -1,3 +1,10 @@
+# ========================================
+# Render Deployment Configuration
+# ========================================
+# SECURITY NOTE: This file is safe to commit.
+# Sensitive values (sync: false) must be set in Render Dashboard.
+# Never hardcode credentials here!
+
 services:
   - type: web
     name: elearning-backend
