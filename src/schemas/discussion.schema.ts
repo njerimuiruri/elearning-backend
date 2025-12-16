@@ -18,10 +18,18 @@ class Reply {
   createdAt?: Date;
 }
 
+class LastReadEntry {
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  userId: Types.ObjectId;
+
+  @Prop({ default: Date.now })
+  lastReadAt: Date;
+}
+
 @Schema({ timestamps: true })
 export class Discussion extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  studentId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  studentId?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'Course', required: true })
   courseId: Types.ObjectId;
@@ -29,8 +37,17 @@ export class Discussion extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   instructorId: Types.ObjectId;
 
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  createdById: Types.ObjectId;
+
+  @Prop({ required: true, enum: ['student', 'instructor'] })
+  createdByRole: 'student' | 'instructor';
+
   @Prop({ required: true })
   moduleIndex: number;
+
+  @Prop()
+  moduleTitle?: string;
 
   @Prop({ required: true })
   title: string;
@@ -52,6 +69,9 @@ export class Discussion extends Document {
 
   @Prop({ default: 'open', enum: ['open', 'resolved', 'closed'] })
   status: string;
+
+  @Prop({ type: [LastReadEntry], default: [] })
+  lastRead: LastReadEntry[];
 
   createdAt: Date;
   updatedAt: Date;

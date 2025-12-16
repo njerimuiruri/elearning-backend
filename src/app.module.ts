@@ -14,6 +14,7 @@ import { CommonModule } from './common/common.module';
 import { CertificateModule } from './certificates/certificate.module';
 import { QuestionsModule } from './questions/questions.module';
 import { NotesModule } from './notes/notes.module';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { NotesModule } from './notes/notes.module';
     CertificateModule,
     QuestionsModule,
     NotesModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

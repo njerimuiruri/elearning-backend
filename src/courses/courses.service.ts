@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Course } from '../schemas/course.schema';
@@ -30,16 +30,17 @@ export class CourseService {
     const normalized = this.normalizeCourseData(courseData);
     const newCourse = new this.courseModel({
       ...normalized,
-      instructorId,
+      instructorIds: [instructorId],
     });
     return await newCourse.save();
   }
 
   async assignInstructorToCourse(courseId: string, instructorId: string) {
     console.log('Assigning instructor to course:', { courseId, instructorId });
+    // Add instructorId to instructorIds array if not present
     const updated = await this.courseModel.findByIdAndUpdate(
       courseId,
-      { instructorId: instructorId as any },
+      { $addToSet: { instructorIds: instructorId } },
       { new: true },
     );
     if (updated) {
@@ -56,13 +57,13 @@ export class CourseService {
 
     return await this.courseModel
       .findById(courseId)
-      .populate('instructorId', 'firstName lastName email institution avgRating profilePhotoUrl bio')
+      .populate('instructorIds', 'firstName lastName email institution avgRating profilePhotoUrl bio')
       .lean();
   }
 
   async getInstructorCourses(instructorId: string) {
     return await this.courseModel
-      .find({ instructorId })
+      .find({ instructorIds: instructorId })
       .sort({ createdAt: -1 })
       .lean();
   }
@@ -79,7 +80,8 @@ export class CourseService {
     const [courses, total] = await Promise.all([
       this.courseModel
         .find(query)
-        .populate('instructorId', 'firstName lastName email avgRating totalStudents')
+        .populate('category', 'name')
+        .populate('instructorIds', 'firstName lastName email avgRating totalStudents')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -218,9 +220,12 @@ export class CourseService {
       throw new Error('Course not found');
     }
     
-    // If course has no instructor and we have one provided, assign it
-    if (!course.instructorId && instructorId) {
-      course.instructorId = instructorId as any;
+    // If course has no instructors and we have one provided, assign it
+    if (!course.instructorIds || !Array.isArray(course.instructorIds) || course.instructorIds.length === 0) {
+      if (instructorId) {
+        course.instructorIds = [instructorId as any];
+        await course.save();
+      }
       await course.save();
     }
 
@@ -231,7 +236,7 @@ export class CourseService {
         submittedAt: new Date(),
       },
       { new: true },
-    ).populate('instructorId');
+    ).populate('instructorIds');
 
     if (!updatedCourse) {
       throw new Error('Course not found');
@@ -239,17 +244,20 @@ export class CourseService {
 
     // Send notification email to admin
     try {
-      const instructorData = updatedCourse.instructorId as any;
-      await this.emailService.sendCourseSubmissionNotificationToAdmin(
-        'faith.muiruri@strathmore.edu',
-        `${instructorData.firstName} ${instructorData.lastName}`,
-        instructorData.email,
-        updatedCourse.title,
-        updatedCourse.category,
-        updatedCourse.description,
-        updatedCourse.modules?.length || 0,
-        updatedCourse._id.toString(),
-      );
+      const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+      const mainInstructor = instructors[0];
+      if (mainInstructor && typeof mainInstructor === 'object' && 'firstName' in mainInstructor && 'lastName' in mainInstructor && 'email' in mainInstructor) {
+        await this.emailService.sendCourseSubmissionNotificationToAdmin(
+          'faith.muiruri@strathmore.edu',
+          `${mainInstructor.firstName || ''} ${mainInstructor.lastName || ''}`,
+          String(mainInstructor.email || ''),
+          updatedCourse.title,
+          updatedCourse.category,
+          updatedCourse.description,
+          updatedCourse.modules?.length || 0,
+          updatedCourse._id.toString(),
+        );
+      }
     } catch (error) {
       console.error('Failed to send course submission email to admin:', error);
       // Don't fail the submission if email fails
@@ -268,22 +276,26 @@ export class CourseService {
         publishedAt: new Date(),
       },
       { new: true },
-    ).populate('instructorId');
+    ).populate('instructorIds');
 
     if (!updatedCourse) {
       throw new Error('Course not found');
     }
 
-    // Send approval email to instructor
+    // Send approval email to all instructors
     try {
-      const instructor = updatedCourse.instructorId as any;
-      await this.emailService.sendCourseApprovedEmail(
-        instructor.email,
-        `${instructor.firstName} ${instructor.lastName}`,
-        updatedCourse.title,
-      );
+      const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+      for (const instructor of instructors) {
+        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor && 'lastName' in instructor) {
+          await this.emailService.sendCourseApprovedEmail(
+            String(instructor.email),
+            `${instructor.firstName} ${instructor.lastName}`,
+            updatedCourse.title,
+          );
+        }
+      }
     } catch (error) {
-      console.error('Failed to send course approval email to instructor:', error);
+      console.error('Failed to send course approval email to instructor(s):', error);
       // Don't fail the approval if email fails
     }
 
@@ -298,23 +310,27 @@ export class CourseService {
         rejectionReason: reason,
       },
       { new: true },
-    ).populate('instructorId');
+    ).populate('instructorIds');
 
     if (!updatedCourse) {
       throw new Error('Course not found');
     }
 
-    // Send rejection email to instructor
+    // Send rejection email to all instructors
     try {
-      const instructor = updatedCourse.instructorId as any;
-      await this.emailService.sendCourseRejectedEmail(
-        instructor.email,
-        `${instructor.firstName} ${instructor.lastName}`,
-        updatedCourse.title,
-        reason,
-      );
+      const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+      for (const instructor of instructors) {
+        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor && 'lastName' in instructor) {
+          await this.emailService.sendCourseRejectedEmail(
+            String(instructor.email),
+            `${instructor.firstName} ${instructor.lastName}`,
+            updatedCourse.title,
+            reason,
+          );
+        }
+      }
     } catch (error) {
-      console.error('Failed to send course rejection email to instructor:', error);
+      console.error('Failed to send course rejection email to instructor(s):', error);
       // Don't fail the rejection if email fails
     }
 
@@ -338,9 +354,11 @@ export class CourseService {
       throw new Error('You must be enrolled in this course to review the instructor');
     }
 
+    // Use the first instructorId for review
+    const mainInstructorId = Array.isArray(course.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
     const review = await this.instructorReviewModel.findOneAndUpdate(
       {
-        instructorId: course.instructorId,
+        instructorId: mainInstructorId,
         studentId,
         courseId,
       },
@@ -350,8 +368,9 @@ export class CourseService {
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },
     );
-
-    await this.updateInstructorStats(course.instructorId);
+    if (mainInstructorId) {
+      await this.updateInstructorStats(mainInstructorId);
+    }
     return review;
   }
 
@@ -376,21 +395,17 @@ export class CourseService {
         },
       },
     ]);
-
     const avgRating = stats[0]?.avgRating || 0;
     const reviewCount = stats[0]?.reviewCount || 0;
-
     // Estimate total students taught from enrollments across instructor's courses
-    const courseIds = await this.courseModel.find({ instructorId: instructorObjectId }).distinct('_id');
+    const courseIds = await this.courseModel.find({ instructorIds: instructorObjectId }).distinct('_id');
     const totalStudents = courseIds.length
       ? await this.enrollmentModel.distinct('studentId', { courseId: { $in: courseIds } }).then((ids) => ids.length)
       : 0;
-
     await this.userModel.findByIdAndUpdate(instructorId, {
       avgRating,
       totalStudents,
     });
-
     return { avgRating, totalStudents, reviewCount };
   }
 
@@ -659,7 +674,7 @@ export class CourseService {
       studentName: `${student?.firstName || ''} ${student?.lastName || ''}`,
       courseName: course.title,
       scoreAchieved: enrollment.finalAssessmentScore || 0,
-      instructorName: course.instructorId ? 'Instructor' : 'Administrator',
+      instructorName: (Array.isArray(course.instructorIds) && course.instructorIds.length > 0) ? 'Instructor' : 'Administrator',
     });
 
     await certificate.save();
@@ -684,27 +699,118 @@ export class CourseService {
 
   // Discussion Management
   async createDiscussion(discussionData: any) {
-    const discussion = new this.discussionModel(discussionData);
-    return await discussion.save();
+    const course = await this.courseModel.findById(discussionData.courseId);
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    const moduleIndex = typeof discussionData.moduleIndex === 'number' ? discussionData.moduleIndex : parseInt(discussionData.moduleIndex, 10);
+    if (Number.isNaN(moduleIndex)) {
+      throw new BadRequestException('moduleIndex is required');
+    }
+
+    const moduleTitle = Array.isArray((course as any).modules) && moduleIndex >= 0 && moduleIndex < (course as any).modules.length
+      ? (course as any).modules[moduleIndex]?.title
+      : undefined;
+
+    if (!discussionData.createdByRole || !discussionData.createdById) {
+      throw new BadRequestException('createdByRole and createdById are required');
+    }
+
+    // Allow instructor or enrolled student
+    if (discussionData.createdByRole === 'instructor') {
+      const mainInstructorId = Array.isArray(course.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
+      if (!mainInstructorId || String(mainInstructorId) !== String(discussionData.createdById)) {
+        throw new UnauthorizedException('Only the course instructor can start discussions for this course');
+      }
+      discussionData.instructorId = mainInstructorId;
+    } else {
+      const enrollment = await this.enrollmentModel.findOne({ courseId: discussionData.courseId, studentId: discussionData.createdById });
+      if (!enrollment) {
+        throw new UnauthorizedException('Only enrolled students can start discussions');
+      }
+      discussionData.studentId = discussionData.createdById;
+      const mainInstructorId = Array.isArray(course.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
+      discussionData.instructorId = mainInstructorId;
+    }
+
+    const discussion = new this.discussionModel({
+      ...discussionData,
+      moduleIndex,
+      moduleTitle,
+      status: 'open',
+    });
+    const saved = await discussion.save();
+
+    // Notify participants
+    await this.notifyDiscussionCreated(saved, course, discussionData.createdByRole);
+
+    return saved;
   }
 
-  async getCoursesDiscussions(courseId: string) {
-    return await this.discussionModel
-      .find({ courseId })
-      .populate('studentId', 'firstName lastName')
-      .populate('instructorId', 'firstName lastName')
+  async getCoursesDiscussions(courseId: string, moduleIndex?: number, userId?: string) {
+    const filter: any = { courseId };
+    if (typeof moduleIndex === 'number' && !Number.isNaN(moduleIndex)) {
+      filter.moduleIndex = moduleIndex;
+    }
+
+    const discussions = await this.discussionModel
+      .find(filter)
+      .populate('studentId', 'firstName lastName email')
+      .populate('instructorId', 'firstName lastName email')
       .sort({ createdAt: -1 })
       .lean();
+
+    if (!userId) {
+      return discussions;
+    }
+
+    return discussions.map((d: any) => {
+      const lastReadEntry = (d.lastRead || []).find((lr: any) => String(lr.userId) === String(userId));
+      const lastReadAt = lastReadEntry?.lastReadAt ? new Date(lastReadEntry.lastReadAt).getTime() : 0;
+      const unreadReplies = (d.replies || []).filter((r: any) => r?.createdAt && new Date(r.createdAt).getTime() > lastReadAt);
+      return {
+        ...d,
+        unreadCount: unreadReplies.length,
+        hasUnread: unreadReplies.length > 0,
+      };
+    });
   }
 
   async addDiscussionReply(discussionId: string, reply: any) {
-    return await this.discussionModel.findByIdAndUpdate(
-      discussionId,
-      {
-        $push: { replies: reply },
-      },
-      { new: true },
-    );
+    const discussion = await this.discussionModel.findById(discussionId);
+    if (!discussion) {
+      throw new NotFoundException('Discussion not found');
+    }
+
+    const course = await this.courseModel.findById(discussion.courseId);
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    if (!reply.authorRole || !reply.authorId) {
+      throw new BadRequestException('authorRole and authorId are required');
+    }
+
+    // Enrollment/instructor check
+    if (reply.authorRole === 'student') {
+      const enrollment = await this.enrollmentModel.findOne({ courseId: discussion.courseId, studentId: reply.authorId });
+      if (!enrollment) {
+        throw new UnauthorizedException('Only enrolled students can reply');
+      }
+    } else if (reply.authorRole === 'instructor') {
+      const mainInstructorId = Array.isArray(course.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
+      if (!mainInstructorId || String(mainInstructorId) !== String(reply.authorId)) {
+        throw new UnauthorizedException('Only the course instructor can reply as instructor');
+      }
+    }
+
+    discussion.replies.push(reply);
+    const updated = await discussion.save();
+
+    await this.notifyDiscussionReply(updated, course, reply.authorRole);
+
+    return updated;
   }
 
   async resolveDiscussion(discussionId: string) {
@@ -713,6 +819,104 @@ export class CourseService {
       { isResolved: true, status: 'resolved' },
       { new: true },
     );
+  }
+
+  private async notifyDiscussionCreated(discussion: any, course: any, authorRole: 'student' | 'instructor') {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const discussionLink = `${frontendUrl}/courses/${discussion.courseId}/modules/${discussion.moduleIndex || 0}/discussion`;
+
+    const mainInstructorId = Array.isArray(course.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
+    const instructor = mainInstructorId ? await this.userModel.findById(mainInstructorId) : null;
+    const enrolledStudents = await this.enrollmentModel.find({ courseId: course._id }).populate('studentId', 'email firstName lastName email');
+
+    if (authorRole === 'student' && instructor?.email) {
+      await this.emailService.sendMessageNotification(
+        String(instructor.email),
+        `New module discussion in ${course.title}`,
+        `<p>A student started a discussion in module ${discussion.moduleIndex + 1}: <strong>${discussion.title}</strong></p><p><a href="${discussionLink}">Open discussion</a></p>`,
+        `A student started a discussion in module ${discussion.moduleIndex + 1}: ${discussion.title}. View: ${discussionLink}`,
+      );
+    }
+
+    if (authorRole === 'instructor' && enrolledStudents.length > 0) {
+      const recipients = enrolledStudents
+        .map((enr) => (enr.studentId as any)?.email)
+        .filter((email) => !!email);
+
+      await this.sendBatchedEmails(
+        recipients,
+        `New discussion from instructor in ${course.title}`,
+        `<p>Your instructor started a discussion in module ${discussion.moduleIndex + 1}: <strong>${discussion.title}</strong></p><p><a href="${discussionLink}">Join the discussion</a></p>`,
+        `Your instructor started a discussion in module ${discussion.moduleIndex + 1}: ${discussion.title}. Join: ${discussionLink}`,
+      );
+    }
+  }
+
+  private async notifyDiscussionReply(discussion: any, course: any, authorRole: 'student' | 'instructor') {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const discussionLink = `${frontendUrl}/courses/${discussion.courseId}/modules/${discussion.moduleIndex || 0}/discussion`;
+
+    const mainInstructorId = Array.isArray(course.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
+    const instructor = mainInstructorId ? await this.userModel.findById(mainInstructorId) : null;
+    const enrolledStudents = await this.enrollmentModel.find({ courseId: course._id }).populate('studentId', 'email firstName lastName email');
+
+    if (authorRole === 'student' && instructor?.email) {
+      await this.emailService.sendMessageNotification(
+        String(instructor.email),
+        `Student replied in ${course.title} discussion`,
+        `<p>A student replied in module ${discussion.moduleIndex + 1}: <strong>${discussion.title}</strong></p><p><a href="${discussionLink}">View reply</a></p>`,
+        `A student replied in module ${discussion.moduleIndex + 1}: ${discussion.title}. View: ${discussionLink}`,
+      );
+    }
+
+    if (authorRole === 'instructor' && enrolledStudents.length > 0) {
+      const recipients = enrolledStudents
+        .map((enr) => (enr.studentId as any)?.email)
+        .filter((email) => !!email);
+
+      await this.sendBatchedEmails(
+        recipients,
+        `Instructor replied in ${course.title} discussion`,
+        `<p>Your instructor replied in module ${discussion.moduleIndex + 1}: <strong>${discussion.title}</strong></p><p><a href="${discussionLink}">Read the reply</a></p>`,
+        `Your instructor replied in module ${discussion.moduleIndex + 1}: ${discussion.title}. Read: ${discussionLink}`,
+      );
+    }
+  }
+
+  private async sendBatchedEmails(recipients: string[], subject: string, html: string, text: string) {
+    const batchSize = 30;
+    for (let i = 0; i < recipients.length; i += batchSize) {
+      const batch = recipients.slice(i, i + batchSize);
+      for (const email of batch) {
+        await this.emailService.sendMessageNotification(email, subject, html, text);
+      }
+      if (i + batchSize < recipients.length) {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+      }
+    }
+  }
+
+  async markDiscussionRead(discussionId: string, userId: string) {
+    if (!userId) {
+      throw new UnauthorizedException('User required');
+    }
+
+    const discussion = await this.discussionModel.findById(discussionId);
+    if (!discussion) {
+      throw new NotFoundException('Discussion not found');
+    }
+
+    const existing = (discussion as any).lastRead || [];
+    const idx = existing.findIndex((lr: any) => String(lr.userId) === String(userId));
+    const now = new Date();
+    if (idx >= 0) {
+      existing[idx].lastReadAt = now;
+    } else {
+      existing.push({ userId, lastReadAt: now });
+    }
+    (discussion as any).lastRead = existing;
+    await discussion.save();
+    return { success: true };
   }
 
   // Final Assessment Management
@@ -1139,7 +1343,9 @@ export class CourseService {
         courseId: course._id,
         courseName: course.title,
         studentName: `${student.firstName} ${student.lastName}`,
-        instructorName: `${(course.instructorId as any).firstName} ${(course.instructorId as any).lastName}`,
+        instructorName: (Array.isArray(course.instructorIds) && course.instructorIds.length > 0 && (course.instructorIds[0] as any).firstName && (course.instructorIds[0] as any).lastName)
+          ? `${(course.instructorIds[0] as any).firstName} ${(course.instructorIds[0] as any).lastName}`
+          : '',
         issuedDate: new Date(),
         completionDate: new Date(),
       });
@@ -1354,16 +1560,14 @@ export class CourseService {
 
     console.log('📚 Getting submissions for course:', courseId);
     console.log('👨‍🏫 Instructor ID:', instructorId);
-    console.log('📖 Course instructor ID:', course.instructorId?.toString());
-
-    const courseInstructorId = course.instructorId?.toString();
-    
+    const mainInstructorId = Array.isArray(course.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
+    console.log('📖 Course main instructor ID:', mainInstructorId?.toString());
     // If course has no instructor assigned, assign current instructor
-    if (!course.instructorId) {
+    if (!mainInstructorId) {
       console.log('⚠️ Course has no instructor, assigning current instructor');
-      course.instructorId = instructorId as any;
+      course.instructorIds = [instructorId as any];
       await course.save();
-    } else if (courseInstructorId !== instructorId.toString()) {
+    } else if (String(mainInstructorId) !== instructorId.toString()) {
       console.log('❌ Authorization failed: instructor mismatch');
       throw new UnauthorizedException('You are not authorized to view submissions for this course');
     }
@@ -1473,7 +1677,8 @@ export class CourseService {
     }
 
     // Verify instructor owns this course
-    if (course.instructorId?.toString() !== instructorId.toString()) {
+    const mainInstructorId = Array.isArray(course.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
+    if (!mainInstructorId || String(mainInstructorId) !== instructorId.toString()) {
       throw new UnauthorizedException('You are not authorized to review this submission');
     }
 

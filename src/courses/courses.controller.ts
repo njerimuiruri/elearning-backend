@@ -76,17 +76,15 @@ export class CourseController {
     if (course) {
       console.log('Course Title:', course.title);
       console.log('Course Status:', course.status);
-      console.log('Course InstructorId:', course.instructorId);
+      console.log('Course InstructorIds:', course.instructorIds);
     }
     
     if (!course) {
       console.log('❌ Course not found');
       throw new NotFoundException('Course not found');
     }
-    
-    // If course has no instructor OR instructor doesn't match, assign it to current user
-    // This handles courses that were created before auth was set up
-    if (!course.instructorId || course.instructorId.toString() !== user._id.toString()) {
+    // If course has no instructors OR current user is not among them, assign
+    if (!course.instructorIds || !Array.isArray(course.instructorIds) || !course.instructorIds.map(i => i.toString()).includes(user._id.toString())) {
       console.log('⚠️ Assigning course to current instructor');
       await this.courseService.assignInstructorToCourse(id, user._id);
     }
@@ -143,7 +141,7 @@ export class CourseController {
     if (!course) {
       throw new NotFoundException('Course not found');
     }
-    if (course.instructorId.toString() !== user._id.toString()) {
+    if (!course.instructorIds || !course.instructorIds.map(i => i.toString()).includes(user._id.toString())) {
       throw new UnauthorizedException('Unauthorized');
     }
     return this.courseService.addFinalAssessment(id, assessmentData);
@@ -167,7 +165,7 @@ export class CourseController {
     if (!course) {
       throw new NotFoundException('Course not found');
     }
-    if (course.instructorId.toString() !== user._id.toString()) {
+    if (!course.instructorIds || !course.instructorIds.map(i => i.toString()).includes(user._id.toString())) {
       throw new UnauthorizedException('Unauthorized');
     }
     return this.courseService.updateFinalAssessment(id, assessmentData);
@@ -245,7 +243,7 @@ export class CourseController {
   // Discussion Routes
   @Post('/:id/discussions')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.STUDENT)
+  @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR)
   async createDiscussion(
     @Param('id') id: string,
     @Body() discussionData: any,
@@ -254,14 +252,25 @@ export class CourseController {
     return this.courseService.createDiscussion({
       ...discussionData,
       courseId: id,
-      studentId: user._id,
+      studentId: user.role === UserRole.STUDENT ? user._id : undefined,
+      instructorId: discussionData.instructorId || undefined,
+      createdById: user._id,
+      createdByRole: user.role === UserRole.INSTRUCTOR ? 'instructor' : 'student',
     });
   }
 
   @Get('/:id/discussions')
   @UseGuards(JwtAuthGuard)
-  async getDiscussions(@Param('id') id: string) {
-    return this.courseService.getCoursesDiscussions(id);
+  async getDiscussions(
+    @Param('id') id: string,
+    @Query('moduleIndex') moduleIndex?: string,
+    @CurrentUser() user?: any,
+  ) {
+    return this.courseService.getCoursesDiscussions(
+      id,
+      moduleIndex ? parseInt(moduleIndex, 10) : undefined,
+      user?._id,
+    );
   }
 
   @Post('discussions/:discussionId/reply')
@@ -275,8 +284,18 @@ export class CourseController {
       ...reply,
       authorId: user._id,
       authorName: `${user.firstName} ${user.lastName}`,
+      authorRole: user.role === UserRole.INSTRUCTOR ? 'instructor' : 'student',
       createdAt: new Date(),
     });
+  }
+
+  @Post('discussions/:discussionId/read')
+  @UseGuards(JwtAuthGuard)
+  async markDiscussionRead(
+    @Param('discussionId') discussionId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.markDiscussionRead(discussionId, user?._id);
   }
 
   // Dashboard Routes
@@ -355,7 +374,7 @@ export class CourseController {
         return { error: 'Course not found' };
       }
       console.log('✅ Course found:', course?.title);
-      console.log('   Course instructorId:', course?.instructorId?.toString());
+      console.log('   Course instructorIds:', course?.instructorIds?.map((id: any) => id?.toString?.() ?? String(id)));
       
       // 2. Check all enrollments for this course (regardless of attempts)
       const allEnrollments = await this.enrollmentModel.find({
@@ -388,7 +407,7 @@ export class CourseController {
         courseId: id,
         instructorId: user._id.toString(),
         courseTitle: course?.title,
-        courseInstructor: course?.instructorId?.toString(),
+        courseInstructor: Array.isArray(course?.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0]?.toString?.() ?? String(course.instructorIds[0]) : undefined,
         totalEnrollments: allEnrollments.length,
         enrollmentsWithSubmissions: submissionEnrollments.length,
         allEnrollments: allEnrollments.map((e: any) => ({
@@ -440,31 +459,24 @@ export class CourseController {
     }
     
     console.log('✅ Course found:', course.title);
-    console.log('Course instructorId:', course.instructorId);
+    console.log('Course instructorIds:', course.instructorIds);
     console.log('User ID:', user._id);
     
-    if (!course.instructorId) {
-      console.log('⚠️ Course has no instructorId, assigning to current user');
-      course.instructorId = user._id;
+    if (!course.instructorIds || !Array.isArray(course.instructorIds) || course.instructorIds.length === 0) {
+      console.log('⚠️ Course has no instructorIds, assigning to current user');
+      course.instructorIds = [user._id];
       // Don't await, just attempt to update
-      this.courseService.updateCourse(id, { instructorId: user._id }).catch(err => 
-        console.log('Could not update instructorId:', err.message)
+      this.courseService.updateCourse(id, { instructorIds: [user._id] }).catch(err => 
+        console.log('Could not update instructorIds:', err.message)
       );
     }
-    
-    // Handle both cases: instructorId can be a string ID or an object with _id property
-    const courseInstructorId = typeof course.instructorId === 'string' 
-      ? course.instructorId 
-      : course.instructorId._id || course.instructorId;
-    
+
+    const instructorIds = Array.isArray(course.instructorIds) ? course.instructorIds.map(i => i.toString()) : [];
     const userIdString = user._id.toString ? user._id.toString() : String(user._id);
-    const courseInstructorIdString = courseInstructorId.toString ? courseInstructorId.toString() : String(courseInstructorId);
-    
     console.log('Comparing IDs:');
-    console.log('Course instructorId (stringified):', courseInstructorIdString);
+    console.log('Course instructorIds:', instructorIds);
     console.log('User ID (stringified):', userIdString);
-    
-    if (courseInstructorIdString !== userIdString) {
+    if (!instructorIds.includes(userIdString)) {
       console.log('❌ Unauthorized: course instructor mismatch');
       throw new UnauthorizedException('You are not authorized to view this course');
     }
@@ -510,7 +522,7 @@ export class CourseController {
     if (!course) {
       throw new NotFoundException('Course not found');
     }
-    if (course.instructorId.toString() !== user._id.toString()) {
+    if (!course.instructorIds || !course.instructorIds.map(i => i.toString()).includes(user._id.toString())) {
       throw new UnauthorizedException('Unauthorized');
     }
     return this.courseService.updateCourse(id, updateCourseDto);

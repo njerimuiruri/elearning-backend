@@ -159,9 +159,10 @@ export class QuestionAnswerService {
   private async findAvailableInstructor(courseId: string): Promise<any> {
     const course = await this.courseModel
       .findById(courseId)
-      .populate('instructorId');
+      .populate('instructorIds');
 
-    return course?.instructorId || null;
+    // Return the first instructor if available
+    return Array.isArray(course?.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
   }
 
   /**
@@ -211,8 +212,8 @@ export class QuestionAnswerService {
 
       // Verify instructor owns this course or is assigned
       const course = await this.courseModel.findById(question.courseId);
-      if (course && course.instructorId.toString() !== instructorId && 
-          question.instructorId?.toString() !== instructorId) {
+      const instructorIds = Array.isArray(course?.instructorIds) ? course.instructorIds.map((id: any) => id.toString()) : [];
+      if (course && !instructorIds.includes(instructorId) && question.instructorId?.toString() !== instructorId) {
         throw new Error('Not authorized to respond to this question');
       }
 

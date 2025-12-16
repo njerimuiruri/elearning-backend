@@ -103,6 +103,7 @@ class Module {
 }
 
 @Schema({ timestamps: true })
+
 export class Course extends Document {
   @Prop({ required: true, trim: true })
   title: string;
@@ -113,8 +114,9 @@ export class Course extends Document {
   @Prop({ required: true })
   category: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  instructorId: Types.ObjectId;
+  // Support one or more instructors
+  @Prop({ type: [Types.ObjectId], ref: 'User', required: true })
+  instructorIds: Types.ObjectId[];
 
   @Prop({ enum: CourseLevel, default: CourseLevel.BEGINNER })
   level: CourseLevel;
@@ -177,7 +179,7 @@ export class Course extends Document {
 export const CourseSchema = SchemaFactory.createForClass(Course);
 
 // Create indexes
-CourseSchema.index({ instructorId: 1 });
+CourseSchema.index({ instructorIds: 1 });
 CourseSchema.index({ status: 1 });
 CourseSchema.index({ category: 1 });
 CourseSchema.index({ createdAt: -1 });

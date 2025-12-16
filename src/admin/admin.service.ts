@@ -719,7 +719,7 @@ export class AdminService {
     const [courses, total] = await Promise.all([
       this.courseModel
         .find(query)
-        .populate('instructorId', 'firstName lastName email institution')
+        .populate('instructorIds', 'firstName lastName email institution')
         .sort({ submittedAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -748,36 +748,43 @@ export class AdminService {
         approvedAt: new Date(),
       },
       { new: true },
-    ).populate('instructorId');
+    ).populate('instructorIds');
 
     if (!updatedCourse) {
       throw new NotFoundException('Course not found');
     }
 
-    const instructorId = updatedCourse.instructorId as any;
+    const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
 
-    // Send approval email to instructor
+    // Send approval email to all instructors
     try {
-      await this.emailService.sendCourseApprovalEmailToInstructor(
-        instructorId.email,
-        instructorId.firstName,
-        updatedCourse.title,
-      );
+      for (const instructor of instructors) {
+        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor) {
+          await this.emailService.sendCourseApprovalEmailToInstructor(
+            String(instructor.email),
+            String(instructor.firstName),
+            updatedCourse.title,
+          );
+        }
+      }
     } catch (error) {
       console.error('Failed to send course approval email:', error);
       // Don't block the approval if email fails
     }
 
-    // Send notification to admin email
+    // Send notification to admin email (use first instructor)
     try {
-      await this.emailService.sendInstructorRegistrationNotificationToAdmin(
-        'faith.muiruri@strathmore.edu',
-        `${instructorId.firstName} ${instructorId.lastName}`,
-        instructorId.email,
-        updatedCourse.title,
-        `Course APPROVED`,
-        updatedCourse._id.toString(),
-      );
+      const mainInstructor = instructors[0];
+      if (mainInstructor && typeof mainInstructor === 'object' && 'firstName' in mainInstructor && 'lastName' in mainInstructor && 'email' in mainInstructor) {
+        await this.emailService.sendInstructorRegistrationNotificationToAdmin(
+          'faith.muiruri@strathmore.edu',
+          `${mainInstructor.firstName || ''} ${mainInstructor.lastName || ''}`,
+          String(mainInstructor.email || ''),
+          updatedCourse.title,
+          `Course APPROVED`,
+          updatedCourse._id.toString(),
+        );
+      }
     } catch (error) {
       console.error('Failed to send admin notification:', error);
     }
@@ -801,37 +808,44 @@ export class AdminService {
         rejectionReason: reason,
       },
       { new: true },
-    ).populate('instructorId');
+    ).populate('instructorIds');
 
     if (!updatedCourse) {
       throw new NotFoundException('Course not found');
     }
 
-    const instructorId = updatedCourse.instructorId as any;
+    const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
 
-    // Send rejection email to instructor
+    // Send rejection email to all instructors
     try {
-      await this.emailService.sendCourseRejectionEmailToInstructor(
-        instructorId.email,
-        instructorId.firstName,
-        updatedCourse.title,
-        reason,
-      );
+      for (const instructor of instructors) {
+        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor) {
+          await this.emailService.sendCourseRejectionEmailToInstructor(
+            String(instructor.email),
+            String(instructor.firstName),
+            updatedCourse.title,
+            reason,
+          );
+        }
+      }
     } catch (error) {
       console.error('Failed to send course rejection email:', error);
       // Don't block the rejection if email fails
     }
 
-    // Send notification to admin email
+    // Send notification to admin email (use first instructor)
     try {
-      await this.emailService.sendInstructorRegistrationNotificationToAdmin(
-        'faith.muiruri@strathmore.edu',
-        `${instructorId.firstName} ${instructorId.lastName}`,
-        instructorId.email,
-        updatedCourse.title,
-        `Course REJECTED - Reason: ${reason}`,
-        updatedCourse._id.toString(),
-      );
+      const mainInstructor = instructors[0];
+      if (mainInstructor && typeof mainInstructor === 'object' && 'firstName' in mainInstructor && 'lastName' in mainInstructor && 'email' in mainInstructor) {
+        await this.emailService.sendInstructorRegistrationNotificationToAdmin(
+          'faith.muiruri@strathmore.edu',
+          `${mainInstructor.firstName || ''} ${mainInstructor.lastName || ''}`,
+          String(mainInstructor.email || ''),
+          updatedCourse.title,
+          `Course REJECTED - Reason: ${reason}`,
+          updatedCourse._id.toString(),
+        );
+      }
     } catch (error) {
       console.error('Failed to send admin notification:', error);
     }
@@ -843,7 +857,7 @@ export class AdminService {
   }
 
   async approvePendingCourse(courseId: string, adminId: string) {
-    const course = await this.courseModel.findById(courseId).populate('instructorId');
+    const course = await this.courseModel.findById(courseId).populate('instructorIds');
 
     if (!course) {
       throw new NotFoundException('Course not found');
@@ -862,22 +876,26 @@ export class AdminService {
         publishedAt: new Date(),
       },
       { new: true },
-    ).populate('instructorId');
+    ).populate('instructorIds');
 
     if (!updatedCourse) {
       throw new NotFoundException('Course not found');
     }
 
-    // Send approval email to instructor
+    // Send approval email to all instructors
     try {
-      const instructor = updatedCourse.instructorId as any;
-      await this.emailService.sendCourseApprovedEmail(
-        instructor.email,
-        `${instructor.firstName} ${instructor.lastName}`,
-        updatedCourse.title,
-      );
+      const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+      for (const instructor of instructors) {
+        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor && 'lastName' in instructor) {
+          await this.emailService.sendCourseApprovedEmail(
+            String(instructor.email),
+            `${instructor.firstName} ${instructor.lastName}`,
+            updatedCourse.title,
+          );
+        }
+      }
     } catch (error) {
-      console.error('Failed to send course approval email to instructor:', error);
+      console.error('Failed to send course approval email to instructor(s):', error);
       // Don't fail the approval if email fails
     }
 
@@ -888,7 +906,7 @@ export class AdminService {
   }
 
   async rejectPendingCourse(courseId: string, reason: string) {
-    const course = await this.courseModel.findById(courseId).populate('instructorId');
+    const course = await this.courseModel.findById(courseId).populate('instructorIds');
 
     if (!course) {
       throw new NotFoundException('Course not found');
@@ -906,23 +924,27 @@ export class AdminService {
         rejectedAt: new Date(),
       },
       { new: true },
-    ).populate('instructorId');
+    ).populate('instructorIds');
 
     if (!updatedCourse) {
       throw new NotFoundException('Course not found');
     }
 
-    // Send rejection email to instructor
+    // Send rejection email to all instructors
     try {
-      const instructor = updatedCourse.instructorId as any;
-      await this.emailService.sendCourseRejectedEmail(
-        instructor.email,
-        `${instructor.firstName} ${instructor.lastName}`,
-        updatedCourse.title,
-        reason,
-      );
+      const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+      for (const instructor of instructors) {
+        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor && 'lastName' in instructor) {
+          await this.emailService.sendCourseRejectedEmail(
+            String(instructor.email),
+            `${instructor.firstName} ${instructor.lastName}`,
+            updatedCourse.title,
+            reason,
+          );
+        }
+      }
     } catch (error) {
-      console.error('Failed to send course rejection email to instructor:', error);
+      console.error('Failed to send course rejection email to instructor(s):', error);
       // Don't block the rejection if email fails
     }
 
@@ -945,7 +967,7 @@ export class AdminService {
     const [courses, total] = await Promise.all([
       this.courseModel
         .find(query)
-        .populate('instructorId', 'firstName lastName email')
+        .populate('instructorIds', 'firstName lastName email')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -967,7 +989,7 @@ export class AdminService {
   async getCourseById(courseId: string) {
     const course = await this.courseModel
       .findById(courseId)
-      .populate('instructorId', 'firstName lastName email institution')
+      .populate('instructorIds', 'firstName lastName email institution')
       .exec();
 
     if (!course) {
@@ -1029,7 +1051,7 @@ export class AdminService {
   }
 
   async deleteCourse(courseId: string) {
-    const course = await this.courseModel.findById(courseId).populate('instructorId');
+    const course = await this.courseModel.findById(courseId).populate('instructorIds');
 
     if (!course) {
       throw new NotFoundException('Course not found');
@@ -1040,30 +1062,29 @@ export class AdminService {
 
     // Send deletion notification email to instructor
     try {
-      const instructor = course.instructorId as any;
+      const instructors = Array.isArray(course.instructorIds) ? course.instructorIds : [];
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const dashboardUrl = `${frontendUrl}/instructor/dashboard`;
 
-      const htmlContent = `
-        <h2>Course Deletion Notification</h2>
-        <p>Dear ${instructor.firstName} ${instructor.lastName},</p>
-        <p>We are writing to inform you that your course <strong>"${course.title}"</strong> has been deleted by an administrator.</p>
-        <p><strong>Reason:</strong> Administrative action</p>
-        <p>If you believe this was done in error or have any questions, please contact our support team.</p>
-        <p>You can visit your instructor dashboard to create new courses:</p>
-        <p>
-          <a href="${dashboardUrl}" style="display:inline-block;padding:10px 20px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">Go to Dashboard</a>
-        </p>
-        <p>Best regards,<br/>E-Learning Platform Team</p>
-      `;
-
-      await this.emailService.sendSimpleEmail(
-        instructor.email,
-        `Course Deleted: ${course.title}`,
-        htmlContent,
-      ).catch(() => {
-        console.log('Failed to send course deletion email to instructor');
-      });
+      for (const instructor of instructors) {
+        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor && 'lastName' in instructor) {
+          const htmlContent = `
+            <h2>Course Deletion Notification</h2>
+            <p>Dear ${instructor.firstName} ${instructor.lastName},</p>
+            <p>We are writing to inform you that your course <strong>"${course.title}"</strong> has been deleted by an administrator.</p>
+            <p><strong>Reason:</strong> Administrative action</p>
+            <p>If you believe this was done in error or have any questions, please contact our support team.</p>
+            <p>You can visit your instructor dashboard to create new courses:</p>
+            <p><a href="${dashboardUrl}">${dashboardUrl}</a></p>
+            <p>Best regards,<br/>E-Learning Platform Team</p>
+          `;
+          await this.emailService.sendSimpleEmail(
+            String(instructor.email),
+            'Course Deletion Notification',
+            htmlContent
+          );
+        }
+      }
     } catch (error) {
       console.error('Error sending course deletion email:', error);
       // Don't fail the deletion if email fails
