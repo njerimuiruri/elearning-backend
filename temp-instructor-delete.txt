@@ -1,0 +1,7 @@
+  @Delete('instructors/:id')
+  @ApiOperation({ summary: 'Delete instructor and their associated courses' })
+  @ApiParam({ name: 'id', description: 'Instructor user ID' })
+  @ApiResponse({ status: 200, description: 'Instructor and their courses deleted successfully' })
+  async deleteInstructor(@Param('id') id: string) {
+    return this.adminService.deleteInstructor(id);
+  }

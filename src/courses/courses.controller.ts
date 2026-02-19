@@ -1,19 +1,175 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards, Query, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CourseService } from './courses.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { CategoryAccessGuard } from '../categories/guards/category-access.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { UserRole } from '../schemas/user.schema';
 import { Enrollment } from '../schemas/enrollment.schema';
 import { CreateCourseDto, UpdateCourseDto } from './dto/course.dto';
 
+// Helper to normalize populated or raw instructor id entries
+function normalizeInstructorIds(ids: any): string[] {
+  if (!Array.isArray(ids)) return [];
+  return ids.map((i: any) => {
+    if (!i) return '';
+    if (typeof i === 'string') return i;
+    if (i._id) return String(i._id);
+    if (i.id) return String(i.id);
+    try {
+      return String(i);
+    } catch (err) {
+      return '';
+    }
+  });
+}
+
 @Controller('api/courses')
 @ApiTags('Courses')
 export class CourseController {
+  // === Draft/Review/Publish Workflow ===
+  @Put('/:courseId/modules/:moduleIndex/lessons/:lessonIndex/draft')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Save lesson as draft (Co-Instructor)' })
+  async saveLessonDraft(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @Param('lessonIndex') lessonIndex: number,
+    @Body() lessonData: any,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.saveLessonDraft(courseId, moduleIndex, lessonIndex, lessonData, user._id);
+  }
+
+  @Put('/:courseId/modules/:moduleIndex/lessons/:lessonIndex/submit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Submit lesson for review (Co-Instructor)' })
+  async submitLessonForReview(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @Param('lessonIndex') lessonIndex: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.submitLessonForReview(courseId, moduleIndex, lessonIndex, user._id);
+  }
+
+  @Put('/:courseId/modules/:moduleIndex/lessons/:lessonIndex/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Approve and publish lesson (Lead Instructor/Admin)' })
+  async approveLesson(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @Param('lessonIndex') lessonIndex: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.approveLesson(courseId, moduleIndex, lessonIndex, user._id);
+  }
+
+  @Put('/:courseId/modules/:moduleIndex/draft')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Save module as draft (Co-Instructor)' })
+  async saveModuleDraft(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @Body() moduleData: any,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.saveModuleDraft(courseId, moduleIndex, moduleData, user._id);
+  }
+
+  @Put('/:courseId/modules/:moduleIndex/submit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Submit module for review (Co-Instructor)' })
+  async submitModuleForReview(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.submitModuleForReview(courseId, moduleIndex, user._id);
+  }
+
+  @Put('/:courseId/modules/:moduleIndex/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Approve and publish module (Lead Instructor/Admin)' })
+  async approveModule(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.approveModule(courseId, moduleIndex, user._id);
+  }
+
+  // Module Instructor Management
+  @Post('/:courseId/modules/:moduleIndex/instructors')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Assign or update a module instructor (Lead only)' })
+  async assignModuleInstructor(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @Body() instructor: any,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.assignModuleInstructor(courseId, moduleIndex, instructor, user._id);
+  }
+
+  @Delete('/:courseId/modules/:moduleIndex/instructors/:instructorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Remove a module instructor (Lead only)' })
+  async removeModuleInstructor(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @Param('instructorId') instructorId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.removeModuleInstructor(courseId, moduleIndex, instructorId, user._id);
+  }
+
+  @Get('/:courseId/modules/:moduleIndex/instructors')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Get all instructors for a module' })
+  async getModuleInstructors(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+  ) {
+    return this.courseService.getModuleInstructors(courseId, moduleIndex);
+  }
+    // Admin - Set course price
+    @Put('/:id/set-price')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(UserRole.ADMIN)
+    @ApiBearerAuth('jwt-auth')
+    @ApiOperation({ summary: 'Set course price (Admin only)' })
+    @ApiParam({ name: 'id', description: 'Course ID' })
+    @ApiResponse({ status: 200, description: 'Price set successfully' })
+    async setCoursePrice(
+      @Param('id') id: string,
+      @Body('price') price: number,
+      @CurrentUser() user: any,
+    ) {
+      return this.courseService.setCoursePrice(id, price, user._id);
+    }
   constructor(
     private readonly courseService: CourseService,
     @InjectModel(Enrollment.name) private enrollmentModel: Model<Enrollment>,
@@ -84,7 +240,7 @@ export class CourseController {
       throw new NotFoundException('Course not found');
     }
     // If course has no instructors OR current user is not among them, assign
-    if (!course.instructorIds || !Array.isArray(course.instructorIds) || !course.instructorIds.map(i => i.toString()).includes(user._id.toString())) {
+    if (!course.instructorIds || !normalizeInstructorIds(course.instructorIds).includes(user._id.toString())) {
       console.log('⚠️ Assigning course to current instructor');
       await this.courseService.assignInstructorToCourse(id, user._id);
     }
@@ -141,7 +297,7 @@ export class CourseController {
     if (!course) {
       throw new NotFoundException('Course not found');
     }
-    if (!course.instructorIds || !course.instructorIds.map(i => i.toString()).includes(user._id.toString())) {
+    if (!course.instructorIds || !normalizeInstructorIds(course.instructorIds).includes(user._id.toString())) {
       throw new UnauthorizedException('Unauthorized');
     }
     return this.courseService.addFinalAssessment(id, assessmentData);
@@ -165,7 +321,7 @@ export class CourseController {
     if (!course) {
       throw new NotFoundException('Course not found');
     }
-    if (!course.instructorIds || !course.instructorIds.map(i => i.toString()).includes(user._id.toString())) {
+    if (!course.instructorIds || !normalizeInstructorIds(course.instructorIds).includes(user._id.toString())) {
       throw new UnauthorizedException('Unauthorized');
     }
     return this.courseService.updateFinalAssessment(id, assessmentData);
@@ -173,7 +329,7 @@ export class CourseController {
 
   // Enrollment Routes
   @Post('/:id/enroll')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, CategoryAccessGuard)
   @Roles(UserRole.STUDENT)
   async enrollCourse(
     @Param('id') id: string,
@@ -192,6 +348,26 @@ export class CourseController {
     return this.courseService.getEnrollmentForCourse(user._id, id);
   }
 
+  @Get('enrollment/:enrollmentId/assessment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT)
+  async getAssessmentForEnrollment(
+    @Param('enrollmentId') enrollmentId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.getAssessmentForEnrollment(enrollmentId, user._id);
+  }
+
+  @Get('/:id/resume-destination')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT)
+  async getResumeDestination(
+    @Param('id') id: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.getResumeDestination(user._id, id);
+  }
+
   // Student Routes
   @Get('student/my-enrollments')
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -205,6 +381,13 @@ export class CourseController {
   @Roles(UserRole.STUDENT)
   async getStudentCertificates(@CurrentUser() user: any) {
     return this.courseService.getStudentCertificates(user._id);
+  }
+
+  @Get('student/achievements')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT)
+  async getStudentAchievements(@CurrentUser() user: any) {
+    return this.courseService.getStudentAchievements(user._id);
   }
 
   // Progress Routes
@@ -264,12 +447,15 @@ export class CourseController {
   async getDiscussions(
     @Param('id') id: string,
     @Query('moduleIndex') moduleIndex?: string,
+    @Query('sortBy') sortBy?: 'recent' | 'popular' | 'unanswered' | 'mostReplies',
+    @Query('filterByStatus') filterByStatus?: 'open' | 'resolved' | 'closed' | 'all',
     @CurrentUser() user?: any,
   ) {
     return this.courseService.getCoursesDiscussions(
       id,
       moduleIndex ? parseInt(moduleIndex, 10) : undefined,
       user?._id,
+      { sortBy, filterByStatus },
     );
   }
 
@@ -296,6 +482,33 @@ export class CourseController {
     @CurrentUser() user: any,
   ) {
     return this.courseService.markDiscussionRead(discussionId, user?._id);
+  }
+
+  @Post('discussions/:discussionId/pin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async togglePinDiscussion(
+    @Param('discussionId') discussionId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.togglePinDiscussion(discussionId, user._id);
+  }
+
+  @Post('discussions/:discussionId/like')
+  @UseGuards(JwtAuthGuard)
+  async likeDiscussion(
+    @Param('discussionId') discussionId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.likeDiscussion(discussionId, user._id);
+  }
+
+  @Post('discussions/:discussionId/view')
+  @UseGuards(JwtAuthGuard)
+  async incrementViews(
+    @Param('discussionId') discussionId: string,
+  ) {
+    return this.courseService.incrementDiscussionViews(discussionId);
   }
 
   // Dashboard Routes
@@ -341,7 +554,30 @@ export class CourseController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.STUDENT)
   async restartCourse(@Param('enrollmentId') enrollmentId: string) {
-    return this.courseService.restartCourse(enrollmentId);
+    return this.courseService.restartCourse(enrollmentId, 'manual_restart', false);
+  }
+
+  // Soft Reset Course (only reset attempts, keep progress)
+  @Post('enrollment/:enrollmentId/soft-reset')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT)
+  async softResetCourse(@Param('enrollmentId') enrollmentId: string) {
+    return this.courseService.softResetCourse(enrollmentId);
+  }
+
+  // Get Attempt History
+  @Get('enrollment/:enrollmentId/history')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT, UserRole.INSTRUCTOR, UserRole.ADMIN)
+  async getAttemptHistory(@Param('enrollmentId') enrollmentId: string) {
+    const enrollment = await this.courseService.getEnrollmentById(enrollmentId);
+    if (!enrollment) {
+      throw new Error('Enrollment not found');
+    }
+    return {
+      attemptHistory: enrollment.attemptHistory || [],
+      currentAttemptNumber: enrollment.currentAttemptNumber || 1,
+    };
   }
 
   // ====== INSTRUCTOR SPECIFIC ROUTES (before generic /:id) ======
@@ -471,8 +707,8 @@ export class CourseController {
       );
     }
 
-    const instructorIds = Array.isArray(course.instructorIds) ? course.instructorIds.map(i => i.toString()) : [];
-    const userIdString = user._id.toString ? user._id.toString() : String(user._id);
+    const instructorIds = normalizeInstructorIds(course.instructorIds);
+    const userIdString = user._id && user._id.toString ? user._id.toString() : String(user._id);
     console.log('Comparing IDs:');
     console.log('Course instructorIds:', instructorIds);
     console.log('User ID (stringified):', userIdString);
@@ -487,20 +723,30 @@ export class CourseController {
 
   // ====== GENERIC ROUTES (must come LAST) ======
 
-  // Public - Get all published courses
+
+  // Public: Get all published courses with filters
   @Get()
+  @ApiOperation({ summary: 'Get all published courses (public)' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
+  @ApiQuery({ name: 'category', required: false, description: 'Filter by category' })
+  @ApiQuery({ name: 'level', required: false, description: 'Filter by level' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
   async getAllCourses(
+    @Query('status') status?: string,
     @Query('category') category?: string,
     @Query('level') level?: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.courseService.getAllPublishedCourses({
+    // Only allow published courses to be fetched publicly
+    const result = await this.courseService.getAllPublishedCourses({
       category,
       level,
-      page,
-      limit,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 20,
     });
+    return result;
   }
 
   // Generic course routes (must come after specific routes)
@@ -522,9 +768,89 @@ export class CourseController {
     if (!course) {
       throw new NotFoundException('Course not found');
     }
-    if (!course.instructorIds || !course.instructorIds.map(i => i.toString()).includes(user._id.toString())) {
+    if (!course.instructorIds || !normalizeInstructorIds(course.instructorIds).includes(user._id.toString())) {
       throw new UnauthorizedException('Unauthorized');
     }
     return this.courseService.updateCourse(id, updateCourseDto);
+  }
+
+  // Lock a module for editing
+  @Post(':courseId/modules/:moduleIndex/lock')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async lockModule(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.lockModule(courseId, moduleIndex, user._id);
+  }
+
+  // Unlock a module after editing
+  @Post(':courseId/modules/:moduleIndex/unlock')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async unlockModule(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.unlockModule(courseId, moduleIndex, user._id);
+  }
+
+  // Lock a lesson for editing
+  @Post(':courseId/modules/:moduleIndex/lessons/:lessonIndex/lock')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async lockLesson(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @Param('lessonIndex') lessonIndex: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.lockLesson(courseId, moduleIndex, lessonIndex, user._id);
+  }
+
+  // Unlock a lesson after editing
+  @Post(':courseId/modules/:moduleIndex/lessons/:lessonIndex/unlock')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async unlockLesson(
+    @Param('courseId') courseId: string,
+    @Param('moduleIndex') moduleIndex: number,
+    @Param('lessonIndex') lessonIndex: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.unlockLesson(courseId, moduleIndex, lessonIndex, user._id);
+  }
+
+  // Admin: Add instructor to course
+  @Post(':id/instructors/:instructorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Add instructor to course (Admin only)' })
+  @ApiParam({ name: 'id', description: 'Course ID' })
+  @ApiParam({ name: 'instructorId', description: 'Instructor User ID' })
+  async addInstructorToCourse(
+    @Param('id') id: string,
+    @Param('instructorId') instructorId: string,
+  ) {
+    return this.courseService.assignInstructorToCourse(id, instructorId);
+  }
+
+  // Admin: Remove instructor from course
+  @Delete(':id/instructors/:instructorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Remove instructor from course (Admin only)' })
+  @ApiParam({ name: 'id', description: 'Course ID' })
+  @ApiParam({ name: 'instructorId', description: 'Instructor User ID' })
+  async removeInstructorFromCourse(
+    @Param('id') id: string,
+    @Param('instructorId') instructorId: string,
+  ) {
+    return this.courseService.removeInstructorFromCourse(id, instructorId);
   }
 }

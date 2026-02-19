@@ -77,6 +77,57 @@ class ModuleDto {
 }
 
 export class CreateCourseDto {
+    @IsString()
+    @IsOptional()
+    welcomeMessage?: string;
+
+    @IsString()
+    @IsOptional()
+    audienceDescription?: string;
+
+    @IsString()
+    @IsOptional()
+    deliveryMode?: string;
+
+    @IsString()
+    @IsOptional()
+    courseAim?: string;
+
+    @IsString()
+    @IsOptional()
+    courseObjective?: string;
+
+    @IsString()
+    @IsOptional()
+    expectedLearningOutcomes?: string;
+
+    @IsString()
+    @IsOptional()
+    briefContent?: string;
+
+    @IsString()
+    @IsOptional()
+    teachingLearningMethods?: string;
+
+    @IsString()
+    @IsOptional()
+    resourcesMaterials?: string;
+
+    @IsString()
+    @IsOptional()
+    assessmentPlan?: string;
+
+    @IsString()
+    @IsOptional()
+    supportingTechnologies?: string;
+
+    @IsString()
+    @IsOptional()
+    coreTexts?: string;
+
+    @IsString()
+    @IsOptional()
+    additionalReadings?: string;
   @IsString()
   @IsNotEmpty()
   title: string;
@@ -93,6 +144,10 @@ export class CreateCourseDto {
   @IsOptional()
   level?: CourseLevel;
 
+  // Allow admin to specify multiple instructors (optional)
+  @IsArray()
+  @IsOptional()
+  instructorIds?: string[];
   @IsArray()
   @IsOptional()
   modules?: ModuleDto[];
@@ -118,6 +173,57 @@ export class CreateCourseDto {
 }
 
 export class UpdateCourseDto {
+    @IsString()
+    @IsOptional()
+    welcomeMessage?: string;
+
+    @IsString()
+    @IsOptional()
+    audienceDescription?: string;
+
+    @IsString()
+    @IsOptional()
+    deliveryMode?: string;
+
+    @IsString()
+    @IsOptional()
+    courseAim?: string;
+
+    @IsString()
+    @IsOptional()
+    courseObjective?: string;
+
+    @IsString()
+    @IsOptional()
+    expectedLearningOutcomes?: string;
+
+    @IsString()
+    @IsOptional()
+    briefContent?: string;
+
+    @IsString()
+    @IsOptional()
+    teachingLearningMethods?: string;
+
+    @IsString()
+    @IsOptional()
+    resourcesMaterials?: string;
+
+    @IsString()
+    @IsOptional()
+    assessmentPlan?: string;
+
+    @IsString()
+    @IsOptional()
+    supportingTechnologies?: string;
+
+    @IsString()
+    @IsOptional()
+    coreTexts?: string;
+
+    @IsString()
+    @IsOptional()
+    additionalReadings?: string;
   @IsString()
   @IsOptional()
   title?: string;
@@ -134,6 +240,10 @@ export class UpdateCourseDto {
   @IsOptional()
   level?: CourseLevel;
 
+  // Allow admin to update instructors (optional)
+  @IsArray()
+  @IsOptional()
+  instructorIds?: string[];
   @IsArray()
   @IsOptional()
   modules?: ModuleDto[];

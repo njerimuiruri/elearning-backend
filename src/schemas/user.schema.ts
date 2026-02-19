@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export enum UserRole {
   STUDENT = 'student',
@@ -39,6 +39,9 @@ class FellowData {
 
   @Prop({ enum: FellowshipStatus, default: FellowshipStatus.ACTIVE })
   fellowshipStatus: string;
+
+  @Prop([{ type: Types.ObjectId, ref: 'Category' }])
+  assignedCategories: Types.ObjectId[];
 }
 
 @Schema({ timestamps: true })
@@ -110,6 +113,33 @@ export class User extends Document {
   @Prop({ default: null })
   cvUrl: string;
 
+  @Prop({ default: null })
+  profilePicture: string;
+
+  @Prop({ default: null })
+  qualifications: string;
+
+  @Prop({ default: null })
+  expertise: string;
+
+  @Prop({ default: null })
+  linkedIn: string;
+
+  @Prop({ default: null })
+  portfolio: string;
+
+  @Prop({ default: null })
+  teachingExperience: string;
+
+  @Prop({ default: null })
+  yearsOfExperience: string;
+
+  @Prop({ default: null })
+  organization: string;
+
+  @Prop({ default: null })
+  otherOrganization: string;
+
   @Prop({ default: 0 })
   totalStudents: number;
 
@@ -119,6 +149,10 @@ export class User extends Document {
   // Fellow-specific fields
   @Prop({ type: FellowData, default: null })
   fellowData: FellowData;
+
+  // Category access control
+  @Prop([{ type: Types.ObjectId, ref: 'Category' }])
+  purchasedCategories: Types.ObjectId[];
 
   // Password management
   @Prop({ default: false })

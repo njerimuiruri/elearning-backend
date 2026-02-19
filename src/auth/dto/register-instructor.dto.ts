@@ -24,15 +24,57 @@ export class RegisterInstructorDto {
 
   @IsString()
   @IsNotEmpty()
+  country: string;
+
+  @IsString()
+  @IsOptional()
+  organization?: string;
+
+  @IsString()
+  @IsOptional()
+  otherOrganization?: string;
+
+  @IsString()
+  @IsNotEmpty()
   institution: string;
 
   @IsString()
   @IsNotEmpty()
   bio: string;
 
+  @IsString()
+  @IsNotEmpty()
+  qualifications: string;
+
+  @IsString()
+  @IsNotEmpty()
+  expertise: string;
+
   @IsOptional()
   @IsString()
-  profilePhotoUrl?: string;
+  linkedIn?: string;
+
+  @IsOptional()
+  @IsString()
+  portfolio?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  teachingExperience: string;
+
+  @IsString()
+  @IsNotEmpty()
+  yearsOfExperience: string;
+
+  @IsOptional()
+  profilePicture?: any; // For file uploads
+
+  @IsOptional()
+  @IsString()
+  profilePictureUrl?: string;
+
+  @IsOptional()
+  cv?: any; // For file uploads
 
   @IsOptional()
   @IsString()

@@ -1,33 +1,227 @@
 import { Injectable, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Course } from '../schemas/course.schema';
+import { Course, CourseStatus } from '../schemas/course.schema';
 import { Enrollment } from '../schemas/enrollment.schema';
 import { Progress } from '../schemas/progress.schema';
 import { Certificate } from '../schemas/certificate.schema';
+import { Achievement } from '../schemas/achievement.schema';
 import { Discussion } from '../schemas/discussion.schema';
 import { EmailReminder } from '../schemas/email-reminder.schema';
 import { User } from '../schemas/user.schema';
 import { EmailService } from '../common/services/email.service';
+import { MessagesService } from '../messages/messages.service';
 import { InstructorReview } from '../schemas/instructor-review.schema';
 
+const MODULE_XP_BOOST = 300;
+const COURSE_COMPLETION_XP = 1500;
+
 @Injectable()
+
+
 export class CourseService {
   constructor(
-    @InjectModel(User.name) private userModel: Model<User>,
-    @InjectModel(Course.name) private courseModel: Model<Course>,
-    @InjectModel(Enrollment.name) private enrollmentModel: Model<Enrollment>,
-    @InjectModel(Progress.name) private progressModel: Model<Progress>,
-    @InjectModel(Certificate.name) private certificateModel: Model<Certificate>,
-    @InjectModel(Discussion.name) private discussionModel: Model<Discussion>,
-    @InjectModel(EmailReminder.name) private emailReminderModel: Model<EmailReminder>,
-    @InjectModel(InstructorReview.name) private instructorReviewModel: Model<InstructorReview>,
-    private emailService: EmailService,
+    @InjectModel(Course.name) private readonly courseModel: Model<Course>,
+    @InjectModel(Enrollment.name) private readonly enrollmentModel: Model<Enrollment>,
+    @InjectModel(Progress.name) private readonly progressModel: Model<Progress>,
+    @InjectModel(Certificate.name) private readonly certificateModel: Model<Certificate>,
+    @InjectModel(Achievement.name) private readonly achievementModel: Model<Achievement>,
+    @InjectModel(Discussion.name) private readonly discussionModel: Model<Discussion>,
+    @InjectModel(EmailReminder.name) private readonly emailReminderModel: Model<EmailReminder>,
+    @InjectModel(User.name) private readonly userModel: Model<User>,
+    @InjectModel(InstructorReview.name) private readonly instructorReviewModel: Model<InstructorReview>,
+    private readonly emailService: EmailService,
+    private readonly messagesService: MessagesService,
   ) {}
+
+  // Admin: Set course price
+  async setCoursePrice(courseId: string, price: number, adminId: string) {
+    if (typeof price !== 'number' || price <= 0) {
+      throw new BadRequestException('Price must be a positive number');
+    }
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    course.price = price;
+    course.lastEditedBy = new Types.ObjectId(adminId);
+    course.lastEditedAt = new Date();
+    await course.save();
+    return course;
+  }
+
+  // Save lesson as draft (Co-Instructor)
+  async saveLessonDraft(courseId: string, moduleIndex: number, lessonIndex: number, lessonData: any, instructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex];
+    if (!module) throw new NotFoundException('Module not found');
+    const lesson = module.lessons?.[lessonIndex];
+    if (!lesson) throw new NotFoundException('Lesson not found');
+    // Only module instructor with canEditLessons
+    const modInst = (module.moduleInstructors || []).find((i: any) => String(i.instructorId) === String(instructorId));
+    if (!modInst || !modInst.permissions?.canEditLessons) {
+      throw new UnauthorizedException('No permission to edit lessons');
+    }
+    Object.assign(lesson, lessonData, {
+      status: 'draft',
+      draftBy: instructorId,
+      draftAt: new Date(),
+    });
+    await course.save();
+    return lesson;
+  }
+
+  // Submit lesson for review (Co-Instructor)
+  async submitLessonForReview(courseId: string, moduleIndex: number, lessonIndex: number, instructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex];
+    if (!module) throw new NotFoundException('Module not found');
+    const lesson = module.lessons?.[lessonIndex];
+    if (!lesson) throw new NotFoundException('Lesson not found');
+    // Only module instructor with canEditLessons
+    const modInst = (module.moduleInstructors || []).find((i: any) => String(i.instructorId) === String(instructorId));
+    if (!modInst || !modInst.permissions?.canEditLessons) {
+      throw new UnauthorizedException('No permission to submit lessons');
+    }
+    lesson.status = 'under_review';
+    await course.save();
+    return lesson;
+  }
+
+  // Approve and publish lesson (Lead Instructor/Admin)
+  async approveLesson(courseId: string, moduleIndex: number, lessonIndex: number, instructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex];
+    if (!module) throw new NotFoundException('Module not found');
+    const lesson = module.lessons?.[lessonIndex];
+    if (!lesson) throw new NotFoundException('Lesson not found');
+    // Only Lead Instructor or Admin
+    const lead = (module.moduleInstructors || []).find((i: any) => i.role === 'lead');
+    if (!lead || String(lead.instructorId) !== String(instructorId)) {
+      throw new UnauthorizedException('Only Lead Instructor can approve');
+    }
+    lesson.status = 'published';
+    lesson.reviewedBy = instructorId;
+    lesson.reviewedAt = new Date();
+    await course.save();
+    return lesson;
+  }
+
+  // Save module as draft (Co-Instructor)
+  async saveModuleDraft(courseId: string, moduleIndex: number, moduleData: any, instructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex];
+    if (!module) throw new NotFoundException('Module not found');
+    // Only module instructor with canEditLessons
+    const modInst = (module.moduleInstructors || []).find((i: any) => String(i.instructorId) === String(instructorId));
+    if (!modInst || !modInst.permissions?.canEditLessons) {
+      throw new UnauthorizedException('No permission to edit module');
+    }
+    Object.assign(module, moduleData, {
+      status: 'draft',
+      draftBy: instructorId,
+      draftAt: new Date(),
+    });
+    await course.save();
+    return module;
+  }
+
+  // Submit module for review (Co-Instructor)
+  async submitModuleForReview(courseId: string, moduleIndex: number, instructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex];
+    if (!module) throw new NotFoundException('Module not found');
+    // Only module instructor with canEditLessons
+    const modInst = (module.moduleInstructors || []).find((i: any) => String(i.instructorId) === String(instructorId));
+    if (!modInst || !modInst.permissions?.canEditLessons) {
+      throw new UnauthorizedException('No permission to submit module');
+    }
+    module.status = 'under_review';
+    await course.save();
+    return module;
+  }
+
+  // Approve and publish module (Lead Instructor/Admin)
+  async approveModule(courseId: string, moduleIndex: number, instructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex];
+    if (!module) throw new NotFoundException('Module not found');
+    // Only Lead Instructor or Admin
+    const lead = (module.moduleInstructors || []).find((i: any) => i.role === 'lead');
+    if (!lead || String(lead.instructorId) !== String(instructorId)) {
+      throw new UnauthorizedException('Only Lead Instructor can approve');
+    }
+    module.status = 'published';
+    module.reviewedBy = instructorId;
+    module.reviewedAt = new Date();
+    await course.save();
+    return module;
+  }
+
+  // Assign or update a module instructor (Lead only)
+  async assignModuleInstructor(courseId: string, moduleIndex: number, instructor: any, actingInstructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex];
+    if (!module) throw new NotFoundException('Module not found');
+    // Only Lead Instructor or Admin can assign
+    const lead = (module.moduleInstructors || []).find((i: any) => i.role === 'lead');
+    if (!lead || String(lead.instructorId) !== String(actingInstructorId)) {
+      throw new UnauthorizedException('Only Lead Instructor can assign module instructors');
+    }
+    // Check if instructor already exists
+    const idx = (module.moduleInstructors || []).findIndex((i: any) => String(i.instructorId) === String(instructor.instructorId));
+    if (idx >= 0) {
+      // Update role/permissions
+      module.moduleInstructors[idx] = instructor;
+    } else {
+      module.moduleInstructors = [...(module.moduleInstructors || []), instructor];
+    }
+    await course.save();
+    return module.moduleInstructors;
+  }
+
+  // Remove a module instructor (Lead only)
+  async removeModuleInstructor(courseId: string, moduleIndex: number, instructorId: string, actingInstructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex];
+    if (!module) throw new NotFoundException('Module not found');
+    // Only Lead Instructor or Admin can remove
+    const lead = (module.moduleInstructors || []).find((i: any) => i.role === 'lead');
+    if (!lead || String(lead.instructorId) !== String(actingInstructorId)) {
+      throw new UnauthorizedException('Only Lead Instructor can remove module instructors');
+    }
+    module.moduleInstructors = (module.moduleInstructors || []).filter((i: any) => String(i.instructorId) !== String(instructorId));
+    await course.save();
+    return module.moduleInstructors;
+  }
+
+  // Get module instructors
+  async getModuleInstructors(courseId: string, moduleIndex: number) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex];
+    if (!module) throw new NotFoundException('Module not found');
+    return module.moduleInstructors || [];
+  }
+
+
 
   // Course Management
   async createCourse(instructorId: string, courseData: any) {
     const normalized = this.normalizeCourseData(courseData);
+    // Set uploadedBy for each module if not already set
+    if (Array.isArray(normalized.modules)) {
+      normalized.modules = normalized.modules.map((module: any) => ({
+        ...module,
+        uploadedBy: module.uploadedBy || instructorId,
+      }));
+    }
     const newCourse = new this.courseModel({
       ...normalized,
       instructorIds: [instructorId],
@@ -50,13 +244,25 @@ export class CourseService {
   }
 
   async getCourseById(courseId: string) {
-    // Guard against invalid ObjectId inputs (e.g., numeric indices like "1")
-    if (!Types.ObjectId.isValid(courseId)) {
+    if (!courseId) return null;
+
+    // Normalize / sanitize id in case it's been passed with extra segments or query
+    let rawId = String(courseId).trim();
+    // If a full path or URL was accidentally passed, take the last segment
+    if (rawId.includes('/')) {
+      rawId = rawId.split('/').filter(Boolean).pop() as string;
+    }
+    if (rawId.includes('?')) {
+      rawId = rawId.split('?')[0];
+    }
+
+    // If id still doesn't look like an ObjectId, return null
+    if (!Types.ObjectId.isValid(rawId)) {
       return null;
     }
 
     return await this.courseModel
-      .findById(courseId)
+      .findById(rawId)
       .populate('instructorIds', 'firstName lastName email institution avgRating profilePhotoUrl bio')
       .lean();
   }
@@ -139,6 +345,125 @@ export class CourseService {
     return courseData;
   }
 
+  private async awardModuleCompletionAchievement(
+    enrollment: Enrollment,
+    course: any,
+    moduleIndex: number,
+    score?: number,
+  ) {
+    if (!course) return null;
+
+    // Check if achievement already exists for THIS enrollment (supports multiple course attempts)
+    const existing = await this.achievementModel.findOne({
+      studentId: enrollment.studentId,
+      courseId: enrollment.courseId,
+      enrollmentId: enrollment._id,
+      type: 'module_completion',
+      moduleIndex,
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    const moduleTitle = Array.isArray(course.modules)
+      ? course.modules[moduleIndex]?.title || `Module ${moduleIndex + 1}`
+      : `Module ${moduleIndex + 1}`;
+
+    try {
+      const achievement = await this.achievementModel.create({
+        studentId: enrollment.studentId,
+        courseId: enrollment.courseId,
+        enrollmentId: enrollment._id,
+        type: 'module_completion',
+        moduleIndex,
+        moduleTitle,
+        title: 'Module Completed',
+        description: `Completed ${moduleTitle}`,
+        xpAwarded: MODULE_XP_BOOST,
+        metadata: {
+          score: typeof score === 'number' ? Math.round(score * 10) / 10 : undefined,
+          attemptNumber: enrollment.currentAttemptNumber || 1,
+        },
+      });
+
+      await this.userModel.findByIdAndUpdate(enrollment.studentId, {
+        $inc: { totalPoints: MODULE_XP_BOOST },
+      });
+
+      return achievement;
+    } catch (error: any) {
+      // Handle duplicate key error gracefully
+      if (error.code === 11000) {
+        console.log(`Achievement already exists for student ${enrollment.studentId}, module ${moduleIndex}`);
+        const existing = await this.achievementModel.findOne({
+          studentId: enrollment.studentId,
+          courseId: enrollment.courseId,
+          enrollmentId: enrollment._id,
+          type: 'module_completion',
+          moduleIndex,
+        });
+        return existing;
+      }
+      throw error;
+    }
+  }
+
+  private async awardCourseCompletionAchievement(
+    enrollment: Enrollment,
+    course: any,
+    score?: number,
+  ) {
+    if (!course) return null;
+
+    // Check if achievement already exists for THIS enrollment
+    const existing = await this.achievementModel.findOne({
+      studentId: enrollment.studentId,
+      courseId: enrollment.courseId,
+      enrollmentId: enrollment._id,
+      type: 'course_completion',
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    try {
+      const achievement = await this.achievementModel.create({
+        studentId: enrollment.studentId,
+        courseId: enrollment.courseId,
+        enrollmentId: enrollment._id,
+        type: 'course_completion',
+        title: 'Course Completed',
+        description: `Finished ${course.title || 'the course'}`,
+        xpAwarded: COURSE_COMPLETION_XP,
+        metadata: {
+          score: typeof score === 'number' ? Math.round(score * 10) / 10 : undefined,
+          attemptNumber: enrollment.currentAttemptNumber || 1,
+        },
+      });
+
+      await this.userModel.findByIdAndUpdate(enrollment.studentId, {
+        $inc: { totalPoints: COURSE_COMPLETION_XP },
+      });
+
+      return achievement;
+    } catch (error: any) {
+      // Handle duplicate key error gracefully
+      if (error.code === 11000) {
+        console.log(`Course completion achievement already exists for student ${enrollment.studentId}`);
+        const existing = await this.achievementModel.findOne({
+          studentId: enrollment.studentId,
+          courseId: enrollment.courseId,
+          enrollmentId: enrollment._id,
+          type: 'course_completion',
+        });
+        return existing;
+      }
+      throw error;
+    }
+  }
+
   private async buildModuleProgress(enrollmentId: Types.ObjectId | string, totalModules?: number) {
     const enrollmentObjectId = typeof enrollmentId === 'string' ? new Types.ObjectId(enrollmentId) : enrollmentId;
 
@@ -211,6 +536,95 @@ export class CourseService {
     return await this.courseModel.findByIdAndDelete(courseId);
   }
 
+  // Lock a module for editing
+  async lockModule(courseId: string, moduleIndex: number, instructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex] as any;
+    if (!module) throw new NotFoundException('Module not found');
+    if (module.lockedBy && String(module.lockedBy) !== instructorId && module.lockedAt && Date.now() - new Date(module.lockedAt).getTime() < 10 * 60 * 1000) {
+      throw new BadRequestException('Module is currently being edited by another instructor');
+    }
+    module.lockedBy = instructorId;
+    module.lockedAt = new Date();
+    await course.save();
+    return { lockedBy: module.lockedBy, lockedAt: module.lockedAt };
+  }
+
+  // Unlock a module after editing
+  async unlockModule(courseId: string, moduleIndex: number, instructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex] as any;
+    if (!module) throw new NotFoundException('Module not found');
+    if (String(module.lockedBy) === instructorId) {
+      module.lockedBy = undefined;
+      module.lockedAt = undefined;
+      module.lastEditedBy = instructorId;
+      module.lastEditedAt = new Date();
+      await course.save();
+    }
+    return { unlocked: true };
+  }
+
+
+  // Lock a lesson for editing (enforce module instructor permissions)
+  async lockLesson(courseId: string, moduleIndex: number, lessonIndex: number, instructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex] as any;
+    if (!module) throw new NotFoundException('Module not found');
+    // Permission check: must be a module instructor with canEditLessons
+    const modInst = (module.moduleInstructors || []).find((i: any) => String(i.instructorId) === String(instructorId));
+    if (!modInst || !modInst.permissions?.canEditLessons) {
+      throw new UnauthorizedException('You do not have permission to edit lessons in this module');
+    }
+    const lesson = module.lessons?.[lessonIndex] as any;
+    if (!lesson) throw new NotFoundException('Lesson not found');
+    if (lesson.lockedBy && String(lesson.lockedBy) !== instructorId && lesson.lockedAt && Date.now() - new Date(lesson.lockedAt).getTime() < 10 * 60 * 1000) {
+      throw new BadRequestException('Lesson is currently being edited by another instructor');
+    }
+    lesson.lockedBy = instructorId;
+    lesson.lockedAt = new Date();
+    await course.save();
+    return { lockedBy: lesson.lockedBy, lockedAt: lesson.lockedAt };
+  }
+
+
+  // Unlock a lesson after editing (enforce module instructor permissions)
+  async unlockLesson(courseId: string, moduleIndex: number, lessonIndex: number, instructorId: string) {
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    const module = course.modules?.[moduleIndex] as any;
+    if (!module) throw new NotFoundException('Module not found');
+    // Permission check: must be a module instructor with canEditLessons
+    const modInst = (module.moduleInstructors || []).find((i: any) => String(i.instructorId) === String(instructorId));
+    if (!modInst || !modInst.permissions?.canEditLessons) {
+      throw new UnauthorizedException('You do not have permission to edit lessons in this module');
+    }
+    const lesson = module.lessons?.[lessonIndex] as any;
+    if (!lesson) throw new NotFoundException('Lesson not found');
+    if (String(lesson.lockedBy) === instructorId) {
+      lesson.lockedBy = undefined;
+      lesson.lockedAt = undefined;
+      lesson.lastEditedBy = instructorId;
+      lesson.lastEditedAt = new Date();
+      await course.save();
+    }
+    return { unlocked: true };
+  }
+
+  // Remove instructor from course (admin only)
+  async removeInstructorFromCourse(courseId: string, instructorId: string) {
+    // Remove instructorId from instructorIds array
+    const updated = await this.courseModel.findByIdAndUpdate(
+      courseId,
+      { $pull: { instructorIds: instructorId } },
+      { new: true },
+    );
+    return updated;
+  }
+
   // Course Submission & Approval
   async submitCourse(courseId: string, instructorId?: string) {
     // First, get the course
@@ -232,8 +646,9 @@ export class CourseService {
     const updatedCourse = await this.courseModel.findByIdAndUpdate(
       courseId,
       {
-        status: 'submitted',
+        status: 'submitted', // Pending review
         submittedAt: new Date(),
+        price: undefined, // Remove any price set by instructor
       },
       { new: true },
     ).populate('instructorIds');
@@ -267,22 +682,25 @@ export class CourseService {
   }
 
   async approveCourse(courseId: string, adminId: string, feedback?: string) {
-    const updatedCourse = await this.courseModel.findByIdAndUpdate(
-      courseId,
-      {
-        status: 'published', // Automatically publish course when approved
-        approvedBy: adminId,
-        approvedAt: new Date(),
-        publishedAt: new Date(),
-      },
-      { new: true },
-    ).populate('instructorIds');
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new Error('Course not found');
+
+    if (typeof course.price !== 'number' || course.price <= 0) {
+      throw new BadRequestException('Course price must be set by admin before approval');
+    }
+    course.status = CourseStatus.PUBLISHED;
+    course.approvedBy = new Types.ObjectId(adminId);
+    course.approvedAt = new Date();
+    course.publishedAt = new Date();
+    await course.save();
+    const updatedCourse = await this.courseModel.findById(courseId).populate('instructorIds');
 
     if (!updatedCourse) {
-      throw new Error('Course not found');
+      throw new Error('Course not found after approval');
     }
 
     // Send approval email to all instructors
+
     try {
       const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
       for (const instructor of instructors) {
@@ -454,17 +872,39 @@ export class CourseService {
       await enrollment.save();
     } catch (err: any) {
       if (err?.code === 11000) {
-        const dup = await this.enrollmentModel.findOne({ studentId, courseId });
-        if (dup) {
-          const moduleProgress = await this.buildModuleProgress(dup._id, course.modules?.length || 0);
-          const updated = await this.updateEnrollment(dup._id, {
-            moduleProgress: moduleProgress as any,
+        // Handle duplicate key errors
+        const keyPattern = err?.keyPattern || {};
+        
+        // If it's the studentId+courseId unique constraint, use existing enrollment
+        if (keyPattern.studentId && keyPattern.courseId) {
+          const dup = await this.enrollmentModel.findOne({ studentId, courseId });
+          if (dup) {
+            const moduleProgress = await this.buildModuleProgress(dup._id, course.modules?.length || 0);
+            const updated = await this.updateEnrollment(dup._id, {
+              moduleProgress: moduleProgress as any,
+              lastAccessedAt: new Date(),
+            });
+            return updated;
+          }
+        }
+        
+        // If it's a certificatePublicId collision (shouldn't happen with sparse index), retry
+        if (keyPattern.certificatePublicId) {
+          // Generate a new enrollment with no certificatePublicId set
+          const retryEnrollment = new this.enrollmentModel({
+            studentId,
+            courseId,
             lastAccessedAt: new Date(),
           });
-          return updated;
+          await retryEnrollment.save();
+          enrollment._id = retryEnrollment._id;
+          // Continue with the rest of the enrollment logic
+        } else {
+          throw err;
         }
+      } else {
+        throw err;
       }
-      throw err;
     }
 
     // Create progress records for each module
@@ -515,6 +955,72 @@ export class CourseService {
     return updated;
   }
 
+  async getResumeDestination(studentId: string, courseId: string) {
+    const enrollment = await this.enrollmentModel.findOne({ studentId, courseId });
+    if (!enrollment) {
+      throw new NotFoundException('Enrollment not found');
+    }
+
+    const course = await this.courseModel.findById(courseId);
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    // Check last activity type to determine smart resume
+    const lastActivity = enrollment.lastActivityType || 'lesson';
+
+    // Priority 1: If in final assessment, resume there
+    // BUT: Don't send back to assessment if already submitted (unless failed and can retry)
+    if (lastActivity === 'final_assessment' && enrollment.inFinalAssessment) {
+      const hasSubmitted = (enrollment.finalAssessmentAttempts || 0) > 0;
+      const pendingReview = (enrollment.pendingManualGradingCount || 0) > 0;
+      const hasPassed = enrollment.finalAssessmentPassed === true;
+      const canRetry = !hasPassed && enrollment.finalAssessmentAttempts < 3;
+      
+      // If submitted and waiting for review, or passed - don't send back to assessment
+      if (hasSubmitted && (pendingReview || hasPassed || !canRetry)) {
+        // Don't redirect to assessment, fall through to lesson resume
+      } else {
+        return {
+          type: 'final_assessment',
+          path: `/courses/${courseId}/final-assessment`,
+          moduleIndex: null,
+          lessonIndex: null,
+        };
+      }
+    }
+
+    // Priority 2: If in module assessment, resume there
+    if (lastActivity === 'module_assessment' && enrollment.inModuleAssessment && typeof enrollment.currentAssessmentModule === 'number') {
+      const moduleIndex = enrollment.currentAssessmentModule;
+      const module = course.modules?.[moduleIndex];
+      const moduleId = (module as any)?._id || moduleIndex;
+      const lessonId = (module?.lessons?.[0] as any)?._id || 0;
+      return {
+        type: 'module_assessment',
+        path: `/courses/${courseId}/learn/${moduleId}/${lessonId}`,
+        moduleIndex,
+        lessonIndex: null,
+        shouldOpenAssessment: true,
+      };
+    }
+
+    // Priority 3: Resume from last accessed lesson
+    const moduleIndex = enrollment.lastAccessedModule ?? 0;
+    const lessonIndex = enrollment.lastAccessedLesson ?? 0;
+    const module = course.modules?.[moduleIndex];
+    const lesson = module?.lessons?.[lessonIndex];
+    const moduleId = (module as any)?._id || moduleIndex;
+    const lessonId = (lesson as any)?._id || lessonIndex;
+
+    return {
+      type: 'lesson',
+      path: `/courses/${courseId}/learn/${moduleId}/${lessonId}`,
+      moduleIndex,
+      lessonIndex,
+    };
+  }
+
   async getStudentEnrollments(studentId: string) {
     return await this.enrollmentModel
       .find({ studentId })
@@ -531,6 +1037,86 @@ export class CourseService {
       .lean();
   }
 
+  /**
+   * Return assessment page data for a given enrollment.
+   * Includes: course final assessment questions, student's answers/results,
+   * instructor explanations/feedback and all certificates earned by student.
+   */
+  async getAssessmentForEnrollment(enrollmentId: string, requestingUserId?: string) {
+    const enrollment = await this.enrollmentModel
+      .findById(enrollmentId)
+      .populate('studentId', 'firstName lastName email')
+      .lean();
+
+    if (!enrollment) {
+      throw new NotFoundException('Enrollment not found');
+    }
+
+    // If a requesting userId is provided, ensure only the student (or admin) can fetch
+    if (requestingUserId && String(enrollment.studentId?._id || enrollment.studentId) !== String(requestingUserId)) {
+      throw new UnauthorizedException('You are not authorized to view this assessment');
+    }
+
+    const course = await this.courseModel.findById(enrollment.courseId).lean();
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    // Build question list from course finalAssessment (if present)
+    const finalAssessment: any = course.finalAssessment || { questions: [], title: null, instructions: null };
+    const questions = Array.isArray(finalAssessment.questions) ? finalAssessment.questions : [];
+
+    // Student answers stored on enrollment.finalAssessmentResults (array of objects)
+    const studentResults: Array<any> = Array.isArray(enrollment.finalAssessmentResults) ? enrollment.finalAssessmentResults : [];
+
+    // Map questions to include student's answer and instructor explanation/feedback
+    const merged = questions.map((q: any, idx: number) => {
+      // Find result by questionIndex or matching index
+      const result = studentResults.find((r: any) => (r.questionIndex === idx) || (r.questionIndex === Number(r.questionIndex) && Number(r.questionIndex) === idx));
+      return {
+        questionIndex: idx,
+        questionText: q.text || q.question || q.title || q.prompt || '',
+        questionType: q.type || q.questionType || 'multiple-choice',
+        options: q.options || q.choices || null,
+        maxPoints: (result && result.maxPoints) || q.maxPoints || 0,
+        studentAnswer: result ? result.studentAnswer : null,
+        correctAnswer: result ? result.correctAnswer : (q.correctAnswer ?? null),
+        isCorrect: result ? !!result.isCorrect : null,
+        pointsEarned: result ? result.pointsEarned : null,
+        explanation: result ? (result.explanation || null) : null,
+        instructorFeedback: result ? (result.instructorFeedback || null) : null,
+        gradedAt: result ? result.gradedAt : null,
+        gradedBy: result ? result.gradedBy : null,
+        aiScore: result ? result.aiScore : null,
+        aiFeedback: result ? result.aiFeedback : null,
+      };
+    });
+
+    // Include student certificates (all earned)
+    const certificates = await this.getStudentCertificates(String(enrollment.studentId?._id || enrollment.studentId));
+
+    return {
+      enrollment: {
+        _id: enrollment._id,
+        studentId: enrollment.studentId,
+        courseId: enrollment.courseId,
+        finalAssessmentAttempts: enrollment.finalAssessmentAttempts || 0,
+        finalAssessmentPassed: enrollment.finalAssessmentPassed || false,
+        finalAssessmentScore: enrollment.finalAssessmentScore || 0,
+      },
+      course: {
+        _id: course._id,
+        title: course.title,
+        finalAssessment: {
+          title: finalAssessment.title || null,
+          instructions: finalAssessment.instructions || null,
+          questions: merged,
+        },
+      },
+      certificates,
+    };
+  }
+
   // Progress Tracking
   async updateProgress(enrollmentId: string, moduleIndex: number, score: number, answers: any[]) {
     const enrollment = await this.enrollmentModel.findById(enrollmentId);
@@ -540,6 +1126,8 @@ export class CourseService {
       enrollmentId,
       moduleIndex,
     });
+
+    const wasModuleCompleted = progressRecord?.moduleCompleted;
 
     if (progressRecord) {
       progressRecord.moduleScore = score;
@@ -558,20 +1146,30 @@ export class CourseService {
     const progressPercentage = course?.modules ? (completedModules / course.modules.length) * 100 : 0;
     const moduleProgress = await this.buildModuleProgress(enrollmentId, course?.modules?.length || 0);
 
-    await this.enrollmentModel.findByIdAndUpdate(enrollmentId, {
+    const completedAllModules = course?.modules ? completedModules === course.modules.length : false;
+
+    const updatedEnrollment = await this.enrollmentModel.findByIdAndUpdate(enrollmentId, {
       progress: progressPercentage,
       completedModules,
       totalScore,
       lastAccessedAt: new Date(),
-      isCompleted: completedModules === course?.modules?.length,
-      completedAt: completedModules === course?.modules?.length ? new Date() : null,
+      isCompleted: completedAllModules,
+      completedAt: completedAllModules ? new Date() : null,
       moduleProgress,
-    });
+    }, { new: true });
+
+    if (!wasModuleCompleted) {
+      await this.awardModuleCompletionAchievement(updatedEnrollment || enrollment, course, moduleIndex, score);
+    }
+
+    if (completedAllModules) {
+      await this.awardCourseCompletionAchievement(updatedEnrollment || enrollment, course, totalScore);
+    }
 
     return {
       progress: progressPercentage,
       score: totalScore,
-      isCompleted: completedModules === course?.modules?.length,
+      isCompleted: completedAllModules,
     };
   }
 
@@ -582,11 +1180,12 @@ export class CourseService {
     lessonIndex: number,
     completed = false,
   ) {
-    const enrollment = await this.enrollmentModel.findById(enrollmentId);
-    if (!enrollment) throw new Error('Enrollment not found');
+    try {
+      const enrollment = await this.enrollmentModel.findById(enrollmentId);
+      if (!enrollment) throw new NotFoundException('Enrollment not found');
 
-    const course = await this.courseModel.findById(enrollment.courseId).lean();
-    if (!course) throw new Error('Course not found');
+      const course = await this.courseModel.findById(enrollment.courseId).lean();
+      if (!course) throw new NotFoundException('Course not found');
 
     const modules = course.modules || [];
     const targetModule = modules[moduleIndex];
@@ -595,8 +1194,11 @@ export class CourseService {
       0,
     );
 
-    // Update last accessed pointers
+    // Update last accessed pointers and activity type
     enrollment.lastAccessedModule = moduleIndex;
+    enrollment.lastActivityType = 'lesson';
+    enrollment.inModuleAssessment = false;
+    enrollment.inFinalAssessment = false;
     enrollment.lastAccessedLesson = lessonIndex;
     enrollment.lastAccessedAt = new Date();
 
@@ -637,6 +1239,19 @@ export class CourseService {
       return done ? count + 1 : count;
     }, 0);
 
+    const completedModuleIndices = modules
+      .map((m, idx) => ({ m, idx }))
+      .filter(({ m, idx }) => {
+        const lessons = m?.lessons || [];
+        if (!lessons.length) return false;
+        return lessons.every((_, lIdx) =>
+          lessonProgress.some(
+            (lp) => lp.moduleIndex === idx && lp.lessonIndex === lIdx && lp.isCompleted,
+          ),
+        );
+      })
+      .map(({ idx }) => idx);
+
     enrollment.lessonProgress = lessonProgress;
     enrollment.progress = progressPercent;
     enrollment.completedModules = modulesCompleted;
@@ -645,8 +1260,31 @@ export class CourseService {
       enrollment.completedAt = new Date();
     }
 
+    // Award XP boosts for completed modules and full course completion
+    for (const completedModuleIndex of completedModuleIndices) {
+      try {
+        await this.awardModuleCompletionAchievement(enrollment, course, completedModuleIndex);
+      } catch (error) {
+        console.error(`Error awarding module completion achievement for module ${completedModuleIndex}:`, error);
+        // Continue even if achievement fails
+      }
+    }
+
+    if (enrollment.isCompleted) {
+      try {
+        await this.awardCourseCompletionAchievement(enrollment, course);
+      } catch (error) {
+        console.error('Error awarding course completion achievement:', error);
+        // Continue even if achievement fails
+      }
+    }
+
     await enrollment.save();
     return enrollment.toObject();
+    } catch (error) {
+      console.error('Error updating lesson progress:', error);
+      throw error;
+    }
   }
 
   async getEnrollmentProgress(enrollmentId: string) {
@@ -748,18 +1386,54 @@ export class CourseService {
     return saved;
   }
 
-  async getCoursesDiscussions(courseId: string, moduleIndex?: number, userId?: string) {
+  async getCoursesDiscussions(courseId: string, moduleIndex?: number, userId?: string, options?: {
+    sortBy?: 'recent' | 'popular' | 'unanswered' | 'mostReplies';
+    filterByStatus?: 'open' | 'resolved' | 'closed' | 'all';
+  }) {
     const filter: any = { courseId };
     if (typeof moduleIndex === 'number' && !Number.isNaN(moduleIndex)) {
       filter.moduleIndex = moduleIndex;
     }
 
-    const discussions = await this.discussionModel
+    // Apply status filter
+    if (options?.filterByStatus && options.filterByStatus !== 'all') {
+      filter.status = options.filterByStatus;
+    }
+
+    // Determine sort order
+    let sortCriteria: any = { isPinned: -1, createdAt: -1 }; // Pinned first, then newest
+
+    switch (options?.sortBy) {
+      case 'popular':
+        sortCriteria = { isPinned: -1, likes: -1, views: -1, createdAt: -1 };
+        break;
+      case 'mostReplies':
+        sortCriteria = { isPinned: -1, createdAt: -1 }; // Will sort by reply count in post-processing
+        break;
+      case 'unanswered':
+        filter.status = 'open';
+        sortCriteria = { isPinned: -1, createdAt: -1 };
+        break;
+      case 'recent':
+      default:
+        sortCriteria = { isPinned: -1, updatedAt: -1 };
+        break;
+    }
+
+    let discussions = await this.discussionModel
       .find(filter)
       .populate('studentId', 'firstName lastName email')
       .populate('instructorId', 'firstName lastName email')
-      .sort({ createdAt: -1 })
+      .sort(sortCriteria)
       .lean();
+
+    // Sort by reply count if needed
+    if (options?.sortBy === 'mostReplies') {
+      discussions = discussions.sort((a: any, b: any) => {
+        if (a.isPinned !== b.isPinned) return b.isPinned ? 1 : -1;
+        return (b.replies?.length || 0) - (a.replies?.length || 0);
+      });
+    }
 
     if (!userId) {
       return discussions;
@@ -894,6 +1568,47 @@ export class CourseService {
         await new Promise((resolve) => setTimeout(resolve, 800));
       }
     }
+  }
+
+  async togglePinDiscussion(discussionId: string, instructorId: string) {
+    const discussion = await this.discussionModel.findById(discussionId);
+    if (!discussion) {
+      throw new NotFoundException('Discussion not found');
+    }
+
+    const course = await this.courseModel.findById(discussion.courseId);
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    // Only instructor can pin
+    const mainInstructorId = Array.isArray(course.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
+    if (!mainInstructorId || String(mainInstructorId) !== String(instructorId)) {
+      throw new UnauthorizedException('Only the course instructor can pin discussions');
+    }
+
+    discussion.isPinned = !discussion.isPinned;
+    discussion.pinnedAt = discussion.isPinned ? new Date() : null;
+    return await discussion.save();
+  }
+
+  async likeDiscussion(discussionId: string, userId: string) {
+    const discussion = await this.discussionModel.findById(discussionId);
+    if (!discussion) {
+      throw new NotFoundException('Discussion not found');
+    }
+
+    // Increment like count
+    discussion.likes = (discussion.likes || 0) + 1;
+    return await discussion.save();
+  }
+
+  async incrementDiscussionViews(discussionId: string) {
+    return await this.discussionModel.findByIdAndUpdate(
+      discussionId,
+      { $inc: { views: 1 } },
+      { new: true },
+    );
   }
 
   async markDiscussionRead(discussionId: string, userId: string) {
@@ -1045,6 +1760,24 @@ export class CourseService {
     };
   }
 
+  async getStudentAchievements(studentId: string) {
+    const [achievements, user] = await Promise.all([
+      this.achievementModel.find({ studentId }).sort({ createdAt: -1 }).lean(),
+      this.userModel.findById(studentId).select('totalPoints'),
+    ]);
+
+    const totalXpFromAchievements = achievements.reduce(
+      (sum, a) => sum + (a.xpAwarded || 0),
+      0,
+    );
+
+    return {
+      totalXp: totalXpFromAchievements,
+      totalPoints: user?.totalPoints || 0,
+      achievements,
+    };
+  }
+
   // Module Assessment Methods
   async submitModuleAssessment(enrollmentId: string, moduleIndex: number, answers: any[]) {
     const enrollment = await this.enrollmentModel.findById(enrollmentId);
@@ -1077,18 +1810,81 @@ export class CourseService {
       moduleProgress = newProgress;
     }
 
-    // Check attempt limit
+    const wasModuleCompleted = moduleProgress?.isCompleted;
+
+    // Check attempt limit BEFORE incrementing - Auto-restart after 3rd attempt
     if (moduleProgress!.assessmentAttempts >= 3 && !moduleProgress!.assessmentPassed) {
+      // Calculate score even for max attempts exceeded case
+      const questions = module.moduleAssessment.questions;
+      let correctCount = 0;
+      const normalize = (val: any) =>
+        val === undefined || val === null ? '' : String(val).trim().toLowerCase();
+
+      const isCorrectAnswer = (question: any, userAnswer: any) => {
+        const normCorrect = normalize(question.correctAnswer);
+        const normUser = normalize(userAnswer);
+
+        if (normCorrect === normUser) return true;
+
+        const hasOptions = Array.isArray(question.options) && question.options.length > 0;
+        const parsedIndex = (() => {
+          if (typeof userAnswer === 'number' && Number.isInteger(userAnswer)) return userAnswer;
+          if (typeof userAnswer === 'string' && userAnswer.trim() !== '' && !isNaN(Number(userAnswer))) {
+            return parseInt(userAnswer, 10);
+          }
+          return null;
+        })();
+
+        if (hasOptions && parsedIndex !== null && parsedIndex >= 0 && parsedIndex < question.options.length) {
+          const optionValue = normalize(question.options[parsedIndex]);
+          if (optionValue === normCorrect) return true;
+          if (normalize(parsedIndex) === normCorrect) return true;
+        }
+
+        if (hasOptions) {
+          const matchedIdx = question.options.findIndex((opt: any) => normalize(opt) === normUser);
+          if (matchedIdx >= 0) {
+            if (normalize(matchedIdx) === normCorrect) return true;
+            if (normalize(question.options[matchedIdx]) === normCorrect) return true;
+          }
+        }
+
+        return false;
+      };
+
+      questions.forEach((question, idx) => {
+        const userAnswer = answers[idx];
+        if (isCorrectAnswer(question, userAnswer)) correctCount++;
+      });
+
+      const scorePercentage = (correctCount / questions.length) * 100;
+      
+      // Auto-restart the course after 3 failed attempts
+      await this.restartCourse(enrollmentId, 'auto_restart_module_failure', true);
+      
       return {
         success: false,
-        error: 'Maximum attempts (3) reached. You must restart the course.',
+        error: 'Maximum attempts (3) reached.',
         attemptsRemaining: 0,
         mustRestartCourse: true,
+        autoRestarted: true,
+        score: scorePercentage,
+        passed: false,
+        correctCount,
+        totalQuestions: questions.length,
+        passingScore: module.moduleAssessment.passingScore || 70,
+        message: 'Your course has been automatically restarted. Your previous progress has been saved for review. You can now start fresh from Module 1.',
       };
     }
 
     // Increment attempts
     moduleProgress!.assessmentAttempts += 1;
+
+    // Mark that student is in module assessment
+    enrollment.inModuleAssessment = true;
+    enrollment.currentAssessmentModule = moduleIndex;
+    enrollment.lastActivityType = 'module_assessment';
+    enrollment.lastAccessedAt = new Date();
 
     // Grade the assessment (tolerant to index or text answers)
     const questions = module.moduleAssessment.questions;
@@ -1155,16 +1951,33 @@ export class CourseService {
     if (passed) {
       moduleProgress!.isCompleted = true;
       moduleProgress!.completedAt = new Date();
-      
+
       // Update completed modules count
       const completedCount = enrollment.moduleProgress.filter(mp => mp.isCompleted).length;
       enrollment.completedModules = completedCount;
       enrollment.progress = (completedCount / course.modules.length) * 100;
+
+      // Clear assessment state after passing
+      enrollment.inModuleAssessment = false;
+      enrollment.currentAssessmentModule = undefined;
+      // After passing, move to next module or stay on current
+      enrollment.lastActivityType = 'lesson';
+
+      if (!wasModuleCompleted) {
+        await this.awardModuleCompletionAchievement(enrollment, course, moduleIndex, scorePercentage);
+      }
+    } else {
+      // Keep assessment state if failed for retry
+      enrollment.inModuleAssessment = moduleProgress!.assessmentAttempts < 3;
     }
 
     // Mark array as modified so Mongoose detects the nested changes
     enrollment.markModified('moduleProgress');
     await enrollment.save();
+
+    if (passed && Array.isArray(course.modules) && enrollment.completedModules === course.modules.length) {
+      await this.awardCourseCompletionAchievement(enrollment, course, scorePercentage);
+    }
 
     return {
       success: true,
@@ -1188,7 +2001,9 @@ export class CourseService {
       throw new Error('Enrollment not found');
     }
 
-    const course = await this.courseModel.findById(enrollment.courseId).populate('instructorId', 'firstName lastName email');
+    const alreadyPassed = enrollment.finalAssessmentPassed;
+
+    const course = await this.courseModel.findById(enrollment.courseId).populate('instructorIds', 'firstName lastName email');
     if (!course || !course.finalAssessment) {
       throw new Error('Final assessment not found');
     }
@@ -1203,19 +2018,90 @@ export class CourseService {
       throw new Error('You must complete all modules before taking the final assessment');
     }
 
-    // Check attempt limit
+    // Check attempt limit - Auto-restart after 3rd attempt
     if (enrollment.finalAssessmentAttempts >= 3 && !enrollment.finalAssessmentPassed) {
+      // Calculate score even for max attempts exceeded case
+      const questions = course.finalAssessment.questions;
+      let correctCount = 0;
+      let earnedPoints = 0;
+      let totalPoints = 0;
+
+      const normalize = (val: any) =>
+        val === undefined || val === null ? '' : String(val).trim().toLowerCase();
+
+      const isCorrectAnswer = (question: any, userAnswer: any) => {
+        const normCorrect = normalize(question.correctAnswer);
+        const normUser = normalize(userAnswer);
+        if (normCorrect === normUser) return true;
+
+        const hasOptions = Array.isArray(question.options) && question.options.length > 0;
+        const parsedIndex = (() => {
+          if (typeof userAnswer === 'number' && Number.isInteger(userAnswer)) return userAnswer;
+          if (typeof userAnswer === 'string' && userAnswer.trim() !== '' && !isNaN(Number(userAnswer))) {
+            return parseInt(userAnswer, 10);
+          }
+          return null;
+        })();
+
+        if (hasOptions && parsedIndex !== null && parsedIndex >= 0 && parsedIndex < question.options.length) {
+          const optionValue = normalize(question.options[parsedIndex]);
+          if (optionValue === normCorrect) return true;
+          if (normalize(parsedIndex) === normCorrect) return true;
+        }
+
+        if (hasOptions) {
+          const matchedIdx = question.options.findIndex((opt: any) => normalize(opt) === normUser);
+          if (matchedIdx >= 0) {
+            if (normalize(matchedIdx) === normCorrect) return true;
+            if (normalize(question.options[matchedIdx]) === normCorrect) return true;
+          }
+        }
+        return false;
+      };
+
+      questions.forEach((question, idx) => {
+        const userAnswer = answers[idx];
+        const questionType = question.type || 'multiple-choice';
+        const maxPts = question.points || 1;
+        totalPoints += maxPts;
+
+        if (questionType !== 'essay') {
+          const isCorrect = isCorrectAnswer(question, userAnswer);
+          if (isCorrect) {
+            correctCount++;
+            earnedPoints += maxPts;
+          }
+        }
+      });
+
+      const scorePercentage = totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0;
+
+      // Auto-restart the course after 3 failed attempts
+      await this.restartCourse(enrollmentId, 'auto_restart_final_failure', true);
+
       return {
         success: false,
-        error: 'Maximum attempts (3) reached. You must restart the course.',
+        error: 'Maximum attempts (3) reached.',
         attemptsRemaining: 0,
         mustRestartCourse: true,
+        autoRestarted: true,
+        score: scorePercentage,
+        passed: false,
+        correctCount,
+        totalQuestions: questions.length,
+        passingScore: course.finalAssessment.passingScore || 70,
+        message: 'Your course has been automatically restarted. Your previous progress has been saved for review. You can now start fresh from Module 1.',
       };
     }
 
     // Increment attempts
     enrollment.finalAssessmentAttempts += 1;
     const currentAttemptNumber = enrollment.finalAssessmentAttempts;
+
+    // Mark that student is in final assessment
+    enrollment.inFinalAssessment = true;
+    enrollment.lastActivityType = 'final_assessment';
+    enrollment.lastAccessedAt = new Date();
 
     console.log('📝 Submitting final assessment:');
     console.log('   Student:', enrollment.studentId);
@@ -1331,28 +2217,44 @@ export class CourseService {
       enrollment.isCompleted = true;
       enrollment.completedAt = new Date();
       enrollment.certificateEarned = true;
-      
+
+      // Clear assessment state after passing
+      enrollment.inFinalAssessment = false;
+      enrollment.lastActivityType = 'lesson';
+
       // Generate certificate
       const student = await this.userModel.findById(enrollment.studentId);
       if (!student) {
         throw new Error('Student not found');
       }
-      
+
+      const certificateNumber = `CERT-${(enrollment._id as Types.ObjectId).toString().slice(-8).toUpperCase()}`;
+      const instructorName = (Array.isArray(course.instructorIds) && course.instructorIds.length > 0 && (course.instructorIds[0] as any).firstName && (course.instructorIds[0] as any).lastName)
+        ? `${(course.instructorIds[0] as any).firstName} ${(course.instructorIds[0] as any).lastName}`
+        : 'Course Instructor';
+
       const certificate = await this.certificateModel.create({
         studentId: enrollment.studentId,
         courseId: course._id,
+        enrollmentId: enrollment._id,
+        certificateNumber,
         courseName: course.title,
         studentName: `${student.firstName} ${student.lastName}`,
-        instructorName: (Array.isArray(course.instructorIds) && course.instructorIds.length > 0 && (course.instructorIds[0] as any).firstName && (course.instructorIds[0] as any).lastName)
-          ? `${(course.instructorIds[0] as any).firstName} ${(course.instructorIds[0] as any).lastName}`
-          : '',
+        instructorName,
+        scoreAchieved: Math.round(scorePercentage * 10) / 10,
         issuedDate: new Date(),
-        completionDate: new Date(),
       });
 
       enrollment.certificateId = certificate._id as any;
       enrollment.certificateUrl = `/api/certificates/${certificate._id}`;
       enrollment.certificateIssuedAt = new Date();
+
+      if (!alreadyPassed) {
+        await this.awardCourseCompletionAchievement(enrollment, course, scorePercentage);
+      }
+    } else {
+      // Keep assessment state if failed for retry
+      enrollment.inFinalAssessment = enrollment.finalAssessmentAttempts < 3;
     }
 
     await enrollment.save();
@@ -1384,31 +2286,120 @@ export class CourseService {
     };
   }
 
-  // Restart Course (reset all progress and attempts)
-  async restartCourse(enrollmentId: string) {
+  // Helper: Save attempt history before reset
+  private saveAttemptHistory(enrollment: any, resetReason: string) {
+    if (!enrollment.attemptHistory) {
+      enrollment.attemptHistory = [];
+    }
+
+    const highestModuleScore = enrollment.moduleProgress.reduce((max, mp) => 
+      Math.max(max, mp.lastScore || 0), 0);
+
+    const historyEntry = {
+      attemptNumber: enrollment.currentAttemptNumber || 1,
+      resetReason,
+      resetAt: new Date(),
+      progressAtReset: enrollment.progress || 0,
+      completedModulesAtReset: enrollment.completedModules || 0,
+      moduleAssessmentAttempts: enrollment.moduleProgress.reduce((sum, mp) => 
+        sum + (mp.assessmentAttempts || 0), 0),
+      finalAssessmentAttempts: enrollment.finalAssessmentAttempts || 0,
+      highestModuleScore,
+      highestFinalScore: enrollment.finalAssessmentScore || 0,
+      moduleProgressSnapshot: JSON.parse(JSON.stringify(enrollment.moduleProgress)),
+    };
+
+    enrollment.attemptHistory.push(historyEntry);
+    enrollment.currentAttemptNumber = (enrollment.currentAttemptNumber || 1) + 1;
+  }
+
+  // Restart Course (reset all progress and attempts) - Manual or Automatic
+  async restartCourse(enrollmentId: string, reason: string = 'manual_restart', autoRestart: boolean = false) {
     const enrollment = await this.enrollmentModel.findById(enrollmentId);
     if (!enrollment) {
       throw new Error('Enrollment not found');
     }
 
+    // Save history before resetting
+    this.saveAttemptHistory(enrollment, reason);
+
+    // Reset all progress
     enrollment.moduleProgress = [];
     enrollment.completedModules = 0;
     enrollment.progress = 0;
     enrollment.finalAssessmentAttempts = 0;
     enrollment.finalAssessmentPassed = false;
     enrollment.finalAssessmentScore = 0;
+    enrollment.finalAssessmentResults = [];
+    enrollment.pendingManualGradingCount = 0;
     enrollment.isCompleted = false;
     enrollment.completedAt = undefined;
     enrollment.certificateEarned = false;
     enrollment.certificateId = undefined;
     enrollment.certificateUrl = undefined;
     enrollment.certificateIssuedAt = undefined;
+    enrollment.inModuleAssessment = false;
+    enrollment.currentAssessmentModule = undefined;
+    enrollment.inFinalAssessment = false;
+    enrollment.lastActivityType = 'lesson';
+    enrollment.lastAccessedModule = 0;
+    enrollment.lastAccessedLesson = 0;
+    enrollment.lessonProgress = [];
+
+    await enrollment.save();
+
+    const message = autoRestart 
+      ? 'Your course has been automatically restarted after exhausting all attempts. Your previous progress has been saved for review.'
+      : 'Course restarted successfully. All progress and attempts have been reset. Your previous attempt has been saved for analytics.';
+
+    return {
+      success: true,
+      message,
+      attemptNumber: enrollment.currentAttemptNumber,
+      historyPreserved: true,
+    };
+  }
+
+  // Soft Reset: Only reset attempts, keep lesson/module progress
+  async softResetCourse(enrollmentId: string) {
+    const enrollment = await this.enrollmentModel.findById(enrollmentId);
+    if (!enrollment) {
+      throw new Error('Enrollment not found');
+    }
+
+    // Save history before resetting
+    this.saveAttemptHistory(enrollment, 'soft_reset');
+
+    // Reset only assessment attempts, keep other progress
+    enrollment.moduleProgress.forEach(mp => {
+      mp.assessmentAttempts = 0;
+      mp.assessmentPassed = false;
+      mp.lastScore = 0;
+    });
+
+    enrollment.finalAssessmentAttempts = 0;
+    enrollment.finalAssessmentPassed = false;
+    enrollment.finalAssessmentScore = 0;
+    enrollment.finalAssessmentResults = [];
+    enrollment.pendingManualGradingCount = 0;
+    enrollment.isCompleted = false;
+    enrollment.completedAt = undefined;
+    enrollment.certificateEarned = false;
+    enrollment.certificateId = undefined;
+    enrollment.certificateUrl = undefined;
+    enrollment.certificateIssuedAt = undefined;
+    enrollment.inModuleAssessment = false;
+    enrollment.currentAssessmentModule = undefined;
+    enrollment.inFinalAssessment = false;
 
     await enrollment.save();
 
     return {
       success: true,
-      message: 'Course restarted successfully. All progress and attempts have been reset.',
+      message: 'Assessment attempts have been reset. Your lesson progress and completed modules remain intact.',
+      attemptNumber: enrollment.currentAttemptNumber,
+      historyPreserved: true,
+      progressRetained: true,
     };
   }
 
@@ -1418,6 +2409,8 @@ export class CourseService {
     if (!enrollment) {
       throw new Error('Enrollment not found');
     }
+
+    const alreadyPassed = enrollment.finalAssessmentPassed;
 
     const results = enrollment.finalAssessmentResults;
     if (!results || results[questionIndex] === undefined) {
@@ -1471,25 +2464,45 @@ export class CourseService {
         enrollment.isCompleted = true;
         enrollment.completedAt = new Date();
         enrollment.certificateEarned = true;
+        enrollment.inFinalAssessment = false;
 
         // Generate certificate if not already issued
         if (!enrollment.certificateId) {
           const student = await this.userModel.findById(enrollment.studentId);
-          const instructor = (course as any)?.instructorId;
-          
+          const certificateNumber = `CERT-${(enrollment._id as Types.ObjectId).toString().slice(-8).toUpperCase()}`;
+          const instructorDoc = Array.isArray(course?.instructorIds) && course.instructorIds.length > 0
+            ? await this.userModel.findById(course.instructorIds[0])
+            : null;
+
           const certificate = await this.certificateModel.create({
             studentId: enrollment.studentId,
             courseId: enrollment.courseId,
+            enrollmentId: enrollment._id,
+            certificateNumber,
             courseName: course?.title,
-            studentName: `${student?.firstName} ${student?.lastName}`,
-            instructorName: `${instructor?.firstName} ${instructor?.lastName}`,
+            studentName: `${student?.firstName || ''} ${student?.lastName || ''}`.trim(),
+            instructorName: instructorDoc ? `${instructorDoc.firstName || ''} ${instructorDoc.lastName || ''}`.trim() : 'Course Instructor',
+            scoreAchieved: Math.round((enrollment.finalAssessmentScore || newScore) * 10) / 10,
             issuedDate: new Date(),
-            completionDate: new Date(),
           });
 
           enrollment.certificateId = certificate._id as any;
           enrollment.certificateUrl = `/api/certificates/${certificate._id}`;
           enrollment.certificateIssuedAt = new Date();
+        }
+
+        if (!alreadyPassed) {
+          await this.awardCourseCompletionAchievement(enrollment, course, enrollment.finalAssessmentScore);
+        }
+      } else {
+        // Failed - check retry logic
+        enrollment.finalAssessmentPassed = false;
+        const canRetry = enrollment.finalAssessmentAttempts < 3;
+        
+        if (canRetry) {
+          enrollment.inFinalAssessment = true; // Allow retry
+        } else {
+          enrollment.inFinalAssessment = false; // No more retries
         }
       }
     }
@@ -1722,6 +2735,7 @@ export class CourseService {
       enrollment.isCompleted = true;
       enrollment.completedAt = new Date();
       enrollment.certificateEarned = true;
+      enrollment.inFinalAssessment = false; // Clear assessment state
       
       // Generate certificate if not already created
       if (!enrollment.certificateId) {
@@ -1732,18 +2746,49 @@ export class CourseService {
         enrollment.certificateIssuedAt = new Date();
         console.log('✅ Certificate generated:', certificate._id);
       }
+    } else {
+      // Failed - check retry logic
+      const canRetry = enrollment.finalAssessmentAttempts < 3;
+      
+      if (canRetry) {
+        // Allow retry
+        enrollment.inFinalAssessment = true;
+        console.log(`⚠️ Student failed (${finalScore}%). Can retry (attempt ${enrollment.finalAssessmentAttempts}/3)`);
+      } else {
+        // No more retries - student must restart course
+        enrollment.inFinalAssessment = false;
+        console.log(`❌ Student failed all attempts (${enrollment.finalAssessmentAttempts}/3). Must restart course.`);
+      }
     }
 
     await enrollment.save();
+
+    // Notify student via in-app message and email (MessagesService will also send an email)
+    try {
+      const studentIdStr = enrollment.studentId.toString();
+      const courseIdStr = enrollment.courseId.toString();
+      const subject = `Your final assessment for ${course?.title || 'the course'} has been reviewed`;
+      const frontend = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const resultsUrl = `${frontend}/courses/${courseIdStr}/final-assessment/results`;
+      const content = `Your final assessment has been reviewed by the instructor. Final score: ${finalScore} (${passed ? 'Passed' : 'Not Passed'}). View details: ${resultsUrl}`;
+
+      await this.messagesService.sendMessage(instructorId, studentIdStr, content, courseIdStr);
+    } catch (err) {
+      console.warn('Failed to notify student about assessment review:', err?.message || err);
+    }
 
     return {
       message: 'Assessment review submitted successfully',
       finalScore,
       passed,
+      canRetry: !passed && enrollment.finalAssessmentAttempts < 3,
+      attemptsUsed: enrollment.finalAssessmentAttempts,
+      maxAttempts: 3,
       certificateEarned: enrollment.certificateEarned,
       certificateId: enrollment.certificateId,
       certificateUrl: enrollment.certificateUrl,
     };
   }
+
 }
 

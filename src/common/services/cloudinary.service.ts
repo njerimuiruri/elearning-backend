@@ -50,6 +50,25 @@ export class CloudinaryService {
     });
   }
 
+  async uploadDocument(fileBuffer: Buffer, fileName: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'elearning/resources',
+          resource_type: 'raw',
+          public_id: fileName.replace(/\.[^/.]+$/, ''),
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else if (result) resolve(result.secure_url);
+          else reject(new Error('Upload failed'));
+        },
+      );
+
+      uploadStream.end(fileBuffer);
+    });
+  }
+
   async deleteResource(publicId: string): Promise<void> {
     try {
       await cloudinary.uploader.destroy(publicId);

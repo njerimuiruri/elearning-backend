@@ -9,7 +9,9 @@ import {
   UseGuards,
   Put,
   UploadedFile,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { diskStorage } from 'multer';
@@ -25,10 +27,14 @@ import { User } from '../schemas/user.schema';
 import * as path from 'path';
 import * as fs from 'fs';
 
-// Ensure uploads directory exists
+// Ensure uploads base and sub-directories exist (store relative paths)
 const uploadsDir = './uploads';
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+const uploadsProfilesDir = path.join(uploadsDir, 'profiles');
+const uploadsCvsDir = path.join(uploadsDir, 'cvs');
+for (const dir of [uploadsDir, uploadsProfilesDir, uploadsCvsDir]) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
 }
 
 @Controller('api/auth')
@@ -43,15 +49,63 @@ export class AuthController {
   @ApiOperation({ summary: 'Login user' })
   @ApiResponse({ status: 200, description: 'Login successful, returns JWT token' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(@Body() loginDto: LoginDto, @Res() response: Response) {
+    const result = await this.authService.login(loginDto);
+    
+    // Set HTTP-only cookie with 24-hour expiration
+    response.cookie('token', result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      path: '/',
+    });
+
+    // Also set a non-HTTP-only cookie for client-side user data access
+    response.cookie('user', JSON.stringify(result.user), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      path: '/',
+    });
+
+    return response.json({
+      user: result.user,
+      token: result.token,
+      message: result.message,
+    });
   }
 
   @Post('google')
   @ApiOperation({ summary: 'Login or register with Google for students and instructors' })
   @ApiResponse({ status: 200, description: 'Google login successful, returns JWT token' })
-  async googleLogin(@Body() body: GoogleLoginDto) {
-    return this.authService.googleLogin(body);
+  async googleLogin(@Body() body: GoogleLoginDto, @Res() response: Response) {
+    const result = await this.authService.googleLogin(body);
+    
+    // Set HTTP-only cookie with 24-hour expiration
+    response.cookie('token', result.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      path: '/',
+    });
+
+    // Also set a non-HTTP-only cookie for client-side user data access
+    response.cookie('user', JSON.stringify(result.user), {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      path: '/',
+    });
+
+    return response.json({
+      user: result.user,
+      token: result.token,
+      message: result.message,
+    });
   }
 
   @Post('logout')
@@ -59,51 +113,67 @@ export class AuthController {
   @ApiBearerAuth('jwt-auth')
   @ApiOperation({ summary: 'Logout user' })
   @ApiResponse({ status: 200, description: 'Logout successful' })
-  async logout(@CurrentUser() user: User) {
-    // Update last logout time
-    await this.usersService.updateUser(user._id.toString(), {
-      lastLogout: new Date(),
-    } as any);
+  async logout(@CurrentUser() user: User, @Res() response: Response) {
+    // Clear cookies
+    response.clearCookie('token', { path: '/' });
+    response.clearCookie('user', { path: '/' });
 
-    return {
+    // Update last logout time asynchronously (non-blocking)
+    this.usersService.updateUser(user._id.toString(), {
+      lastLogout: new Date(),
+    } as any).catch(err => console.error('Failed to update last logout:', err));
+
+    return response.json({
       message: 'Logged out successfully',
       success: true,
-    };
+    });
   }
 
   @Post('register')
   @UseInterceptors(
     FileFieldsInterceptor(
       [
-        { name: 'profileImage', maxCount: 1 },
-        { name: 'cvFile', maxCount: 1 },
+        { name: 'profilePicture', maxCount: 1 },
+        { name: 'cv', maxCount: 1 },
       ],
       {
         storage: diskStorage({
-          destination: uploadsDir,
+          destination: (req, file, cb) => {
+            let dest = uploadsDir;
+            if (file.fieldname === 'cv') dest = uploadsCvsDir;
+            else if (file.fieldname === 'profilePicture') dest = uploadsProfilesDir;
+            cb(null, dest);
+          },
           filename: (req, file, cb) => {
             const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
             const ext = path.extname(file.originalname);
-            cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+            
+            if (file.fieldname === 'cv') {
+              // For CV, include first and last name from the request body
+              const firstName = (req.body.firstName || 'instructor').replace(/\s+/g, '-').toLowerCase();
+              const lastName = (req.body.lastName || 'cv').replace(/\s+/g, '-').toLowerCase();
+              cb(null, `cv-${firstName}-${lastName}-${uniqueSuffix}${ext}`);
+            } else {
+              // For profile pictures, keep the existing format
+              const base = file.fieldname === 'profilePicture' ? 'profile' : file.fieldname;
+              cb(null, `${base}-${uniqueSuffix}${ext}`);
+            }
           },
         }),
         limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
         fileFilter: (req, file, cb) => {
-          if (file.fieldname === 'profileImage') {
+          if (file.fieldname === 'profilePicture') {
             if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
               return cb(
                 new BadRequestException('Only image files are allowed for profile picture'),
                 false,
               );
             }
-          } else if (file.fieldname === 'cvFile') {
-            if (
-              !file.mimetype.match(
-                /\/(pdf|msword|vnd.openxmlformats-officedocument.wordprocessingml.document)$/,
-              )
-            ) {
+          } else if (file.fieldname === 'cv') {
+            // Only accept PDF files for CV
+            if (file.mimetype !== 'application/pdf') {
               return cb(
-                new BadRequestException('Only PDF, DOC, or DOCX files are allowed for CV'),
+                new BadRequestException('Only PDF files are allowed for CV. Please convert your document to PDF format.'),
                 false,
               );
             }
@@ -117,8 +187,8 @@ export class AuthController {
     @Body() body: any,
     @UploadedFiles()
     files: {
-      profileImage?: Express.Multer.File[];
-      cvFile?: Express.Multer.File[];
+      profilePicture?: Express.Multer.File[];
+      cv?: Express.Multer.File[];
     },
   ) {
     const { role } = body;
@@ -126,8 +196,8 @@ export class AuthController {
     if (role === 'instructor') {
       const instructorDto: RegisterInstructorDto = {
         ...body,
-        profilePhotoUrl: files?.profileImage?.[0]?.path,
-        cvUrl: files?.cvFile?.[0]?.path,
+        profilePictureUrl: files?.profilePicture?.[0]?.path,
+        cvUrl: files?.cv?.[0]?.path,
       };
 
       if (!instructorDto.cvUrl) {
@@ -156,6 +226,15 @@ export class AuthController {
         bio: user.bio,
         phoneNumber: user.phoneNumber,
         country: user.country,
+        organization: user.organization,
+        institution: user.institution,
+        qualifications: user.qualifications,
+        expertise: user.expertise,
+        linkedIn: user.linkedIn,
+        portfolio: user.portfolio,
+        teachingExperience: user.teachingExperience,
+        yearsOfExperience: user.yearsOfExperience,
+        cvUrl: user.cvUrl,
         totalPoints: user.totalPoints,
         currentStreakDays: user.currentStreakDays,
         longestStreakDays: user.longestStreakDays,
@@ -205,7 +284,7 @@ export class AuthController {
   @UseInterceptors(
     FileInterceptor('profileImage', {
       storage: diskStorage({
-        destination: uploadsDir,
+        destination: uploadsProfilesDir,
         filename: (req, file, cb) => {
           const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
           const ext = path.extname(file.originalname);
