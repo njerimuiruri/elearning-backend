@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { ScheduleModule } from '@nestjs/schedule';
 import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -15,6 +16,14 @@ import { CertificateModule } from './certificates/certificate.module';
 import { QuestionsModule } from './questions/questions.module';
 import { NotesModule } from './notes/notes.module';
 import { CategoriesModule } from './categories/categories.module';
+import { FilesModule } from './files/files.module';
+import { CourseFormatModule } from './course-format/course-format.module';
+import { PaymentsModule } from './payments/payments.module';
+import { ModulesModule } from './modules/modules.module';
+import { ModuleEnrollmentsModule } from './module-enrollments/module-enrollments.module';
+import { ProgressionModule } from './progression/progression.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { DiscussionsModule } from './discussions/discussions.module';
 
 @Module({
   imports: [
@@ -28,6 +37,7 @@ import { CategoriesModule } from './categories/categories.module';
         dbName: 'elearning',
       }),
     }),
+    ScheduleModule.forRoot(),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
       serveRoot: '/uploads',
@@ -42,6 +52,14 @@ import { CategoriesModule } from './categories/categories.module';
     QuestionsModule,
     NotesModule,
     CategoriesModule,
+    FilesModule,
+    CourseFormatModule,
+    PaymentsModule,
+    ModulesModule,
+    ModuleEnrollmentsModule,
+    ProgressionModule,
+    NotificationsModule,
+    DiscussionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

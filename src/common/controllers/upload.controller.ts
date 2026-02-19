@@ -36,6 +36,43 @@ export class UploadController {
     }
   }
 
+  @Post('document')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadDocument(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    const allowedMimes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/plain',
+      'application/zip',
+    ];
+    if (!allowedMimes.includes(file.mimetype)) {
+      throw new BadRequestException('Invalid document format. Allowed: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, TXT, ZIP');
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      throw new BadRequestException('Document size must be less than 20MB');
+    }
+
+    try {
+      const docUrl = await this.cloudinaryService.uploadDocument(
+        file.buffer,
+        file.originalname,
+      );
+      return { success: true, url: docUrl, originalName: file.originalname };
+    } catch (error) {
+      throw new BadRequestException(`Upload failed: ${error.message}`);
+    }
+  }
+
   @Post('video')
   @UseInterceptors(FileInterceptor('file'))
   async uploadVideo(@UploadedFile() file: Express.Multer.File) {

@@ -5,6 +5,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import connectDB from '../database/connect';  
 import * as express from 'express';
+import * as path from 'path';
 
 async function bootstrap() {
   await connectDB();
@@ -39,6 +40,9 @@ async function bootstrap() {
   // Increase payload size limit for course creation with large module data
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
+  
+  // Serve static files from uploads directory
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   
   app.useGlobalPipes(new ValidationPipe());
   

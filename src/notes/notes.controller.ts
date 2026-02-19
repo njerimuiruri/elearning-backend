@@ -110,6 +110,44 @@ export class NotesController {
   }
 
   /**
+   * Create a module-based note
+   * POST /notes/module
+   */
+  @Post('module')
+  async createModuleNote(@Request() req, @Body() body: any) {
+    const { moduleId, moduleName, lessonIndex, lessonName, content } = body;
+
+    const note = await this.notesService.createModuleNote(
+      req.user.id,
+      moduleId,
+      moduleName,
+      lessonIndex,
+      lessonName,
+      content,
+    );
+
+    return {
+      success: true,
+      message: 'Note created successfully',
+      data: note,
+    };
+  }
+
+  /**
+   * Get notes for a specific module
+   * GET /notes/module/:moduleId
+   */
+  @Get('module/:moduleId')
+  async getModuleNotes(@Request() req, @Param('moduleId') moduleId: string) {
+    const notes = await this.notesService.getModuleNotes(req.user.id, moduleId);
+
+    return {
+      success: true,
+      data: notes,
+    };
+  }
+
+  /**
    * Get a specific note by ID
    * GET /notes/:noteId
    * IMPORTANT: This must come AFTER all specific routes

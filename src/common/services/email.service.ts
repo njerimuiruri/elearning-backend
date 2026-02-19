@@ -240,6 +240,89 @@ Arin Publishing Academy Team
     }
   }
 
+  async sendInstructorRegistrationEmail(email: string, firstName: string, temporaryPassword: string) {
+    const subject = 'Welcome to Arin Publishing Academy - Your Instructor Account Has Been Created';
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const loginUrl = `${frontendUrl}/login`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #1d4ed8; border-bottom: 3px solid #1d4ed8; padding-bottom: 10px;">Welcome to Arin Publishing Academy!</h2>
+        <p>Dear <strong>${firstName}</strong>,</p>
+        <p>Your instructor account has been successfully created by the administrator. We're excited to have you as part of our teaching team at <strong>Arin Publishing Academy</strong>!</p>
+        
+        <div style="background-color: #eff6ff; border-left: 4px solid #1d4ed8; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #1d4ed8; margin-top: 0;">Your Login Credentials</h3>
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Role:</strong> Instructor</p>
+          <p><strong>Temporary Password:</strong> <code style="background-color: #e8e8e8; padding: 5px 10px; border-radius: 3px; font-family: monospace;">${temporaryPassword}</code></p>
+        </div>
+        
+        <h3 style="color: #1d4ed8;">Important Security Note</h3>
+        <p>For your account security, you will be required to create a new password on your first login. This ensures your account remains protected.</p>
+        
+        <h3 style="color: #1d4ed8;">Next Steps</h3>
+        <ol>
+          <li>Visit our platform at: <a href="${loginUrl}" style="color: #1d4ed8; text-decoration: none;"><strong>${loginUrl}</strong></a></li>
+          <li>Log in with your email and temporary password</li>
+          <li>Create a new secure password when prompted</li>
+          <li>Start creating and managing your courses</li>
+          <li>Engage with students and build your teaching community</li>
+        </ol>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${loginUrl}" style="display: inline-block; background-color: #1d4ed8; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">Login to Your Instructor Dashboard</a>
+        </div>
+        
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+        <p style="font-size: 14px; color: #666;">If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+        <p style="font-size: 14px;">Best regards,<br/><strong>Arin Publishing Academy Team</strong></p>
+      </div>
+    `;
+
+    const plainTextContent = `
+Welcome to Arin Publishing Academy!
+
+Dear ${firstName},
+
+Your instructor account has been successfully created by the administrator. We're excited to have you as part of our teaching team!
+
+Your Login Credentials:
+Email: ${email}
+Role: Instructor
+Temporary Password: ${temporaryPassword}
+
+Important Security Note:
+For your account security, you will be required to create a new password on your first login.
+
+Next Steps:
+1. Visit our platform: ${loginUrl}
+2. Log in with your email and temporary password
+3. Create a new secure password when prompted
+4. Start creating and managing your courses
+5. Engage with students and build your teaching community
+
+If you have any questions or need assistance, please don't hesitate to contact our support team.
+
+Best regards,
+Arin Publishing Academy Team
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true, message: `Registration email sent to ${email}` };
+    } catch (error) {
+      console.error('Error sending email:', error);
+      throw new Error(`Failed to send email: ${error.message}`);
+    }
+  }
+
   async sendWelcomeEmail(email: string, firstName: string) {
     const subject = 'Welcome to Arin Publishing Academy!';
     const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
@@ -1036,6 +1119,508 @@ E-Learning Platform Team
     } catch (error) {
       console.error('Error sending flag notification:', error);
       throw error;
+    }
+  }
+
+  async sendModuleApprovalEmailToInstructor(
+    email: string,
+    firstName: string,
+    moduleTitle: string,
+  ) {
+    const subject = `Your Module Has Been Approved! 🎉`;
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const dashboardUrl = `${frontendUrl}/instructor/modules`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #16a34a; border-bottom: 3px solid #16a34a; padding-bottom: 10px;">Module Approved! 🎉</h2>
+        <p>Dear <strong>${firstName}</strong>,</p>
+        <p>Congratulations! Your module <strong>"${moduleTitle}"</strong> has been <strong>APPROVED</strong> and is now live on the platform.</p>
+        <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #16a34a; margin-top: 0;">What's Next?</h3>
+          <ul>
+            <li>Your module is now visible to students</li>
+            <li>Students can discover and enroll in your module</li>
+            <li>You can track student progress from your dashboard</li>
+          </ul>
+        </div>
+        <p><a href="${dashboardUrl}" style="display:inline-block;padding:12px 24px;background:#16a34a;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">View Your Module</a></p>
+        <p>Thank you for creating quality educational content!</p>
+        <p>Best regards,<br/>Arin Publishing Academy Team</p>
+      </div>
+    `;
+
+    const plainTextContent = `Module Approved!\n\nDear ${firstName},\n\nCongratulations! Your module "${moduleTitle}" has been APPROVED and is now live on the platform.\n\nStudents can now discover and enroll in your module.\n\nView your module: ${dashboardUrl}\n\nBest regards,\nArin Publishing Academy Team`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true, message: `Module approval email sent to ${email}` };
+    } catch (error) {
+      console.error('Error sending module approval email:', error);
+    }
+  }
+
+  async sendModuleRejectionEmailToInstructor(
+    email: string,
+    firstName: string,
+    moduleTitle: string,
+    rejectionReason: string,
+  ) {
+    const subject = `Module Submission — Feedback Required`;
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const dashboardUrl = `${frontendUrl}/instructor/modules`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #dc2626; border-bottom: 3px solid #dc2626; padding-bottom: 10px;">Module Submission — Feedback Required</h2>
+        <p>Dear <strong>${firstName}</strong>,</p>
+        <p>Thank you for submitting <strong>"${moduleTitle}"</strong>. After review, some updates are needed before it can be published.</p>
+        <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #dc2626; margin-top: 0;">Feedback from Admin</h3>
+          <p>${rejectionReason}</p>
+        </div>
+        <p>Please address the feedback above and resubmit your module for review.</p>
+        <p><a href="${dashboardUrl}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">Edit Your Module</a></p>
+        <p>Best regards,<br/>Arin Publishing Academy Team</p>
+      </div>
+    `;
+
+    const plainTextContent = `Module Submission — Feedback Required\n\nDear ${firstName},\n\nYour module "${moduleTitle}" requires revisions before it can be published.\n\nFeedback:\n${rejectionReason}\n\nPlease update your module and resubmit.\n\nEdit your module: ${dashboardUrl}\n\nBest regards,\nArin Publishing Academy Team`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true, message: `Module rejection email sent to ${email}` };
+    } catch (error) {
+      console.error('Error sending module rejection email:', error);
+    }
+  }
+
+  async sendModuleSubmissionNotificationToAdmin(
+    adminEmail: string,
+    instructorName: string,
+    instructorEmail: string,
+    moduleTitle: string,
+    categoryName: string,
+    moduleId: string,
+  ) {
+    const subject = `New Module Submission — ${moduleTitle}`;
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const adminDashboardUrl = `${frontendUrl}/admin/modules`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #2563eb; border-bottom: 3px solid #2563eb; padding-bottom: 10px;">New Module Submitted for Review</h2>
+        <p>An instructor has submitted a new module that requires your approval.</p>
+        <div style="background-color: #eff6ff; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #2563eb; margin-top: 0;">Module Details</h3>
+          <p><strong>Title:</strong> ${moduleTitle}</p>
+          <p><strong>Instructor:</strong> ${instructorName} (${instructorEmail})</p>
+          <p><strong>Category:</strong> ${categoryName}</p>
+          <p><strong>Module ID:</strong> ${moduleId}</p>
+        </div>
+        <p><a href="${adminDashboardUrl}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">Review in Admin Dashboard</a></p>
+        <p>Best regards,<br/>Arin Publishing Academy System</p>
+      </div>
+    `;
+
+    const plainTextContent = `New Module Submitted for Review\n\nAn instructor has submitted a new module.\n\nTitle: ${moduleTitle}\nInstructor: ${instructorName} (${instructorEmail})\nCategory: ${categoryName}\nModule ID: ${moduleId}\n\nReview: ${adminDashboardUrl}\n\nBest regards,\nArin Publishing Academy System`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: adminEmail,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true, message: `Module submission notification sent to admin` };
+    } catch (error) {
+      console.error('Error sending module submission notification:', error);
+    }
+  }
+
+  /**
+   * Notify instructor that a student submitted an essay assessment
+   */
+  async sendEssaySubmissionNotificationToInstructor(
+    instructorEmail: string,
+    instructorName: string,
+    studentName: string,
+    moduleName: string,
+    enrollmentId: string,
+  ) {
+    const subject = `Essay Submitted for Review: ${moduleName}`;
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const reviewUrl = `${frontendUrl}/instructor/enrollments/${enrollmentId}/grade-essay`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb; border-bottom: 3px solid #2563eb; padding-bottom: 10px;">Essay Assessment Submitted</h2>
+        <p>Dear <strong>${instructorName}</strong>,</p>
+        <p>A student has submitted an essay assessment for your review.</p>
+        <div style="background-color: #eff6ff; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0;">
+          <p><strong>Student:</strong> ${studentName}</p>
+          <p><strong>Module:</strong> ${moduleName}</p>
+          <p><strong>Submitted:</strong> ${new Date().toLocaleDateString()}</p>
+        </div>
+        <p>Please review the essay and mark it as <strong>Pass</strong> or <strong>Fail</strong> with feedback.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${reviewUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Review Essay</a>
+        </div>
+        <p>Best regards,<br/><strong>Arin Publishing Academy</strong></p>
+      </div>
+    `;
+
+    const plainTextContent = `Essay Assessment Submitted\n\nDear ${instructorName},\n\nStudent ${studentName} has submitted an essay for "${moduleName}" and is awaiting your review.\n\nReview here: ${reviewUrl}\n\nBest regards,\nArin Publishing Academy`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: instructorEmail,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending essay submission notification:', error);
+    }
+  }
+
+  /**
+   * Notify student about their essay grading result
+   */
+  async sendEssayGradingResultToStudent(
+    studentEmail: string,
+    studentName: string,
+    moduleName: string,
+    passed: boolean,
+    feedback: string,
+    certificateUrl?: string,
+  ) {
+    const subject = passed
+      ? `Essay Passed: ${moduleName} — Certificate Earned!`
+      : `Essay Reviewed: ${moduleName} — Feedback Available`;
+
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+
+    const htmlContent = passed
+      ? `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #16a34a; border-bottom: 3px solid #16a34a; padding-bottom: 10px;">Congratulations — Essay Passed!</h2>
+        <p>Dear <strong>${studentName}</strong>,</p>
+        <p>Your essay assessment for <strong>"${moduleName}"</strong> has been reviewed by your instructor and you have <strong style="color: #16a34a;">PASSED</strong>!</p>
+        <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #16a34a; margin-top: 0;">Instructor Feedback</h3>
+          <p>${feedback}</p>
+        </div>
+        ${certificateUrl ? `
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${certificateUrl}" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Your Certificate</a>
+        </div>
+        ` : ''}
+        <p>Keep up the excellent work!</p>
+        <p>Best regards,<br/><strong>Arin Publishing Academy</strong></p>
+      </div>
+      `
+      : `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #d97706; border-bottom: 3px solid #d97706; padding-bottom: 10px;">Essay Reviewed — Feedback Available</h2>
+        <p>Dear <strong>${studentName}</strong>,</p>
+        <p>Your essay assessment for <strong>"${moduleName}"</strong> has been reviewed. Please read the feedback carefully and try again.</p>
+        <div style="background-color: #fffbeb; border-left: 4px solid #d97706; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #d97706; margin-top: 0;">Instructor Feedback</h3>
+          <p>${feedback}</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${frontendUrl}/student/modules" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Go to My Modules</a>
+        </div>
+        <p>Best regards,<br/><strong>Arin Publishing Academy</strong></p>
+      </div>
+      `;
+
+    const plainTextContent = passed
+      ? `Essay Passed!\n\nDear ${studentName},\n\nYour essay for "${moduleName}" has been reviewed and you PASSED!\n\nInstructor Feedback:\n${feedback}\n\n${certificateUrl ? `View Certificate: ${certificateUrl}` : ''}\n\nBest regards,\nArin Publishing Academy`
+      : `Essay Reviewed\n\nDear ${studentName},\n\nYour essay for "${moduleName}" has been reviewed. Please check the feedback below and try again.\n\nInstructor Feedback:\n${feedback}\n\nBest regards,\nArin Publishing Academy`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: studentEmail,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending essay grading result:', error);
+    }
+  }
+
+  /**
+   * Notify a student about a new discussion post or reply in their enrolled module
+   */
+  async sendDiscussionNotificationToStudent(
+    studentEmail: string,
+    studentName: string,
+    moduleName: string,
+    lessonTitle: string,
+    discussionTitle: string,
+    discussionUrl: string,
+    isReply: boolean,
+  ) {
+    const subject = isReply
+      ? `New Reply in Discussion: ${discussionTitle}`
+      : `New Discussion in ${moduleName}`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #7c3aed; border-bottom: 3px solid #7c3aed; padding-bottom: 10px;">${isReply ? 'New Reply in Discussion' : 'New Discussion Posted'}</h2>
+        <p>Dear <strong>${studentName}</strong>,</p>
+        <p>${isReply ? 'A new reply has been posted in a discussion you are participating in.' : 'A new discussion has been posted in a module you are enrolled in.'}</p>
+        <div style="background-color: #f5f3ff; border-left: 4px solid #7c3aed; padding: 15px; margin: 20px 0;">
+          <p><strong>Module:</strong> ${moduleName}</p>
+          ${lessonTitle ? `<p><strong>Lesson:</strong> ${lessonTitle}</p>` : ''}
+          <p><strong>Discussion:</strong> ${discussionTitle}</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${discussionUrl}" style="display: inline-block; background-color: #7c3aed; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Discussion</a>
+        </div>
+        <p>Best regards,<br/><strong>Arin Publishing Academy</strong></p>
+      </div>
+    `;
+
+    const plainTextContent = `${isReply ? 'New Reply in Discussion' : 'New Discussion Posted'}\n\nDear ${studentName},\n\nModule: ${moduleName}\n${lessonTitle ? `Lesson: ${lessonTitle}\n` : ''}Discussion: ${discussionTitle}\n\nView Discussion: ${discussionUrl}\n\nBest regards,\nArin Publishing Academy`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: studentEmail,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending discussion notification to student:', error);
+    }
+  }
+
+  /**
+   * Notify instructor when a student posts or replies in a discussion
+   */
+  async sendDiscussionNotificationToInstructor(
+    instructorEmail: string,
+    instructorName: string,
+    studentName: string,
+    moduleName: string,
+    discussionTitle: string,
+    discussionUrl: string,
+  ) {
+    const subject = `Student Reply in Discussion: ${discussionTitle}`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb; border-bottom: 3px solid #2563eb; padding-bottom: 10px;">Student Replied to Discussion</h2>
+        <p>Dear <strong>${instructorName}</strong>,</p>
+        <p>A student has posted a reply in one of your course discussions.</p>
+        <div style="background-color: #eff6ff; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0;">
+          <p><strong>Student:</strong> ${studentName}</p>
+          <p><strong>Module:</strong> ${moduleName}</p>
+          <p><strong>Discussion:</strong> ${discussionTitle}</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${discussionUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Discussion</a>
+        </div>
+        <p>Best regards,<br/><strong>Arin Publishing Academy</strong></p>
+      </div>
+    `;
+
+    const plainTextContent = `Student Replied to Discussion\n\nDear ${instructorName},\n\nStudent: ${studentName}\nModule: ${moduleName}\nDiscussion: ${discussionTitle}\n\nView Discussion: ${discussionUrl}\n\nBest regards,\nArin Publishing Academy`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: instructorEmail,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending discussion notification to instructor:', error);
+    }
+  }
+
+  /**
+   * Send module inactivity reminder to a student
+   */
+  async sendModuleInactivityReminder(
+    email: string,
+    studentName: string,
+    moduleName: string,
+    progress: number,
+    moduleId: string,
+  ) {
+    const subject = `Don't Stop Now — Continue "${moduleName}"`;
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const moduleUrl = `${frontendUrl}/student/modules/${moduleId}`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #021d49 0%, #039e8e 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">Keep Going — You've Got This!</h1>
+        </div>
+        <div style="background-color: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px;">Dear <strong>${studentName}</strong>,</p>
+          <p style="font-size: 16px;">It's been a few days since you last visited <strong>${moduleName}</strong>. Come back and continue your learning!</p>
+          <div style="text-align: center; margin: 25px 0;">
+            <div style="font-size: 48px; font-weight: bold; color: #021d49;">${Math.round(progress)}%</div>
+            <div style="color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Completed</div>
+          </div>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${moduleUrl}" style="display: inline-block; background: linear-gradient(135deg, #021d49 0%, #039e8e 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 16px;">Continue Learning →</a>
+          </div>
+        </div>
+        <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+          <p>© ${new Date().getFullYear()} Arin Publishing Academy. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+
+    const plainTextContent = `Keep Going!\n\nDear ${studentName},\n\nIt's been a few days since you last visited "${moduleName}". You're ${Math.round(progress)}% through — don't stop now!\n\nContinue Learning: ${moduleUrl}\n\nBest regards,\nArin Publishing Academy`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error sending module inactivity reminder:', error);
+    }
+  }
+
+  /**
+   * Send course completion reminder to inactive students
+   */
+  async sendCourseCompletionReminder(
+    email: string,
+    studentName: string,
+    courseTitle: string,
+    progress: number,
+    courseId: string,
+  ) {
+    const subject = `⏰ Complete Your Course: ${courseTitle}`;
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const courseUrl = `${frontendUrl}/courses/${courseId}`;
+    const dashboardUrl = `${frontendUrl}/student`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="color: white; margin: 0; font-size: 28px;">Don't Lose Your Progress!</h1>
+        </div>
+        
+        <div style="background-color: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
+          <p style="font-size: 16px;">Dear <strong>${studentName}</strong>,</p>
+          
+          <p style="font-size: 16px;">We noticed you haven't visited <strong>${courseTitle}</strong> in a while. Your learning journey is important to us!</p>
+          
+          <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border-radius: 10px; padding: 20px; margin: 25px 0; text-align: center;">
+            <div style="background-color: rgba(255, 255, 255, 0.9); border-radius: 8px; padding: 15px; display: inline-block;">
+              <div style="font-size: 48px; font-weight: bold; color: #667eea; margin-bottom: 5px;">${Math.round(progress)}%</div>
+              <div style="color: #666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Completed</div>
+            </div>
+          </div>
+          
+          <div style="background-color: #f0fdf4; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 5px;">
+            <h3 style="color: #10b981; margin-top: 0; font-size: 18px;">Why Continue?</h3>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+              <li style="margin: 8px 0;">📚 Complete your learning goals</li>
+              <li style="margin: 8px 0;">🏆 Earn your certificate of completion</li>
+              <li style="margin: 8px 0;">💼 Add new skills to your professional portfolio</li>
+              <li style="margin: 8px 0;">🎯 Stay on track with your personal development</li>
+            </ul>
+          </div>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${courseUrl}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);">
+              Continue Learning →
+            </a>
+          </div>
+          
+          <div style="background-color: #eff6ff; padding: 20px; border-radius: 8px; margin-top: 25px;">
+            <p style="margin: 0; font-size: 14px; color: #666;">
+              <strong>💡 Pro Tip:</strong> Dedicate just 15-20 minutes daily to make steady progress. Consistency is key to mastering new skills!
+            </p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="${dashboardUrl}" style="color: #667eea; text-decoration: none; font-size: 14px;">View All My Courses</a>
+          </div>
+        </div>
+        
+        <div style="text-align: center; padding: 20px; color: #9ca3af; font-size: 12px;">
+          <p>This is an automated reminder. You can manage your email preferences in your account settings.</p>
+          <p>© ${new Date().getFullYear()} Arin Publishing Academy. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+
+    const plainTextContent = `
+Don't Lose Your Progress!
+
+Dear ${studentName},
+
+We noticed you haven't visited "${courseTitle}" in a while. Your learning journey is important to us!
+
+Your Progress: ${Math.round(progress)}% Completed
+
+Why Continue?
+- Complete your learning goals
+- Earn your certificate of completion
+- Add new skills to your professional portfolio
+- Stay on track with your personal development
+
+Continue Learning: ${courseUrl}
+
+Pro Tip: Dedicate just 15-20 minutes daily to make steady progress. Consistency is key to mastering new skills!
+
+View All My Courses: ${dashboardUrl}
+
+This is an automated reminder. You can manage your email preferences in your account settings.
+
+© ${new Date().getFullYear()} Arin Publishing Academy. All rights reserved.
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return { success: true, message: `Completion reminder sent to ${email}` };
+    } catch (error) {
+      console.error('Error sending completion reminder:', error);
+      throw new Error(`Failed to send reminder: ${error.message}`);
     }
   }
 }

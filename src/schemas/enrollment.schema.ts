@@ -101,6 +101,39 @@ class AssessmentResult {
   aiEvaluatedAt?: Date; // When AI evaluation was performed
 }
 
+// Historical record of course attempts
+class CourseAttemptHistory {
+  @Prop({ required: true })
+  attemptNumber: number;
+
+  @Prop({ required: true })
+  resetReason: string; // 'manual_restart', 'auto_restart_module_failure', 'auto_restart_final_failure', 'soft_reset'
+
+  @Prop({ required: true })
+  resetAt: Date;
+
+  @Prop({ default: 0 })
+  progressAtReset: number;
+
+  @Prop({ default: 0 })
+  completedModulesAtReset: number;
+
+  @Prop({ default: 0 })
+  moduleAssessmentAttempts: number;
+
+  @Prop({ default: 0 })
+  finalAssessmentAttempts: number;
+
+  @Prop({ default: 0 })
+  highestModuleScore: number;
+
+  @Prop({ default: 0 })
+  highestFinalScore: number;
+
+  @Prop({ type: [ModuleProgress], default: [] })
+  moduleProgressSnapshot: ModuleProgress[];
+}
+
 @Schema({ timestamps: true })
 export class Enrollment extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
@@ -151,6 +184,20 @@ export class Enrollment extends Document {
   @Prop({ default: 0 })
   lastAccessedLesson?: number;
 
+  // Track if student is currently in an assessment
+  @Prop({ default: false })
+  inModuleAssessment?: boolean;
+
+  @Prop({ default: null })
+  currentAssessmentModule?: number;
+
+  @Prop({ default: false })
+  inFinalAssessment?: boolean;
+
+  // Track last activity type for smart resume
+  @Prop({ enum: ['lesson', 'module_assessment', 'final_assessment'], default: 'lesson' })
+  lastActivityType?: string;
+
   // Per-lesson completion tracking
   @Prop({
     type: [
@@ -176,7 +223,7 @@ export class Enrollment extends Document {
   @Prop({ default: null })
   certificateId?: Types.ObjectId;
 
-  @Prop({ type: String, unique: true, sparse: true, default: null })
+  @Prop({ type: String, default: null })
   certificatePublicId?: string; // UUID for secure certificate access
 
   @Prop({ default: false })
@@ -187,6 +234,13 @@ export class Enrollment extends Document {
 
   @Prop({ default: null })
   certificateIssuedAt?: Date;
+
+  // Historical data for analytics and instructor review
+  @Prop({ type: [Object], default: [] })
+  attemptHistory?: CourseAttemptHistory[];
+
+  @Prop({ default: 1 })
+  currentAttemptNumber: number;
 
   createdAt: Date;
   updatedAt: Date;
@@ -206,4 +260,4 @@ EnrollmentSchema.pre('save', function(next) {
 EnrollmentSchema.index({ studentId: 1, courseId: 1 }, { unique: true });
 EnrollmentSchema.index({ courseId: 1 });
 EnrollmentSchema.index({ isCompleted: 1 });
-EnrollmentSchema.index({ certificatePublicId: 1 }, { sparse: true });
+EnrollmentSchema.index({ certificatePublicId: 1 }, { unique: true, sparse: true, partialFilterExpression: { certificatePublicId: { $ne: null } } });

@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { User, UserSchema } from '../schemas/user.schema';
 import { PasswordReset, PasswordResetSchema } from '../schemas/password-reset.schema';
+import { ActivityLog, ActivityLogSchema } from '../schemas/activity-log.schema';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { EmailService } from '../common/services/email.service';
@@ -16,6 +17,7 @@ import { EmailService } from '../common/services/email.service';
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: PasswordReset.name, schema: PasswordResetSchema },
+      { name: ActivityLog.name, schema: ActivityLogSchema },
     ]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({

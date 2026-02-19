@@ -8,7 +8,7 @@ export class NotesService {
   constructor(@InjectModel(Note.name) private noteModel: Model<NoteDocument>) {}
 
   /**
-   * Create a new note
+   * Create a new note (course-based)
    */
   async createNote(
     studentId: string,
@@ -36,6 +36,52 @@ export class NotesService {
       return await note.save();
     } catch (error) {
       throw new BadRequestException(`Failed to create note: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create a module-based note (for module lessons)
+   */
+  async createModuleNote(
+    studentId: string,
+    moduleId: string,
+    moduleName: string,
+    lessonIndex: number,
+    lessonName: string,
+    content: string,
+  ): Promise<NoteDocument> {
+    try {
+      const note = new this.noteModel({
+        studentId: new Types.ObjectId(studentId),
+        moduleId: new Types.ObjectId(moduleId),
+        moduleName,
+        lessonIndex,
+        lessonName,
+        content,
+        tags: [],
+      });
+
+      return await note.save();
+    } catch (error) {
+      throw new BadRequestException(`Failed to create module note: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get notes for a specific module
+   */
+  async getModuleNotes(studentId: string, moduleId: string): Promise<NoteDocument[]> {
+    try {
+      return (await this.noteModel
+        .find({
+          studentId: new Types.ObjectId(studentId),
+          moduleId: new Types.ObjectId(moduleId),
+        })
+        .sort({ createdAt: -1 })
+        .lean()
+        .exec()) as any;
+    } catch (error) {
+      throw new BadRequestException(`Failed to fetch module notes: ${error.message}`);
     }
   }
 
@@ -86,7 +132,7 @@ export class NotesService {
       // Group by course
       const grouped = new Map();
       notes.forEach((note) => {
-        const courseKey = note.courseId.toString();
+        const courseKey = note.courseId?.toString() || note.moduleId?.toString() || 'unknown';
         if (!grouped.has(courseKey)) {
           grouped.set(courseKey, {
             courseId: note.courseId,

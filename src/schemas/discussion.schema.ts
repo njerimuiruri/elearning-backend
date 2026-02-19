@@ -31,8 +31,11 @@ export class Discussion extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   studentId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Course', required: true })
-  courseId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'Course' })
+  courseId?: Types.ObjectId;
+
+  @Prop({ type: Types.ObjectId, ref: 'Module' })
+  moduleId?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   instructorId: Types.ObjectId;
@@ -70,6 +73,12 @@ export class Discussion extends Document {
   @Prop({ default: 'open', enum: ['open', 'resolved', 'closed'] })
   status: string;
 
+  @Prop({ default: false })
+  isPinned: boolean;
+
+  @Prop({ type: Date, default: null })
+  pinnedAt?: Date | null;
+
   @Prop({ type: [LastReadEntry], default: [] })
   lastRead: LastReadEntry[];
 
@@ -81,6 +90,7 @@ export const DiscussionSchema = SchemaFactory.createForClass(Discussion);
 
 // Create indexes
 DiscussionSchema.index({ courseId: 1 });
+DiscussionSchema.index({ moduleId: 1 });
 DiscussionSchema.index({ studentId: 1 });
 DiscussionSchema.index({ instructorId: 1 });
 DiscussionSchema.index({ status: 1 });

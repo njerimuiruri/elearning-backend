@@ -36,9 +36,25 @@ class Question {
   explanation?: string;
 }
 
-class Lesson {
+export class Lesson {
   @Prop({ required: true })
   title: string;
+
+  // Draft/Review/Publish workflow fields
+  @Prop({ default: 'published', enum: ['draft', 'under_review', 'published'] })
+  status: string;
+
+  @Prop({ type: String, default: null })
+  draftBy?: string; // instructorId
+
+  @Prop({ type: Date, default: null })
+  draftAt?: Date;
+
+  @Prop({ type: String, default: null })
+  reviewedBy?: string; // instructorId
+
+  @Prop({ type: Date, default: null })
+  reviewedAt?: Date;
 
   @Prop()
   content?: string;
@@ -54,9 +70,21 @@ class Lesson {
 
   @Prop({ type: [Question], default: [] })
   questions?: Question[];
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  lockedBy?: Types.ObjectId;
+
+  @Prop()
+  lockedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  lastEditedBy?: Types.ObjectId;
+
+  @Prop()
+  lastEditedAt?: Date;
 }
 
-class Assessment {
+export class Assessment {
   @Prop({ required: true })
   title: string;
 
@@ -73,12 +101,37 @@ class Assessment {
   order: number;
 }
 
-class Module {
+import { ModuleInstructor, ModuleInstructorSchema } from './module-instructor.schema';
+
+export class Module {
   @Prop({ required: true })
   title: string;
 
+  // Draft/Review/Publish workflow fields
+  @Prop({ default: 'published', enum: ['draft', 'under_review', 'published'] })
+  status: string;
+
+  @Prop({ type: String, default: null })
+  draftBy?: string; // instructorId
+
+  @Prop({ type: Date, default: null })
+  draftAt?: Date;
+
+  @Prop({ type: String, default: null })
+  reviewedBy?: string; // instructorId
+
+  @Prop({ type: Date, default: null })
+  reviewedAt?: Date;
+
+  // Multi-instructor support
+  @Prop({ type: [ModuleInstructorSchema], default: [] })
+  moduleInstructors: ModuleInstructor[];
+
   @Prop()
   description?: string;
+
+  @Prop({ type: [String], default: [] })
+  topicsCovered?: string[]; // Array of topics covered in this module
 
   @Prop()
   content: string;
@@ -88,6 +141,9 @@ class Module {
 
   @Prop()
   duration: number; // in minutes
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  uploadedBy?: Types.ObjectId;
 
   @Prop({ type: [Lesson], default: [] })
   lessons?: Lesson[];
@@ -100,11 +156,61 @@ class Module {
 
   @Prop({ default: 0 })
   order: number;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  lockedBy?: Types.ObjectId;
+
+  @Prop()
+  lockedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  lastEditedBy?: Types.ObjectId;
+
+  @Prop()
+  lastEditedAt?: Date;
 }
 
 @Schema({ timestamps: true })
 
 export class Course extends Document {
+    @Prop()
+    welcomeMessage?: string;
+
+    @Prop()
+    audienceDescription?: string;
+
+    @Prop()
+    deliveryMode?: string;
+
+    @Prop()
+    courseAim?: string;
+
+    @Prop()
+    courseObjective?: string;
+
+    @Prop()
+    expectedLearningOutcomes?: string;
+
+    @Prop()
+    briefContent?: string;
+
+    @Prop()
+    teachingLearningMethods?: string;
+
+    @Prop()
+    resourcesMaterials?: string;
+
+    @Prop()
+    assessmentPlan?: string;
+
+    @Prop()
+    supportingTechnologies?: string;
+
+    @Prop()
+    coreTexts?: string;
+
+    @Prop()
+    additionalReadings?: string;
   @Prop({ required: true, trim: true })
   title: string;
 
@@ -117,6 +223,10 @@ export class Course extends Document {
   // Support one or more instructors
   @Prop({ type: [Types.ObjectId], ref: 'User', required: true })
   instructorIds: Types.ObjectId[];
+
+
+  @Prop({ default: 0 })
+  price: number; // Deprecated - pricing is controlled at category level
 
   @Prop({ enum: CourseLevel, default: CourseLevel.BEGINNER })
   level: CourseLevel;
@@ -141,6 +251,18 @@ export class Course extends Document {
 
   @Prop()
   courseTemplate?: string; // Reference to course template
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  lockedBy?: Types.ObjectId;
+
+  @Prop()
+  lockedAt?: Date;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  lastEditedBy?: Types.ObjectId;
+
+  @Prop()
+  lastEditedAt?: Date;
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   approvedBy?: Types.ObjectId;

@@ -1,21 +1,79 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { User, UserRole, InstructorStatus, FellowshipStatus } from '../schemas/user.schema';
-import { Course } from '../schemas/course.schema';
+import { Course, CourseStatus } from '../schemas/course.schema';
+import { CourseFormat } from '../schemas/course-format.schema';
 import { PasswordReset } from '../schemas/password-reset.schema';
+import { ActivityLog, ActivityType } from '../schemas/activity-log.schema';
+import { Module as ModuleEntity, ModuleStatus } from '../schemas/module.schema';
+import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
 import { EmailService } from '../common/services/email.service';
 
 @Injectable()
 export class AdminService {
+    async setCoursePrice(courseId: string, price: number, adminId: string) {
+      if (typeof price !== 'number' || price <= 0) {
+        throw new BadRequestException('Price must be a positive number');
+      }
+      const course = await this.courseModel.findById(courseId);
+      if (!course) throw new NotFoundException('Course not found');
+      course.price = price;
+      course.lastEditedBy = adminId ? new (this.courseModel as any).db.base.Types.ObjectId(adminId) : undefined;
+      course.lastEditedAt = new Date();
+      await course.save();
+      // Optionally log activity
+      await this.logActivity(
+        ActivityType.COURSE_UPDATED,
+        `Course price set to ${price}`,
+        adminId,
+        undefined,
+        courseId,
+        { price },
+        'DollarSign',
+      );
+      return { message: 'Course price updated', course };
+    }
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Course.name) private courseModel: Model<Course>,
+    @InjectModel(CourseFormat.name) private courseFormatModel: Model<CourseFormat>,
     @InjectModel(PasswordReset.name) private passwordResetModel: Model<PasswordReset>,
+    @InjectModel(ActivityLog.name) private activityLogModel: Model<ActivityLog>,
+    @InjectModel(ModuleEntity.name) private moduleModel: Model<ModuleEntity>,
+    @InjectModel(ModuleEnrollment.name) private moduleEnrollmentModel: Model<ModuleEnrollment>,
     private emailService: EmailService,
   ) {}
+
+  // Helper method to log admin activities
+  private async logActivity(
+    type: ActivityType,
+    message: string,
+    performedBy?: string,
+    targetUser?: string,
+    targetCourse?: string,
+    metadata?: Record<string, any>,
+    icon?: string,
+  ) {
+    try {
+      await this.activityLogModel.create({
+        type,
+        message,
+        performedBy,
+        targetUser,
+        targetCourse,
+        metadata,
+        icon,
+      });
+    } catch (error) {
+      console.error('Failed to log activity:', error);
+      // Don't throw - logging should not block the main operation
+    }
+  }
 
   // Dashboard Statistics
   async getDashboardStats() {
@@ -63,6 +121,37 @@ export class AdminService {
     const userGrowth = totalUsers > 0 ? ((newUsersLast30Days / totalUsers) * 100).toFixed(1) : 0;
     const activeGrowth = activeUsers > 0 ? ((activeUsersLast30Days / activeUsers) * 100).toFixed(1) : 0;
 
+    // Get recent activities for dashboard
+    const recentActivities = await this.activityLogModel
+      .find({
+        type: {
+          $in: [
+            ActivityType.USER_REGISTRATION,
+            ActivityType.INSTRUCTOR_APPROVED,
+            ActivityType.INSTRUCTOR_REJECTED,
+            ActivityType.COURSE_APPROVED,
+            ActivityType.COURSE_REJECTED,
+          ]
+        }
+      })
+      .populate('performedBy', 'firstName lastName email')
+      .populate('targetUser', 'firstName lastName email')
+      .populate('targetCourse', 'title')
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const activities = recentActivities.map(log => ({
+      type: log.type,
+      icon: log.icon || 'Activity',
+      message: log.message,
+      timestamp: log.createdAt,
+      performedBy: log.performedBy,
+      targetUser: log.targetUser,
+      targetCourse: log.targetCourse,
+      metadata: log.metadata,
+    }));
+
     return {
       totalUsers,
       activeUsers,
@@ -78,6 +167,7 @@ export class AdminService {
       userGrowth: `+${userGrowth}%`,
       activeGrowth: `+${activeGrowth}%`,
       fellowsPercentage: totalFellows > 0 ? ((activeFellows / totalFellows) * 100).toFixed(0) : 0,
+      recentActivities: activities,
     };
   }
 
@@ -122,7 +212,7 @@ export class AdminService {
     return { user };
   }
 
-  async updateUserStatus(id: string, isActive: boolean) {
+  async updateUserStatus(id: string, isActive: boolean, adminId?: string) {
     const user = await this.userModel.findByIdAndUpdate(
       id,
       { isActive, updatedAt: new Date() },
@@ -133,17 +223,40 @@ export class AdminService {
       throw new NotFoundException('User not found');
     }
 
+    // Log the activity
+    await this.logActivity(
+      isActive ? ActivityType.USER_ACTIVATED : ActivityType.USER_DEACTIVATED,
+      `User ${user.firstName} ${user.lastName} has been ${isActive ? 'activated' : 'deactivated'}`,
+      adminId,
+      user._id.toString(),
+      undefined,
+      { userEmail: user.email, userRole: user.role },
+      isActive ? 'UserCheck' : 'UserX',
+    );
+
     return {
       message: `User ${isActive ? 'activated' : 'deactivated'} successfully`,
       user,
     };
   }
 
-  async deleteUser(id: string) {
+  async deleteUser(id: string, adminId?: string) {
     const user = await this.userModel.findByIdAndDelete(id);
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    // Log the activity
+    await this.logActivity(
+      ActivityType.USER_DELETED,
+      `User ${user.firstName} ${user.lastName} has been deleted`,
+      adminId,
+      user._id.toString(),
+      undefined,
+      { userEmail: user.email, userRole: user.role },
+      'Trash',
+    );
+
     return { message: 'User deleted successfully' };
   }
 
@@ -158,7 +271,31 @@ export class AdminService {
       .sort({ createdAt: -1 })
       .lean();
 
-    return { instructors };
+    // Format CV display names for all instructors
+    const formattedInstructors = instructors.map(instructor => {
+      let cvDisplayName: string | null = null;
+      if (instructor.cvUrl) {
+        const cvPath = instructor.cvUrl.replace(/\\/g, '/');
+        const cvFilename = cvPath.split('/').pop();
+        
+        // Check if it matches our naming pattern: cv-firstname-lastname-timestamp.pdf
+        const cvMatch = cvFilename?.match(/^cv-([^-]+)-([^-]+)-\d+-\d+\.pdf$/);
+        if (cvMatch) {
+          const firstName = cvMatch[1].charAt(0).toUpperCase() + cvMatch[1].slice(1);
+          const lastName = cvMatch[2].charAt(0).toUpperCase() + cvMatch[2].slice(1);
+          cvDisplayName = `cv-${firstName}-${lastName}.pdf`;
+        } else {
+          cvDisplayName = cvFilename ?? null;
+        }
+      }
+      
+      return {
+        ...instructor,
+        cvDisplayName,
+      };
+    });
+
+    return { instructors: formattedInstructors };
   }
 
   async getInstructorDetails(id: string) {
@@ -174,10 +311,32 @@ export class AdminService {
       throw new NotFoundException('Instructor not found');
     }
 
-    return { instructor };
+    // Format CV display name for better UX
+    let cvDisplayName: string | null = null;
+    if (instructor.cvUrl) {
+      const cvPath = instructor.cvUrl.replace(/\\/g, '/');
+      const cvFilename = cvPath.split('/').pop();
+      
+      // Check if it matches our naming pattern: cv-firstname-lastname-timestamp.pdf
+      const cvMatch = cvFilename?.match(/^cv-([^-]+)-([^-]+)-\d+-\d+\.pdf$/);
+      if (cvMatch) {
+        const firstName = cvMatch[1].charAt(0).toUpperCase() + cvMatch[1].slice(1);
+        const lastName = cvMatch[2].charAt(0).toUpperCase() + cvMatch[2].slice(1);
+        cvDisplayName = `cv-${firstName}-${lastName}.pdf`;
+      } else {
+        cvDisplayName = cvFilename ?? null;
+      }
+    }
+
+    return { 
+      instructor: {
+        ...instructor,
+        cvDisplayName,
+      }
+    };
   }
 
-  async approveInstructor(id: string) {
+  async approveInstructor(id: string, adminId?: string) {
     const instructor = await this.userModel.findOneAndUpdate(
       {
         _id: id,
@@ -194,6 +353,17 @@ export class AdminService {
     if (!instructor) {
       throw new NotFoundException('Instructor not found or already processed');
     }
+
+    // Log the activity
+    await this.logActivity(
+      ActivityType.INSTRUCTOR_APPROVED,
+      `Instructor ${instructor.firstName} ${instructor.lastName} has been approved`,
+      adminId,
+      instructor._id.toString(),
+      undefined,
+      { instructorEmail: instructor.email, institution: instructor.institution },
+      'CheckCircle',
+    );
 
     try {
       await this.emailService.sendInstructorApprovalEmail(
@@ -226,7 +396,7 @@ export class AdminService {
     };
   }
 
-  async rejectInstructor(id: string, reason: string) {
+  async rejectInstructor(id: string, reason: string, adminId?: string) {
     if (!reason || reason.trim().length === 0) {
       throw new BadRequestException('Rejection reason is required');
     }
@@ -247,6 +417,17 @@ export class AdminService {
     if (!instructor) {
       throw new NotFoundException('Instructor not found or already processed');
     }
+
+    // Log the activity
+    await this.logActivity(
+      ActivityType.INSTRUCTOR_REJECTED,
+      `Instructor ${instructor.firstName} ${instructor.lastName} application rejected`,
+      adminId,
+      instructor._id.toString(),
+      undefined,
+      { reason, instructorEmail: instructor.email, institution: instructor.institution },
+      'XCircle',
+    );
 
     try {
       await this.emailService.sendInstructorApprovalEmail(
@@ -300,8 +481,32 @@ export class AdminService {
       this.userModel.countDocuments(query),
     ]);
 
+    // Format CV display names for all instructors
+    const formattedInstructors = instructors.map(instructor => {
+      let cvDisplayName: string | null = null;
+      if (instructor.cvUrl) {
+        const cvPath = instructor.cvUrl.replace(/\\/g, '/');
+        const cvFilename = cvPath.split('/').pop();
+        
+        // Check if it matches our naming pattern: cv-firstname-lastname-timestamp.pdf
+        const cvMatch = cvFilename?.match(/^cv-([^-]+)-([^-]+)-\d+-\d+\.pdf$/);
+        if (cvMatch) {
+          const firstName = cvMatch[1].charAt(0).toUpperCase() + cvMatch[1].slice(1);
+          const lastName = cvMatch[2].charAt(0).toUpperCase() + cvMatch[2].slice(1);
+          cvDisplayName = `cv-${firstName}-${lastName}.pdf`;
+        } else {
+          cvDisplayName = cvFilename ?? null;
+        }
+      }
+      
+      return {
+        ...instructor,
+        cvDisplayName,
+      };
+    });
+
     return {
-      instructors,
+      instructors: formattedInstructors,
       pagination: {
         page,
         limit,
@@ -365,7 +570,15 @@ export class AdminService {
   }
 
   async createStudent(createStudentDto: any) {
-    const { firstName, lastName, email, phoneNumber, country } = createStudentDto;
+    const {
+      firstName,
+      lastName,
+      email,
+      phoneNumber,
+      country,
+      isFellow,
+      assignedCategories
+    } = createStudentDto;
 
     // Check if student already exists
     const existingStudent = await this.userModel.findOne({ email });
@@ -377,8 +590,8 @@ export class AdminService {
     const temporaryPassword = crypto.randomBytes(8).toString('hex');
     const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
-    // Create student with mustSetPassword flag
-    const student = await this.userModel.create({
+    // Prepare user data
+    const userData: any = {
       firstName,
       lastName,
       email,
@@ -388,7 +601,36 @@ export class AdminService {
       role: UserRole.STUDENT,
       isActive: true,
       mustSetPassword: true, // Flag for admin-created student
-    });
+    };
+
+    // If this is a fellow, add fellow data
+    if (isFellow) {
+      userData.userType = 'fellow';
+      userData.fellowData = {
+        fellowId: `FELLOW-${Date.now()}`,
+        cohort: new Date().getFullYear().toString(),
+        deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
+        requiredCourses: [],
+        fellowshipStatus: FellowshipStatus.ACTIVE,
+        assignedCategories: assignedCategories && assignedCategories.length > 0
+          ? assignedCategories.map((id: string) => new Types.ObjectId(id))
+          : [],
+      };
+    }
+
+    // Create student with mustSetPassword flag
+    const student = await this.userModel.create(userData);
+
+    // Log the activity
+    await this.logActivity(
+      ActivityType.STUDENT_CREATED,
+      `Student ${firstName} ${lastName} was created by admin`,
+      undefined,
+      student._id.toString(),
+      undefined,
+      { email, country },
+      'UserPlus',
+    );
 
     // Create password reset token for initial setup
     const setupToken = crypto.randomBytes(32).toString('hex');
@@ -418,6 +660,104 @@ export class AdminService {
       },
       temporaryPassword,
       message: 'Student created successfully. Registration email sent.',
+    };
+  }
+
+  async createInstructor(createInstructorDto: any) {
+    const { 
+      firstName, 
+      lastName, 
+      email, 
+      phoneNumber, 
+      country, 
+      organization,
+      institution,
+      bio,
+      qualifications,
+      expertise,
+      linkedIn,
+      portfolio,
+      teachingExperience,
+      yearsOfExperience,
+      profilePicture,
+      cv
+    } = createInstructorDto;
+
+    // Check if instructor already exists
+    const existingInstructor = await this.userModel.findOne({ email });
+    if (existingInstructor) {
+      throw new BadRequestException('Instructor with this email already exists');
+    }
+
+    // Generate temporary password
+    const temporaryPassword = crypto.randomBytes(8).toString('hex');
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+
+    // Create instructor with approved status since admin is creating them
+    const instructor = await this.userModel.create({
+      firstName,
+      lastName,
+      email,
+      password: hashedPassword,
+      phoneNumber: phoneNumber || null,
+      country: country || null,
+      organization: organization || null,
+      institution: institution || null,
+      bio: bio || null,
+      qualifications: qualifications || null,
+      expertise: expertise || null,
+      linkedIn: linkedIn || null,
+      portfolio: portfolio || null,
+      teachingExperience: teachingExperience || null,
+      yearsOfExperience: yearsOfExperience || null,
+      profilePicture: profilePicture || null,
+      cv: cv || null,
+      role: UserRole.INSTRUCTOR,
+      instructorStatus: InstructorStatus.APPROVED, // Auto-approve admin-created instructors
+      isActive: true,
+      mustSetPassword: true, // Flag for admin-created instructor
+    });
+
+    // Log the activity
+    await this.logActivity(
+      ActivityType.INSTRUCTOR_APPROVED,
+      `Instructor ${firstName} ${lastName} was created by admin and auto-approved`,
+      undefined,
+      instructor._id.toString(),
+      undefined,
+      { email, country, institution },
+      'UserCheck',
+    );
+
+    // Create password reset token for initial setup
+    const setupToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(setupToken).digest('hex');
+
+    await this.passwordResetModel.create({
+      userId: instructor._id,
+      email,
+      token: hashedToken,
+    });
+
+    // Send registration email with credentials
+    try {
+      await this.emailService.sendInstructorRegistrationEmail(email, firstName, temporaryPassword);
+    } catch (error) {
+      console.error('Failed to send registration email:', error);
+      // Don't fail the creation if email fails
+    }
+
+    return {
+      instructor: {
+        _id: instructor._id,
+        firstName: instructor.firstName,
+        lastName: instructor.lastName,
+        email: instructor.email,
+        role: instructor.role,
+        instructorStatus: instructor.instructorStatus,
+      },
+      temporaryPassword,
+      message: 'Instructor created successfully. Registration email sent.',
     };
   }
 
@@ -554,29 +894,6 @@ export class AdminService {
     return { message: 'Student deleted successfully' };
   }
 
-  // Activity Logs
-  async getRecentActivity(filters: { limit?: number; type?: string }) {
-    const { limit = 10 } = filters;
-
-    // Get recent user registrations
-    const recentUsers = await this.userModel
-      .find()
-      .select('firstName lastName email role createdAt')
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean();
-
-    const activities = recentUsers.map(user => ({
-      type: 'user_registration',
-      icon: 'UserPlus',
-      message: `${user.firstName} ${user.lastName} registered as ${user.role}`,
-      timestamp: user.createdAt,
-      userId: user._id,
-    }));
-
-    return { activities };
-  }
-
   // Fellows Management
   async getAllFellows(filters: { status?: string; page?: number; limit?: number }) {
     const { status, page = 1, limit = 20 } = filters;
@@ -662,6 +979,34 @@ export class AdminService {
       message: 'Reminder sent successfully',
       sentTo: fellow.email,
     };
+  }
+
+  async assignFellowCategories(userId: string, categories: string[], adminId: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Initialize fellowData if it doesn't exist
+    if (!user.fellowData) {
+      user.fellowData = { fellowId: new Date().toISOString() } as any;
+    }
+
+    // Update assigned categories
+    user.fellowData['assignedCategories'] = categories.map((id: string) => new Types.ObjectId(id));
+    await user.save();
+
+    await this.logActivity(
+      ActivityType.USER_UPDATED,
+      `Assigned categories to fellow ${user.firstName} ${user.lastName}`,
+      adminId,
+      userId,
+      undefined,
+      { categories },
+      'Tag',
+    );
+
+    return { message: 'Categories assigned successfully', user };
   }
 
   // Analytics
@@ -756,6 +1101,22 @@ export class AdminService {
 
     const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
 
+    // Log the activity
+    const instructorNames = instructors
+      .filter(i => i && typeof i === 'object' && 'firstName' in i)
+      .map(i => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
+      .join(', ');
+    
+    await this.logActivity(
+      ActivityType.COURSE_APPROVED,
+      `Course "${updatedCourse.title}" by ${instructorNames || 'Unknown'} has been approved`,
+      adminId,
+      undefined,
+      updatedCourse._id.toString(),
+      { courseTitle: updatedCourse.title, feedback, instructorNames },
+      'BookCheck',
+    );
+
     // Send approval email to all instructors
     try {
       for (const instructor of instructors) {
@@ -795,7 +1156,7 @@ export class AdminService {
     };
   }
 
-  async rejectCourse(courseId: string, reason: string) {
+  async rejectCourse(courseId: string, reason: string, adminId?: string) {
     if (!reason || reason.trim().length === 0) {
       throw new BadRequestException('Rejection reason is required');
     }
@@ -815,6 +1176,22 @@ export class AdminService {
     }
 
     const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+
+    // Log the activity
+    const instructorNames = instructors
+      .filter(i => i && typeof i === 'object' && 'firstName' in i)
+      .map(i => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
+      .join(', ');
+    
+    await this.logActivity(
+      ActivityType.COURSE_REJECTED,
+      `Course "${updatedCourse.title}" by ${instructorNames || 'Unknown'} has been rejected`,
+      adminId,
+      undefined,
+      updatedCourse._id.toString(),
+      { courseTitle: updatedCourse.title, reason, instructorNames },
+      'BookX',
+    );
 
     // Send rejection email to all instructors
     try {
@@ -882,9 +1259,25 @@ export class AdminService {
       throw new NotFoundException('Course not found');
     }
 
+    // Log the activity
+    const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+    const instructorNames = instructors
+      .filter(i => i && typeof i === 'object' && 'firstName' in i)
+      .map(i => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
+      .join(', ');
+    
+    await this.logActivity(
+      ActivityType.COURSE_APPROVED,
+      `Course "${updatedCourse.title}" by ${instructorNames || 'Unknown'} has been approved and published`,
+      adminId,
+      undefined,
+      updatedCourse._id.toString(),
+      { courseTitle: updatedCourse.title, instructorNames },
+      'CheckCircle',
+    );
+
     // Send approval email to all instructors
     try {
-      const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
       for (const instructor of instructors) {
         if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor && 'lastName' in instructor) {
           await this.emailService.sendCourseApprovedEmail(
@@ -905,7 +1298,7 @@ export class AdminService {
     };
   }
 
-  async rejectPendingCourse(courseId: string, reason: string) {
+  async rejectPendingCourse(courseId: string, reason: string, adminId?: string) {
     const course = await this.courseModel.findById(courseId).populate('instructorIds');
 
     if (!course) {
@@ -930,9 +1323,25 @@ export class AdminService {
       throw new NotFoundException('Course not found');
     }
 
+    // Log the activity
+    const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+    const instructorNames = instructors
+      .filter(i => i && typeof i === 'object' && 'firstName' in i)
+      .map(i => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
+      .join(', ');
+    
+    await this.logActivity(
+      ActivityType.COURSE_REJECTED,
+      `Course "${updatedCourse.title}" by ${instructorNames || 'Unknown'} has been rejected`,
+      adminId,
+      undefined,
+      updatedCourse._id.toString(),
+      { courseTitle: updatedCourse.title, reason, instructorNames },
+      'XCircle',
+    );
+
     // Send rejection email to all instructors
     try {
-      const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
       for (const instructor of instructors) {
         if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor && 'lastName' in instructor) {
           await this.emailService.sendCourseRejectedEmail(
@@ -990,6 +1399,7 @@ export class AdminService {
     const course = await this.courseModel
       .findById(courseId)
       .populate('instructorIds', 'firstName lastName email institution')
+      .populate('modules.uploadedBy', 'firstName lastName email institution')
       .exec();
 
     if (!course) {
@@ -1213,5 +1623,685 @@ export class AdminService {
       enrollments.map(e => e._id),
       message,
     );
+  }
+
+  // Analytics Methods
+  async getAnalyticsOverview() {
+    const Enrollment = this.userModel.db.model('Enrollment');
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const [
+      totalEnrollments,
+      completedEnrollments,
+      activeEnrollments,
+      totalCourses,
+      publishedCourses,
+      totalStudents,
+      approvedInstructors,
+    ] = await Promise.all([
+      Enrollment.countDocuments(),
+      Enrollment.countDocuments({ isCompleted: true }),
+      Enrollment.countDocuments({ 
+        isCompleted: false,
+        lastAccessedAt: { $gte: thirtyDaysAgo }
+      }),
+      this.courseModel.countDocuments(),
+      this.courseModel.countDocuments({ status: CourseStatus.PUBLISHED }),
+      this.userModel.countDocuments({ role: UserRole.STUDENT }),
+      this.userModel.countDocuments({ role: UserRole.INSTRUCTOR, instructorStatus: InstructorStatus.APPROVED }),
+    ]);
+
+    const completionRate = totalEnrollments > 0 
+      ? ((completedEnrollments / totalEnrollments) * 100).toFixed(1)
+      : 0;
+
+    return {
+      enrollments: {
+        total: totalEnrollments,
+        completed: completedEnrollments,
+        active: activeEnrollments,
+        completionRate: `${completionRate}%`,
+      },
+      courses: {
+        total: totalCourses,
+        published: publishedCourses,
+      },
+      users: {
+        students: totalStudents,
+        instructors: approvedInstructors,
+      },
+    };
+  }
+
+  async getStudentProgressAnalytics(limit = 50, status: 'in-progress' | 'completed' | 'all' = 'all') {
+    const Enrollment = this.userModel.db.model('Enrollment');
+
+    const filter: any = {};
+    if (status === 'in-progress') filter.isCompleted = false;
+    if (status === 'completed') filter.isCompleted = true;
+
+    const progressData = await Enrollment.find(filter)
+      .populate('studentId', 'firstName lastName email')
+      .populate('courseId', 'title')
+      .sort({ lastAccessedAt: -1 })
+      .limit(limit)
+      .lean();
+
+    const students = progressData.map(enrollment => ({
+      enrollmentId: enrollment._id,
+      status: enrollment.isCompleted ? 'completed' : 'in-progress',
+      studentId: enrollment.studentId?._id,
+      studentName: `${enrollment.studentId?.firstName} ${enrollment.studentId?.lastName}`,
+      studentEmail: enrollment.studentId?.email,
+      courseId: enrollment.courseId?._id,
+      courseName: enrollment.courseId?.title,
+      progress: enrollment.progress || 0,
+      lastAccessed: enrollment.lastAccessedAt,
+      enrolledAt: enrollment.enrolledAt,
+      daysEnrolled: Math.floor((new Date().getTime() - new Date(enrollment.enrolledAt).getTime()) / (1000 * 60 * 60 * 24)),
+    }));
+
+    const avgProgress = students.length > 0
+      ? students.reduce((sum, s) => sum + s.progress, 0) / students.length
+      : 0;
+
+    return {
+      students,
+      summary: {
+        totalActive: students.length,
+        averageProgress: avgProgress.toFixed(1),
+      },
+    };
+  }
+
+  async getInstructorActivityAnalytics() {
+    const instructors = await this.userModel
+      .find({ role: UserRole.INSTRUCTOR })
+      .select('firstName lastName email instructorStatus lastLogin createdAt')
+      .lean();
+
+    const instructorActivity = await Promise.all(
+      instructors.map(async (instructor) => {
+        const courses = await this.courseModel
+          .find({ instructorIds: instructor._id })
+          .select('title status publishedAt enrollmentCount')
+          .lean();
+
+        const totalStudents = courses.reduce((sum, course) => sum + (course.enrollmentCount || 0), 0);
+
+        return {
+          instructorId: instructor._id,
+          name: `${instructor.firstName} ${instructor.lastName}`,
+          email: instructor.email,
+          status: instructor.instructorStatus,
+          coursesCreated: courses.length,
+          publishedCourses: courses.filter(c => c.status === CourseStatus.PUBLISHED || !!c.publishedAt).length,
+          pendingApproval: courses.filter(c => c.status === CourseStatus.SUBMITTED).length,
+          totalStudents,
+          lastLogin: instructor.lastLogin,
+          joinedAt: instructor.createdAt,
+        };
+      })
+    );
+
+    return {
+      instructors: instructorActivity,
+      summary: {
+        total: instructors.length,
+        approved: instructors.filter(i => i.instructorStatus === InstructorStatus.APPROVED).length,
+        pending: instructors.filter(i => i.instructorStatus === InstructorStatus.PENDING).length,
+      },
+    };
+  }
+
+  async getCourseCompletionAnalytics() {
+    const Enrollment = this.userModel.db.model('Enrollment');
+
+    const completionStats = await Enrollment.aggregate([
+      {
+        $group: {
+          _id: '$courseId',
+          totalEnrollments: { $sum: 1 },
+          completedCount: {
+            $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] }
+          },
+          avgProgress: { $avg: '$progress' },
+        }
+      },
+      {
+        $lookup: {
+          from: 'courses',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'course'
+        }
+      },
+      { $unwind: '$course' },
+      {
+        $project: {
+          courseId: '$_id',
+          courseName: '$course.title',
+          totalEnrollments: 1,
+          completedCount: 1,
+          completionRate: {
+            $multiply: [
+              { $divide: ['$completedCount', '$totalEnrollments'] },
+              100
+            ]
+          },
+          avgProgress: { $round: ['$avgProgress', 1] },
+        }
+      },
+      { $sort: { completionRate: -1 } }
+    ]);
+
+    const overallStats = await Enrollment.aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          completed: { $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] } },
+          avgProgress: { $avg: '$progress' }
+        }
+      }
+    ]);
+
+    const overall = overallStats[0] || { total: 0, completed: 0, avgProgress: 0 };
+    const overallCompletionRate = overall.total > 0 
+      ? ((overall.completed / overall.total) * 100).toFixed(1)
+      : 0;
+
+    return {
+      courses: completionStats,
+      overall: {
+        totalEnrollments: overall.total,
+        completedEnrollments: overall.completed,
+        completionRate: `${overallCompletionRate}%`,
+        averageProgress: overall.avgProgress.toFixed(1),
+      },
+    };
+  }
+
+  async deleteInstructor(id: string) {
+    const instructor = await this.userModel.findOne({
+      _id: id,
+      role: UserRole.INSTRUCTOR,
+    });
+
+    if (!instructor) {
+      throw new NotFoundException('Instructor not found');
+    }
+
+    // Get all courses by this instructor
+    const courses = await this.courseModel.find({ instructorIds: id });
+    const courseIds = courses.map(c => c._id);
+
+    // Delete related data
+    const Enrollment = this.userModel.db.model('Enrollment');
+    const Question = this.userModel.db.model('Question');
+    const Certificate = this.userModel.db.model('Certificate');
+
+    await Promise.all([
+      // Delete courses
+      this.courseModel.deleteMany({ instructorIds: id }),
+      // Delete enrollments for those courses
+      Enrollment.deleteMany({ courseId: { $in: courseIds } }),
+      // Delete questions for those courses
+      Question.deleteMany({ courseId: { $in: courseIds } }),
+      // Delete certificates for those courses
+      Certificate.deleteMany({ courseId: { $in: courseIds } }),
+      // Finally delete the instructor user
+      this.userModel.findByIdAndDelete(id),
+    ]);
+
+    return {
+      message: 'Instructor and all associated data deleted successfully',
+      deletedCourses: courses.length,
+    };
+  }
+
+  // Activity Logs
+  async getRecentActivity(filters: { limit?: number; type?: string } = {}) {
+    const { limit = 50, type } = filters;
+    const query: any = {};
+
+    if (type) {
+      query.type = type;
+    }
+
+    const activities = await this.activityLogModel
+      .find(query)
+      .populate('performedBy', 'firstName lastName email role')
+      .populate('targetUser', 'firstName lastName email role')
+      .populate('targetCourse', 'title')
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    const formattedActivities = activities.map((log: any) => ({
+      _id: log._id,
+      type: log.type,
+      icon: log.icon || 'Activity',
+      message: log.message,
+      timestamp: log.createdAt,
+      performedBy: log.performedBy ? {
+        _id: log.performedBy?._id || null,
+        name: log.performedBy?.firstName && log.performedBy?.lastName 
+          ? `${log.performedBy.firstName} ${log.performedBy.lastName}`
+          : 'Unknown',
+        email: log.performedBy?.email || null,
+        role: log.performedBy?.role || null,
+      } : null,
+      targetUser: log.targetUser ? {
+        _id: log.targetUser?._id || null,
+        name: log.targetUser?.firstName && log.targetUser?.lastName
+          ? `${log.targetUser.firstName} ${log.targetUser.lastName}`
+          : 'Unknown',
+        email: log.targetUser?.email || null,
+        role: log.targetUser?.role || null,
+      } : null,
+      targetCourse: log.targetCourse ? {
+        _id: log.targetCourse?._id || null,
+        title: log.targetCourse?.title || 'Unknown',
+      } : null,
+      metadata: log.metadata,
+    }));
+
+    return {
+      activities: formattedActivities,
+      total: await this.activityLogModel.countDocuments(query),
+    };
+  }
+
+  // Course Format Management Methods
+  async uploadCourseFormat(
+    file: Express.Multer.File,
+    description?: string,
+    version?: string,
+    uploadedBy?: string,
+  ) {
+    try {
+      if (!file) {
+        throw new BadRequestException('No file provided');
+      }
+
+      // Validate file type
+      const allowedExtensions = ['pdf', 'doc', 'docx'];
+      const fileExtension = path.extname(file.originalname).toLowerCase().replace('.', '');
+      
+      if (!allowedExtensions.includes(fileExtension)) {
+        throw new BadRequestException('Only PDF and DOC files are allowed');
+      }
+
+      // Create uploads directory if it doesn't exist
+      const courseFormatsDir = path.join(process.cwd(), 'uploads', 'course-formats');
+      if (!fs.existsSync(courseFormatsDir)) {
+        fs.mkdirSync(courseFormatsDir, { recursive: true });
+      }
+
+      // Generate unique filename
+      const timestamp = Date.now();
+      const uniqueFileName = `format-${timestamp}-${file.originalname}`;
+      const filePath = path.join(courseFormatsDir, uniqueFileName);
+
+      // Save file
+      fs.writeFileSync(filePath, file.buffer);
+
+      // Check if course format already exists and deactivate it
+      const existingFormat = await this.courseFormatModel.findOne({ isActive: true });
+      if (existingFormat) {
+        existingFormat.isActive = false;
+        await existingFormat.save();
+      }
+
+      // Create new course format record
+      const courseFormat = await this.courseFormatModel.create({
+        fileName: file.originalname,
+        filePath: `uploads/course-formats/${uniqueFileName}`,
+        fileType: fileExtension,
+        fileSize: file.size,
+        description,
+        version,
+        uploadedBy,
+        uploadedAt: new Date(),
+        isActive: true,
+      });
+
+      // Log activity
+      await this.logActivity(
+        ActivityType.FILE_UPLOADED,
+        `Course format document uploaded: ${file.originalname}`,
+        uploadedBy,
+        undefined,
+        undefined,
+        { fileName: file.originalname, version, description },
+        'FileUp',
+      );
+
+      return {
+        success: true,
+        message: 'Course format uploaded successfully',
+        courseFormat,
+      };
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to upload course format');
+    }
+  }
+
+  async getCourseFormat() {
+    try {
+      const courseFormat = await this.courseFormatModel
+        .findOne({ isActive: true })
+        .sort({ uploadedAt: -1 });
+
+      if (!courseFormat) {
+        return {
+          success: false,
+          message: 'No course format document found',
+          courseFormat: null,
+        };
+      }
+
+      return {
+        success: true,
+        courseFormat,
+      };
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to fetch course format');
+    }
+  }
+
+  async deleteCourseFormat(id: string) {
+    try {
+      const courseFormat = await this.courseFormatModel.findById(id);
+
+      if (!courseFormat) {
+        throw new NotFoundException('Course format not found');
+      }
+
+      // Delete the file from disk
+      if (fs.existsSync(courseFormat.filePath)) {
+        fs.unlinkSync(courseFormat.filePath);
+      }
+
+      // Delete from database
+      await this.courseFormatModel.findByIdAndDelete(id);
+
+      // Log activity
+      await this.logActivity(
+        ActivityType.FILE_DELETED,
+        `Course format document deleted: ${courseFormat.fileName}`,
+        undefined,
+        undefined,
+        undefined,
+        { fileName: courseFormat.fileName },
+        'FileX',
+      );
+
+      return {
+        success: true,
+        message: 'Course format deleted successfully',
+      };
+    } catch (error) {
+      throw new BadRequestException(error.message || 'Failed to delete course format');
+    }
+  }
+
+  // ===================== MODULE MANAGEMENT =====================
+
+  async getAllModules(filters: { status?: string; level?: string; category?: string; page?: number; limit?: number } = {}) {
+    const { status, level, category, page = 1, limit = 20 } = filters;
+    const query: any = {};
+
+    if (status) query.status = status;
+    if (level) query.level = level;
+    if (category) query.categoryId = new Types.ObjectId(category);
+
+    const skip = (page - 1) * limit;
+
+    const [modules, total] = await Promise.all([
+      this.moduleModel
+        .find(query)
+        .populate('instructorIds', 'firstName lastName email')
+        .populate('categoryId', 'name')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.moduleModel.countDocuments(query),
+    ]);
+
+    return {
+      modules,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    };
+  }
+
+  async getPendingModules(filters: { page?: number; limit?: number } = {}) {
+    const { page = 1, limit = 20 } = filters;
+    const query = { status: ModuleStatus.SUBMITTED };
+    const skip = (page - 1) * limit;
+
+    const [modules, total] = await Promise.all([
+      this.moduleModel
+        .find(query)
+        .populate('instructorIds', 'firstName lastName email institution')
+        .populate('categoryId', 'name')
+        .sort({ submittedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.moduleModel.countDocuments(query),
+    ]);
+
+    return {
+      modules,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    };
+  }
+
+  async getModuleById(moduleId: string) {
+    const moduleDoc = await this.moduleModel
+      .findById(moduleId)
+      .populate('instructorIds', 'firstName lastName email institution')
+      .populate('categoryId', 'name price isPaid')
+      .populate('approvedBy', 'firstName lastName')
+      .lean();
+
+    if (!moduleDoc) {
+      throw new NotFoundException('Module not found');
+    }
+
+    // Get enrollment stats for this module
+    const enrollmentStats = await this.moduleEnrollmentModel.aggregate([
+      { $match: { moduleId: new Types.ObjectId(moduleId) } },
+      {
+        $group: {
+          _id: null,
+          totalEnrollments: { $sum: 1 },
+          completedCount: { $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] } },
+          avgProgress: { $avg: '$overallProgress' },
+        },
+      },
+    ]);
+
+    const stats = enrollmentStats[0] || { totalEnrollments: 0, completedCount: 0, avgProgress: 0 };
+
+    return {
+      ...moduleDoc,
+      enrollmentStats: {
+        totalEnrollments: stats.totalEnrollments,
+        completedCount: stats.completedCount,
+        completionRate: stats.totalEnrollments > 0
+          ? Math.round((stats.completedCount / stats.totalEnrollments) * 100)
+          : 0,
+        avgProgress: Math.round(stats.avgProgress || 0),
+      },
+    };
+  }
+
+  async approveModule(moduleId: string, adminId: string) {
+    const moduleDoc = await this.moduleModel
+      .findById(moduleId)
+      .populate('instructorIds');
+
+    if (!moduleDoc) {
+      throw new NotFoundException('Module not found');
+    }
+
+    if (moduleDoc.status !== ModuleStatus.SUBMITTED) {
+      throw new BadRequestException('Only submitted modules can be approved');
+    }
+
+    moduleDoc.status = ModuleStatus.APPROVED;
+    moduleDoc.approvedBy = new Types.ObjectId(adminId);
+    moduleDoc.approvedAt = new Date();
+    await moduleDoc.save();
+
+    await this.logActivity(
+      ActivityType.COURSE_APPROVED,
+      `Module "${moduleDoc.title}" has been approved`,
+      adminId,
+      undefined,
+      undefined,
+      { moduleId, moduleTitle: moduleDoc.title },
+      'CheckCircle',
+    );
+
+    // Send approval email to each instructor
+    try {
+      for (const instructor of moduleDoc.instructorIds as any[]) {
+        if (instructor && typeof instructor === 'object' && 'email' in instructor) {
+          await this.emailService.sendModuleApprovalEmailToInstructor(
+            String(instructor.email),
+            String(instructor.firstName || ''),
+            moduleDoc.title,
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send module approval email:', error);
+    }
+
+    return { message: 'Module approved successfully', module: moduleDoc };
+  }
+
+  async publishModule(moduleId: string, adminId: string) {
+    const moduleDoc = await this.moduleModel.findById(moduleId);
+
+    if (!moduleDoc) {
+      throw new NotFoundException('Module not found');
+    }
+
+    if (moduleDoc.status !== ModuleStatus.APPROVED) {
+      throw new BadRequestException('Only approved modules can be published');
+    }
+
+    moduleDoc.status = ModuleStatus.PUBLISHED;
+    moduleDoc.publishedAt = new Date();
+    await moduleDoc.save();
+
+    await this.logActivity(
+      ActivityType.COURSE_APPROVED,
+      `Module "${moduleDoc.title}" has been published`,
+      adminId,
+      undefined,
+      undefined,
+      { moduleId, moduleTitle: moduleDoc.title },
+      'Globe',
+    );
+
+    return { message: 'Module published successfully', module: moduleDoc };
+  }
+
+  async rejectModule(moduleId: string, reason: string, adminId?: string) {
+    if (!reason || reason.trim().length === 0) {
+      throw new BadRequestException('Rejection reason is required');
+    }
+
+    const moduleDoc = await this.moduleModel
+      .findById(moduleId)
+      .populate('instructorIds');
+
+    if (!moduleDoc) {
+      throw new NotFoundException('Module not found');
+    }
+
+    if (moduleDoc.status !== ModuleStatus.SUBMITTED) {
+      throw new BadRequestException('Only submitted modules can be rejected');
+    }
+
+    moduleDoc.status = ModuleStatus.REJECTED;
+    moduleDoc.rejectionReason = reason;
+    await moduleDoc.save();
+
+    await this.logActivity(
+      ActivityType.COURSE_REJECTED,
+      `Module "${moduleDoc.title}" has been rejected`,
+      adminId,
+      undefined,
+      undefined,
+      { moduleId, moduleTitle: moduleDoc.title, reason },
+      'XCircle',
+    );
+
+    // Send rejection email to each instructor
+    try {
+      for (const instructor of moduleDoc.instructorIds as any[]) {
+        if (instructor && typeof instructor === 'object' && 'email' in instructor) {
+          await this.emailService.sendModuleRejectionEmailToInstructor(
+            String(instructor.email),
+            String(instructor.firstName || ''),
+            moduleDoc.title,
+            reason,
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send module rejection email:', error);
+    }
+
+    return { message: 'Module rejected', module: moduleDoc };
+  }
+
+  async getModuleDashboardStats() {
+    const [
+      totalModules,
+      draftModules,
+      submittedModules,
+      approvedModules,
+      publishedModules,
+      rejectedModules,
+      totalModuleEnrollments,
+      completedModuleEnrollments,
+    ] = await Promise.all([
+      this.moduleModel.countDocuments(),
+      this.moduleModel.countDocuments({ status: ModuleStatus.DRAFT }),
+      this.moduleModel.countDocuments({ status: ModuleStatus.SUBMITTED }),
+      this.moduleModel.countDocuments({ status: ModuleStatus.APPROVED }),
+      this.moduleModel.countDocuments({ status: ModuleStatus.PUBLISHED }),
+      this.moduleModel.countDocuments({ status: ModuleStatus.REJECTED }),
+      this.moduleEnrollmentModel.countDocuments(),
+      this.moduleEnrollmentModel.countDocuments({ isCompleted: true }),
+    ]);
+
+    const moduleCompletionRate = totalModuleEnrollments > 0
+      ? ((completedModuleEnrollments / totalModuleEnrollments) * 100).toFixed(1)
+      : '0';
+
+    return {
+      totalModules,
+      modulesByStatus: {
+        draft: draftModules,
+        submitted: submittedModules,
+        approved: approvedModules,
+        published: publishedModules,
+        rejected: rejectedModules,
+      },
+      totalModuleEnrollments,
+      completedModuleEnrollments,
+      moduleCompletionRate: `${moduleCompletionRate}%`,
+    };
   }
 }

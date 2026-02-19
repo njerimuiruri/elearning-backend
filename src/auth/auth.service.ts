@@ -8,6 +8,7 @@ import * as crypto from 'crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { User, UserRole, InstructorStatus } from '../schemas/user.schema';
 import { PasswordReset } from '../schemas/password-reset.schema';
+import { ActivityLog, ActivityType } from '../schemas/activity-log.schema';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterInstructorDto } from './dto/register-instructor.dto';
@@ -21,6 +22,7 @@ export class AuthService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(PasswordReset.name) private passwordResetModel: Model<PasswordReset>,
+    @InjectModel(ActivityLog.name) private activityLogModel: Model<ActivityLog>,
     private jwtService: JwtService,
     private emailService: EmailService,
     private configService: ConfigService,
@@ -29,8 +31,30 @@ export class AuthService {
     this.googleClient = clientId ? new OAuth2Client(clientId) : null;
   }
 
+  // Helper method to log activities
+  private async logActivity(
+    type: ActivityType,
+    message: string,
+    targetUser?: string,
+    metadata?: Record<string, any>,
+    icon?: string,
+  ) {
+    try {
+      await this.activityLogModel.create({
+        type,
+        message,
+        targetUser,
+        metadata,
+        icon,
+      });
+    } catch (error) {
+      console.error('Failed to log activity:', error);
+      // Don't throw - logging should not block the main operation
+    }
+  }
+
   async register(registerDto: RegisterDto) {
-    const { email, password, firstName, lastName, role } = registerDto;
+    const { email, password, firstName, lastName, country, organization, otherOrganization, role } = registerDto;
 
     // Check if user exists
     const existingUser = await this.userModel.findOne({ email });
@@ -47,9 +71,20 @@ export class AuthService {
       password: hashedPassword,
       firstName,
       lastName,
+      country,
+      organization: organization === 'Other' ? otherOrganization : organization,
       role: role || UserRole.STUDENT,
       instructorStatus: role === UserRole.INSTRUCTOR ? InstructorStatus.PENDING : undefined,
     });
+
+    // Log the registration activity
+    await this.logActivity(
+      ActivityType.USER_REGISTRATION,
+      `${firstName} ${lastName} registered as ${role || 'student'}`,
+      user._id.toString(),
+      { email, role: role || UserRole.STUDENT, country, organization },
+      'UserPlus',
+    );
 
     // Send welcome email for self-registered students
     if (role !== UserRole.INSTRUCTOR) {
@@ -78,7 +113,26 @@ export class AuthService {
   }
 
   async registerInstructor(registerInstructorDto: RegisterInstructorDto) {
-    const { email, password, firstName, lastName, phoneNumber, institution, bio, profilePhotoUrl, cvUrl } = registerInstructorDto;
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      phoneNumber,
+      country,
+      organization,
+      otherOrganization,
+      institution,
+      bio,
+      qualifications,
+      expertise,
+      linkedIn,
+      portfolio,
+      teachingExperience,
+      yearsOfExperience,
+      profilePictureUrl,
+      cvUrl,
+    } = registerInstructorDto;
 
     // Check if user exists
     const existingUser = await this.userModel.findOne({ email });
@@ -95,14 +149,37 @@ export class AuthService {
       password: hashedPassword,
       firstName,
       lastName,
-      role: UserRole.INSTRUCTOR,
       phoneNumber,
+      country,
+      organization: organization === 'Other' ? otherOrganization : organization,
+      role: UserRole.INSTRUCTOR,
       institution,
       bio,
-      profilePhotoUrl,
+      qualifications,
+      expertise,
+      linkedIn,
+      portfolio,
+      teachingExperience,
+      yearsOfExperience,
+      profilePhotoUrl: profilePictureUrl,
       cvUrl,
       instructorStatus: InstructorStatus.PENDING,
     });
+
+    // Log the instructor registration activity
+    await this.logActivity(
+      ActivityType.USER_REGISTRATION,
+      `${firstName} ${lastName} registered as instructor (pending approval)`,
+      instructor._id.toString(),
+      { 
+        email, 
+        role: UserRole.INSTRUCTOR, 
+        institution, 
+        country,
+        status: InstructorStatus.PENDING,
+      },
+      'UserPlus',
+    );
 
     // Send notification to admin about pending instructor registration
     try {
@@ -159,12 +236,31 @@ export class AuthService {
     // Allow instructors to login regardless of approval status
     // The frontend will handle redirection based on instructorStatus
 
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    // Update last login asynchronously (non-blocking - don't await)
+    this.userModel.updateOne(
+      { _id: user._id },
+      { lastLogin: new Date() },
+    ).exec().catch(err => console.error('Failed to update last login:', err));
 
-    // Generate token
-    const token = this.generateToken(user);
+    // Log the login activity
+    const loginType = user.role === UserRole.ADMIN ? 'Admin' : user.role === UserRole.INSTRUCTOR ? 'Instructor' : 'Student';
+    await this.logActivity(
+      ActivityType.USER_REGISTRATION, // Using this for now, can create new LOGIN type if needed
+      `${loginType} ${user.firstName} ${user.lastName} logged in`,
+      user._id.toString(),
+      { email: user.email, role: user.role, loginTime: new Date() },
+      'LogIn',
+    );
+
+    // Generate token with 24-hour expiration for cookie storage
+    const payload = {
+      sub: user._id,
+      email: user.email,
+      role: user.role,
+    };
+    const token = this.jwtService.sign(payload, {
+      expiresIn: '24h', // 24-hour cookie expiration
+    });
 
     return {
       user: this.sanitizeUser(user),
@@ -233,6 +329,20 @@ export class AuthService {
         provider: 'google',
         mustSetPassword: false,
       });
+
+      // Log the registration activity for new Google users
+      await this.logActivity(
+        ActivityType.USER_REGISTRATION,
+        `${firstName} ${lastName} registered via Google as ${desiredRole}${desiredRole === UserRole.INSTRUCTOR ? ' (pending approval)' : ''}`,
+        user._id.toString(),
+        { 
+          email, 
+          role: desiredRole, 
+          provider: 'google',
+          status: desiredRole === UserRole.INSTRUCTOR ? InstructorStatus.PENDING : 'active',
+        },
+        'UserPlus',
+      );
     }
 
     user.lastLogin = new Date();
@@ -378,6 +488,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.userModel.findByIdAndUpdate(userId, {
       password: hashedPassword,
+      mustSetPassword: false, // Clear the flag after password change
     });
 
     return { success: true, message: 'Password changed successfully' };

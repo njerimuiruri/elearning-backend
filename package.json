@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:admin": "ts-node -r tsconfig-paths/register src/seeds/admin.seed.ts",
     "seed:categories": "ts-node -r tsconfig-paths/register src/seeds/categories.seed.ts",
-    "seed:courses": "ts-node -r tsconfig-paths/register src/seeds/courses.seed.ts"
+    "seed:courses": "ts-node -r tsconfig-paths/register src/seeds/courses.seed.ts",
+    "rebuild:indexes": "ts-node -r tsconfig-paths/register scripts/rebuild-indexes.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -30,6 +31,7 @@
     "@nestjs/mongoose": "^11.0.3",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.9",
+    "@nestjs/schedule": "^6.1.0",
     "@nestjs/serve-static": "^5.0.4",
     "@nestjs/swagger": "^11.2.3",
     "axios": "^1.13.2",
@@ -37,6 +39,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "cloudinary": "^2.8.0",
+    "csv-parser": "^3.2.0",
     "dotenv": "^17.2.3",
     "google-auth-library": "^9.15.1",
     "mongoose": "^8.20.2",

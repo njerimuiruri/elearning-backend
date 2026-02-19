@@ -7,10 +7,13 @@ import { User, UserSchema } from '../schemas/user.schema';
 import { Enrollment, EnrollmentSchema } from '../schemas/enrollment.schema';
 import { Progress, ProgressSchema } from '../schemas/progress.schema';
 import { Certificate, CertificateSchema } from '../schemas/certificate.schema';
+import { Achievement, AchievementSchema } from '../schemas/achievement.schema';
 import { Discussion, DiscussionSchema } from '../schemas/discussion.schema';
 import { EmailReminder, EmailReminderSchema } from '../schemas/email-reminder.schema';
 import { InstructorReview, InstructorReviewSchema } from '../schemas/instructor-review.schema';
 import { EmailService } from '../common/services/email.service';
+import { MessagesModule } from '../messages/messages.module';
+import { CategoriesModule } from '../categories/categories.module';
 
 @Module({
   imports: [
@@ -20,10 +23,13 @@ import { EmailService } from '../common/services/email.service';
       { name: Enrollment.name, schema: EnrollmentSchema },
       { name: Progress.name, schema: ProgressSchema },
       { name: Certificate.name, schema: CertificateSchema },
+      { name: Achievement.name, schema: AchievementSchema },
       { name: Discussion.name, schema: DiscussionSchema },
       { name: EmailReminder.name, schema: EmailReminderSchema },
       { name: InstructorReview.name, schema: InstructorReviewSchema },
     ]),
+    MessagesModule,
+    CategoriesModule,
   ],
   providers: [CourseService, EmailService],
   controllers: [CourseController],
