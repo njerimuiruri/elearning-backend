@@ -24,6 +24,8 @@ import { ModuleEnrollmentsModule } from './module-enrollments/module-enrollments
 import { ProgressionModule } from './progression/progression.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DiscussionsModule } from './discussions/discussions.module';
+import { BulkMessagingModule } from './bulk-messaging/bulk-messaging.module';
+import { ModuleRatingsModule } from './module-ratings/module-ratings.module';
 
 @Module({
   imports: [
@@ -60,6 +62,8 @@ import { DiscussionsModule } from './discussions/discussions.module';
     ProgressionModule,
     NotificationsModule,
     DiscussionsModule,
+    BulkMessagingModule,
+    ModuleRatingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

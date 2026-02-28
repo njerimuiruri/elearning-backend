@@ -11,6 +11,8 @@ export enum NotificationType {
   INACTIVITY_REMINDER = 'inactivity_reminder',
   CERTIFICATE_EARNED = 'certificate_earned',
   LEVEL_UNLOCKED = 'level_unlocked',
+  INSTRUCTOR_REMINDER = 'instructor_reminder',
+  ADMIN_REMINDER = 'admin_reminder',
 }
 
 @Schema({ timestamps: true })
@@ -36,6 +38,14 @@ export class Notification extends Document {
   @Prop({ type: Types.ObjectId, default: null })
   relatedId?: Types.ObjectId;
 
+  /** Optional: links reminder notifications to a specific module */
+  @Prop({ type: Types.ObjectId, ref: 'Module', default: null })
+  moduleId?: Types.ObjectId;
+
+  /** Optional: links reminder notifications to a specific category */
+  @Prop({ type: Types.ObjectId, ref: 'Category', default: null })
+  categoryId?: Types.ObjectId;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,3 +54,4 @@ export const NotificationSchema = SchemaFactory.createForClass(Notification);
 
 NotificationSchema.index({ userId: 1, isRead: 1 });
 NotificationSchema.index({ userId: 1, createdAt: -1 });
+NotificationSchema.index({ userId: 1, type: 1 });

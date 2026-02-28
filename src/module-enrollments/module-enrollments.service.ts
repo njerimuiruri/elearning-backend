@@ -70,14 +70,28 @@ export class ModuleEnrollmentsService {
             (catId: any) => catId.toString() === category._id.toString(),
           ) || false;
 
-        // FREE category → fellow-only free access; non-fellows are blocked entirely
+        // FREE category → fellow-only access; non-fellows are blocked entirely (no payment option)
         if (category.accessType === 'free') {
           if (!hasFellowAccess) {
             throw new ForbiddenException(
-              'This module is free only for fellows added by the admin. Please contact the admin to get access.',
+              'This module is only accessible to assigned fellows. Please contact the admin to get access.',
             );
           }
           // Fellow → fall through to enroll for free
+        }
+
+        // RESTRICTED category → fellows assigned to this category get free access;
+        // everyone else (including fellows assigned to other categories) must pay
+        else if (category.accessType === 'restricted') {
+          if (!hasFellowAccess && !hasPurchasedAccess) {
+            return {
+              requiresPayment: true,
+              categoryId: category._id.toString(),
+              price: category.price,
+              categoryName: category.name,
+            };
+          }
+          // Fellow assigned here, or already purchased → fall through to enroll
         }
 
         // PAID category → fellows free, others must pay
@@ -167,6 +181,9 @@ export class ModuleEnrollmentsService {
 
   // Get enrollment details
   async getEnrollmentById(enrollmentId: string): Promise<ModuleEnrollment> {
+    if (!Types.ObjectId.isValid(enrollmentId)) {
+      throw new BadRequestException('Invalid enrollment ID');
+    }
     const enrollment = await this.enrollmentModel
       .findById(enrollmentId)
       .populate({
@@ -207,11 +224,22 @@ export class ModuleEnrollmentsService {
   async completeLesson(
     enrollmentId: string,
     lessonIndex: number,
-  ): Promise<ModuleEnrollment> {
-    const enrollment = await this.enrollmentModel.findById(enrollmentId);
+  ): Promise<{
+    enrollment: ModuleEnrollment;
+    navigateTo: 'final_assessment' | 'next_lesson' | null;
+    nextLessonIndex?: number;
+  }> {
+    if (!Types.ObjectId.isValid(enrollmentId)) {
+      throw new BadRequestException('Invalid enrollment ID');
+    }
+    const enrollment = await this.enrollmentModel
+      .findById(enrollmentId)
+      .populate('moduleId');
     if (!enrollment) {
       throw new NotFoundException('Enrollment not found');
     }
+
+    const module = enrollment.moduleId as any;
 
     const lessonProgress = enrollment.lessonProgress.find(
       (lp) => lp.lessonIndex === lessonIndex,
@@ -224,20 +252,29 @@ export class ModuleEnrollmentsService {
     if (!lessonProgress.isCompleted) {
       lessonProgress.isCompleted = true;
       lessonProgress.completedAt = new Date();
-      enrollment.completedLessons++;
 
-      // Update overall progress
-      enrollment.progress = Math.round(
-        (enrollment.completedLessons / enrollment.totalLessons) * 100,
-      );
+      // Recompute from source of truth to avoid counter drift / race conditions
+      enrollment.completedLessons = enrollment.lessonProgress.filter(
+        (lp) => lp.isCompleted,
+      ).length;
+      enrollment.progress =
+        enrollment.totalLessons > 0
+          ? Math.min(
+              100,
+              Math.round(
+                (enrollment.completedLessons / enrollment.totalLessons) * 100,
+              ),
+            )
+          : 0;
 
       // If student completed all lessons after a forced module repeat,
-      // clear the block so they can retake the final assessment.
+      // clear the block and reset attempt counter so they get a fresh set.
       if (
         enrollment.requiresModuleRepeat &&
         enrollment.completedLessons >= enrollment.totalLessons
       ) {
         enrollment.requiresModuleRepeat = false;
+        enrollment.finalAssessmentAttempts = 0;
       }
 
       enrollment.lastAccessedLesson = lessonIndex;
@@ -246,7 +283,31 @@ export class ModuleEnrollmentsService {
       await enrollment.save();
     }
 
-    return enrollment;
+    // ── Navigation hint ───────────────────────────────────────────────────────
+    // Tell the frontend where to go next so it can auto-navigate without a
+    // manual click.
+    let navigateTo: 'final_assessment' | 'next_lesson' | null = null;
+    let nextLessonIndex: number | undefined;
+
+    const allLessonsDone =
+      enrollment.completedLessons >= enrollment.totalLessons &&
+      !enrollment.requiresModuleRepeat;
+
+    if (allLessonsDone && module?.finalAssessment) {
+      navigateTo = 'final_assessment';
+    } else if (!allLessonsDone) {
+      // Find the lowest-index incomplete lesson after the current one
+      const nextIncomplete = enrollment.lessonProgress
+        .filter((lp) => !lp.isCompleted && lp.lessonIndex > lessonIndex)
+        .sort((a, b) => a.lessonIndex - b.lessonIndex)[0];
+
+      if (nextIncomplete) {
+        navigateTo = 'next_lesson';
+        nextLessonIndex = nextIncomplete.lessonIndex;
+      }
+    }
+
+    return { enrollment, navigateTo, nextLessonIndex };
   }
 
   // Submit lesson assessment
@@ -259,7 +320,14 @@ export class ModuleEnrollmentsService {
     passed: boolean;
     score: number;
     results: any[];
+    navigateTo: 'final_assessment' | 'next_lesson' | null;
+    nextLessonIndex?: number;
+    lessonResetRequired: boolean;
+    remainingAttempts?: number;
   }> {
+    if (!Types.ObjectId.isValid(enrollmentId)) {
+      throw new BadRequestException('Invalid enrollment ID');
+    }
     const enrollment = await this.enrollmentModel
       .findById(enrollmentId)
       .populate('moduleId');
@@ -288,12 +356,27 @@ export class ModuleEnrollmentsService {
       throw new NotFoundException('Lesson progress not found');
     }
 
-    // Check attempt limit
-    if (
-      lesson.assessment.maxAttempts > 0 &&
-      lessonProgress.assessmentAttempts >= lesson.assessment.maxAttempts
-    ) {
-      throw new BadRequestException('Maximum attempts reached for this lesson assessment');
+    // Guard: lesson must be completed before taking its assessment
+    if (!lessonProgress.isCompleted) {
+      throw new BadRequestException(
+        'Please complete the lesson content before taking the assessment.',
+      );
+    }
+
+    // Guard: assessment already passed — no re-submission needed
+    if (lessonProgress.assessmentPassed) {
+      throw new BadRequestException(
+        'You have already passed this assessment.',
+      );
+    }
+
+    const maxAttempts: number = lesson.assessment.maxAttempts ?? 3;
+
+    // Guard: attempts exhausted (safety net for stale data)
+    if (maxAttempts > 0 && lessonProgress.assessmentAttempts >= maxAttempts) {
+      throw new BadRequestException(
+        'All attempts used. Please re-complete this lesson to unlock a new set of attempts.',
+      );
     }
 
     // Grade assessment
@@ -303,28 +386,66 @@ export class ModuleEnrollmentsService {
       lesson.assessment.passingScore,
     );
 
-    // Update lesson progress
     lessonProgress.assessmentAttempts++;
     lessonProgress.lastScore = score;
     lessonProgress.assessmentPassed = passed;
 
-    // If passed, mark lesson as completed
-    if (passed && !lessonProgress.isCompleted) {
-      lessonProgress.isCompleted = true;
-      lessonProgress.completedAt = new Date();
-      enrollment.completedLessons++;
+    let lessonResetRequired = false;
+    let remainingAttempts: number | undefined;
 
-      // Update overall progress
-      enrollment.progress = Math.round(
-        (enrollment.completedLessons / enrollment.totalLessons) * 100,
-      );
+    if (passed) {
+      // ── PASS ─────────────────────────────────────────────────────────────
+      // Lesson was already marked complete via completeLesson(); no re-mark needed.
+      // Recompute counters in case this is a first-time pass.
+      enrollment.completedLessons = enrollment.lessonProgress.filter(
+        (lp) => lp.isCompleted,
+      ).length;
+      enrollment.progress =
+        enrollment.totalLessons > 0
+          ? Math.min(
+              100,
+              Math.round(
+                (enrollment.completedLessons / enrollment.totalLessons) * 100,
+              ),
+            )
+          : 0;
 
-      // Clear module-repeat block when all lessons re-completed after a forced repeat
+      // Clear module-repeat block when all lessons re-completed after a forced repeat,
+      // and reset the attempt counter so the student gets a fresh set.
       if (
         enrollment.requiresModuleRepeat &&
         enrollment.completedLessons >= enrollment.totalLessons
       ) {
         enrollment.requiresModuleRepeat = false;
+        enrollment.finalAssessmentAttempts = 0;
+      }
+    } else {
+      // ── FAIL ─────────────────────────────────────────────────────────────
+      if (maxAttempts > 0 && lessonProgress.assessmentAttempts >= maxAttempts) {
+        // Max attempts exhausted — reset this lesson so student must redo it
+        lessonResetRequired = true;
+        lessonProgress.isCompleted = false;
+        lessonProgress.completedAt = undefined;
+        lessonProgress.assessmentAttempts = 0; // Fresh count after lesson repeat
+
+        // Recompute enrollment progress (this lesson is no longer counted)
+        enrollment.completedLessons = enrollment.lessonProgress.filter(
+          (lp) => lp.isCompleted,
+        ).length;
+        enrollment.progress =
+          enrollment.totalLessons > 0
+            ? Math.min(
+                100,
+                Math.round(
+                  (enrollment.completedLessons / enrollment.totalLessons) * 100,
+                ),
+              )
+            : 0;
+      } else {
+        remainingAttempts =
+          maxAttempts > 0
+            ? maxAttempts - lessonProgress.assessmentAttempts
+            : undefined;
       }
     }
 
@@ -333,11 +454,38 @@ export class ModuleEnrollmentsService {
 
     await enrollment.save();
 
+    // ── Navigation hint (only relevant on pass) ───────────────────────────
+    let navigateTo: 'final_assessment' | 'next_lesson' | null = null;
+    let nextLessonIndex: number | undefined;
+
+    if (passed) {
+      const allLessonsDone =
+        enrollment.completedLessons >= enrollment.totalLessons &&
+        !enrollment.requiresModuleRepeat;
+
+      if (allLessonsDone && module?.finalAssessment) {
+        navigateTo = 'final_assessment';
+      } else {
+        const nextIncomplete = enrollment.lessonProgress
+          .filter((lp) => !lp.isCompleted && lp.lessonIndex > lessonIndex)
+          .sort((a, b) => a.lessonIndex - b.lessonIndex)[0];
+
+        if (nextIncomplete) {
+          navigateTo = 'next_lesson';
+          nextLessonIndex = nextIncomplete.lessonIndex;
+        }
+      }
+    }
+
     return {
       enrollment,
       passed,
       score,
       results,
+      navigateTo,
+      nextLessonIndex,
+      lessonResetRequired,
+      remainingAttempts,
     };
   }
 
@@ -353,6 +501,9 @@ export class ModuleEnrollmentsService {
     levelUnlocked?: string;
     certificate?: any;
   }> {
+    if (!Types.ObjectId.isValid(enrollmentId)) {
+      throw new BadRequestException('Invalid enrollment ID');
+    }
     const enrollment = await this.enrollmentModel
       .findById(enrollmentId)
       .populate('moduleId');
@@ -785,6 +936,109 @@ export class ModuleEnrollmentsService {
     await enrollment.save();
 
     return { enrollment, passed: pass, levelUnlocked, certificate };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Get all final-assessment submissions for modules this instructor teaches
+  // ---------------------------------------------------------------------------
+  async getInstructorSubmissions(
+    instructorId: string,
+    filters: {
+      moduleId?: string;
+      submissionType?: 'essay' | 'mcq' | 'all';
+      status?: 'pending' | 'passed' | 'failed' | 'all';
+    },
+  ): Promise<any[]> {
+    // 1. Resolve which modules belong to this instructor
+    const moduleQuery: any = {
+      instructorIds: new Types.ObjectId(instructorId),
+    };
+    if (filters.moduleId) {
+      moduleQuery._id = new Types.ObjectId(filters.moduleId);
+    }
+    const modules = await this.moduleModel
+      .find(moduleQuery)
+      .select('_id title level');
+    const moduleMap = new Map(
+      modules.map((m) => [m._id.toString(), m]),
+    );
+    if (moduleMap.size === 0) return [];
+
+    // 2. Build enrollment query — only enrollments that have been attempted
+    const enrollmentQuery: any = {
+      moduleId: { $in: Array.from(moduleMap.keys()).map((id) => new Types.ObjectId(id)) },
+      finalAssessmentAttempts: { $gt: 0 },
+    };
+    if (filters.status === 'pending') {
+      enrollmentQuery.pendingInstructorReview = true;
+    } else if (filters.status === 'passed') {
+      enrollmentQuery.finalAssessmentPassed = true;
+    } else if (filters.status === 'failed') {
+      enrollmentQuery.finalAssessmentPassed = false;
+      enrollmentQuery.pendingInstructorReview = { $ne: true };
+    }
+
+    const enrollments = await this.enrollmentModel
+      .find(enrollmentQuery)
+      .populate('studentId', 'firstName lastName email')
+      .sort({ essaySubmittedAt: -1, updatedAt: -1 });
+
+    // 3. Shape response rows
+    const rows: any[] = [];
+    for (const enrollment of enrollments) {
+      const student = enrollment.studentId as any;
+      const module = moduleMap.get(enrollment.moduleId.toString());
+
+      const results = enrollment.finalAssessmentResults || [];
+      const hasEssay = results.some((r: any) => r.questionType === 'essay');
+      const hasMcq = results.some((r: any) => r.questionType !== 'essay');
+
+      let submissionType: string = 'mcq';
+      if (hasEssay && hasMcq) submissionType = 'mixed';
+      else if (hasEssay) submissionType = 'essay';
+
+      // Apply submission type filter
+      if (filters.submissionType && filters.submissionType !== 'all') {
+        if (filters.submissionType === 'essay' && !hasEssay) continue;
+        if (filters.submissionType === 'mcq' && hasEssay && !hasMcq) continue;
+      }
+
+      let status: string;
+      if (enrollment.pendingInstructorReview) status = 'pending';
+      else if (enrollment.finalAssessmentPassed) status = 'passed';
+      else status = 'failed';
+
+      rows.push({
+        enrollmentId: enrollment._id,
+        studentId: student?._id,
+        studentName: student
+          ? `${student.firstName} ${student.lastName}`.trim()
+          : 'Unknown',
+        studentEmail: student?.email || '',
+        moduleId: module?._id,
+        moduleName: module?.title || '',
+        moduleLevel: (module as any)?.level || '',
+        submissionType,
+        submittedAt: enrollment.essaySubmittedAt || enrollment.updatedAt,
+        status,
+        score: enrollment.finalAssessmentScore,
+        pendingInstructorReview: enrollment.pendingInstructorReview,
+        finalAssessmentAttempts: enrollment.finalAssessmentAttempts,
+        finalAssessmentResults: results,
+      });
+    }
+
+    return rows;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Get all modules assigned to an instructor (for filter dropdown)
+  // ---------------------------------------------------------------------------
+  async getInstructorModulesList(instructorId: string): Promise<any[]> {
+    return this.moduleModel
+      .find({ instructorIds: new Types.ObjectId(instructorId) })
+      .select('_id title level')
+      .lean();
   }
 
   // Grade assessment (auto-grade MC and TF)

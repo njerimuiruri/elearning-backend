@@ -216,6 +216,13 @@ export class Module extends Document {
   @Prop({ default: true })
   isActive: boolean;
 
+  // Ratings (updated whenever a student submits a rating)
+  @Prop({ default: 0 })
+  avgRating: number;
+
+  @Prop({ default: 0 })
+  totalRatings: number;
+
   // Lock management
   @Prop({ type: Types.ObjectId, ref: 'User' })
   lockedBy?: Types.ObjectId;
