@@ -173,14 +173,17 @@ export class ModuleRatingsService {
       ]),
     );
 
-    return modules.map((mod) => ({
-      moduleId: mod._id,
-      title: mod.title,
-      level: mod.level,
-      status: mod.status,
-      avgRating: statsMap.get(mod._id.toString())?.avgRating ?? 0,
-      totalRatings: statsMap.get(mod._id.toString())?.totalRatings ?? 0,
-    }));
+    return modules.map((mod) => {
+      const id = (mod._id as any).toString();
+      return {
+        moduleId: mod._id,
+        title: mod.title,
+        level: mod.level,
+        status: mod.status,
+        avgRating: statsMap.get(id)?.avgRating ?? 0,
+        totalRatings: statsMap.get(id)?.totalRatings ?? 0,
+      };
+    });
   }
 
   // ── Admin: get rating analytics for all published modules ──────────────────

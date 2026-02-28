@@ -63,7 +63,7 @@ export class ModuleRatingsController {
   // GET /module-ratings/admin/analytics
   @Get('admin/analytics')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMIN)
   async getAdminAnalytics(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -89,7 +89,7 @@ export class ModuleRatingsController {
   // GET /module-ratings/:moduleId/reviews
   @Get(':moduleId/reviews')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
   async getModuleReviews(
     @Param('moduleId') moduleId: string,
     @Query('page') page?: string,
