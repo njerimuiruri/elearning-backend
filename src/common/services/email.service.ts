@@ -1623,4 +1623,179 @@ This is an automated reminder. You can manage your email preferences in your acc
       throw new Error(`Failed to send reminder: ${error.message}`);
     }
   }
+
+  /**
+   * Send a bulk reminder email from an instructor or admin to a student.
+   */
+  async sendBulkReminderToStudent(options: {
+    studentName: string;
+    studentEmail: string;
+    senderName: string;
+    senderRole: 'instructor' | 'admin';
+    moduleName?: string;
+    categoryName?: string;
+    subject: string;
+    message: string;
+    dashboardUrl: string;
+  }): Promise<{ success: boolean; message: string }> {
+    const {
+      studentName,
+      studentEmail,
+      senderName,
+      senderRole,
+      moduleName,
+      categoryName,
+      subject,
+      message,
+      dashboardUrl,
+    } = options;
+
+    const senderLabel = senderRole === 'admin' ? 'Platform Admin' : 'Instructor';
+    const contextLine = moduleName
+      ? `<p style="margin:0 0 6px 0;"><strong>Module:</strong> ${moduleName}${categoryName ? ` &nbsp;|&nbsp; <strong>Category:</strong> ${categoryName}` : ''}</p>`
+      : categoryName
+      ? `<p style="margin:0 0 6px 0;"><strong>Category:</strong> ${categoryName}</p>`
+      : '';
+
+    const htmlContent = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f9fafb;padding:24px;">
+        <div style="background:#ffffff;border-radius:8px;padding:32px;border:1px solid #e5e7eb;">
+          <h2 style="color:#1f2937;margin:0 0 4px 0;">Message from Your ${senderLabel}</h2>
+          <p style="color:#6b7280;margin:0 0 24px 0;font-size:14px;">Sent by ${senderName}</p>
+
+          <p style="color:#374151;margin:0 0 16px 0;">Hi <strong>${studentName}</strong>,</p>
+
+          ${contextLine}
+
+          <div style="background:#f3f4f6;border-left:4px solid #2563eb;padding:16px 20px;border-radius:4px;margin:16px 0;">
+            <p style="color:#1f2937;margin:0;white-space:pre-wrap;">${message}</p>
+          </div>
+
+          <div style="text-align:center;margin:28px 0;">
+            <a href="${dashboardUrl}"
+               style="background:#2563eb;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">
+              Go to Dashboard
+            </a>
+          </div>
+
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+          <p style="color:#9ca3af;font-size:12px;margin:0;text-align:center;">
+            This message was sent to you via Arin Publishing Academy.
+            &copy; ${new Date().getFullYear()} Arin Publishing Academy. All rights reserved.
+          </p>
+        </div>
+      </div>
+    `;
+
+    const plainText = `Message from Your ${senderLabel} (${senderName})
+
+Hi ${studentName},
+${moduleName ? `\nModule: ${moduleName}` : ''}${categoryName ? `\nCategory: ${categoryName}` : ''}
+
+${message}
+
+Go to Dashboard: ${dashboardUrl}
+
+© ${new Date().getFullYear()} Arin Publishing Academy. All rights reserved.`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: studentEmail,
+        subject,
+        html: htmlContent,
+        text: plainText,
+      });
+      return { success: true, message: `Bulk reminder sent to ${studentEmail}` };
+    } catch (error) {
+      console.error('Error sending bulk reminder to student:', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * Send a bulk reminder email from admin to an instructor.
+   */
+  async sendBulkReminderToInstructor(options: {
+    instructorName: string;
+    instructorEmail: string;
+    adminName: string;
+    subject: string;
+    message: string;
+    moduleName?: string;
+    categoryName?: string;
+    dashboardUrl: string;
+  }): Promise<{ success: boolean; message: string }> {
+    const {
+      instructorName,
+      instructorEmail,
+      adminName,
+      subject,
+      message,
+      moduleName,
+      categoryName,
+      dashboardUrl,
+    } = options;
+
+    const contextLine = moduleName
+      ? `<p style="margin:0 0 6px 0;"><strong>Module:</strong> ${moduleName}${categoryName ? ` &nbsp;|&nbsp; <strong>Category:</strong> ${categoryName}` : ''}</p>`
+      : categoryName
+      ? `<p style="margin:0 0 6px 0;"><strong>Category:</strong> ${categoryName}</p>`
+      : '';
+
+    const htmlContent = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f9fafb;padding:24px;">
+        <div style="background:#ffffff;border-radius:8px;padding:32px;border:1px solid #e5e7eb;">
+          <h2 style="color:#1f2937;margin:0 0 4px 0;">Message from Platform Admin</h2>
+          <p style="color:#6b7280;margin:0 0 24px 0;font-size:14px;">Sent by ${adminName}</p>
+
+          <p style="color:#374151;margin:0 0 16px 0;">Hi <strong>${instructorName}</strong>,</p>
+
+          ${contextLine}
+
+          <div style="background:#f3f4f6;border-left:4px solid #16a34a;padding:16px 20px;border-radius:4px;margin:16px 0;">
+            <p style="color:#1f2937;margin:0;white-space:pre-wrap;">${message}</p>
+          </div>
+
+          <div style="text-align:center;margin:28px 0;">
+            <a href="${dashboardUrl}"
+               style="background:#16a34a;color:#ffffff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">
+              Go to Dashboard
+            </a>
+          </div>
+
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+          <p style="color:#9ca3af;font-size:12px;margin:0;text-align:center;">
+            This message was sent to you via Arin Publishing Academy.
+            &copy; ${new Date().getFullYear()} Arin Publishing Academy. All rights reserved.
+          </p>
+        </div>
+      </div>
+    `;
+
+    const plainText = `Message from Platform Admin (${adminName})
+
+Hi ${instructorName},
+${moduleName ? `\nModule: ${moduleName}` : ''}${categoryName ? `\nCategory: ${categoryName}` : ''}
+
+${message}
+
+Go to Dashboard: ${dashboardUrl}
+
+© ${new Date().getFullYear()} Arin Publishing Academy. All rights reserved.`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: instructorEmail,
+        subject,
+        html: htmlContent,
+        text: plainText,
+      });
+      return { success: true, message: `Admin reminder sent to instructor ${instructorEmail}` };
+    } catch (error) {
+      console.error('Error sending admin reminder to instructor:', error);
+      return { success: false, message: error.message };
+    }
+  }
 }

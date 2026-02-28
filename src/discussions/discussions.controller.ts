@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   Request,
   UseGuards,
 } from '@nestjs/common';
@@ -23,14 +24,20 @@ export class DiscussionsController {
 
   /**
    * POST /discussions
-   * Instructor creates a discussion thread for a module
+   * Create a discussion thread.
+   * Access control is handled entirely by the service:
+   *   - Instructor: must be assigned to the module
+   *   - Student: must be enrolled in the module
+   *   - Admin: allowed to create/moderate discussions
+   * No RolesGuard here — any authenticated user may attempt;
+   * the service throws 403 if the user lacks the required access.
    */
   @Post()
-  @UseGuards(RolesGuard)
-  @Roles(UserRole.INSTRUCTOR)
   async createDiscussion(@Request() req, @Body() dto: CreateDiscussionDto) {
+    const role = req.user.role as 'student' | 'instructor' | 'admin';
     const discussion = await this.discussionsService.createDiscussion(
       req.user.id,
+      role,
       dto,
     );
     return {
@@ -42,7 +49,7 @@ export class DiscussionsController {
 
   /**
    * GET /discussions/admin/all
-   * Admin views all discussions across the platform
+   * Admin views all discussions across the platform for monitoring.
    */
   @Get('admin/all')
   @UseGuards(RolesGuard)
@@ -54,24 +61,33 @@ export class DiscussionsController {
 
   /**
    * GET /discussions/module/:moduleId
-   * Get all discussions for a module (enrolled students + instructors + admin)
+   * Get all discussions for a module.
+   * Query params:
+   *   sort=recent (default) | active
+   *   lessonIndex=<number>  — filter to a specific lesson
+   * Access: enrolled students, assigned instructors, admin.
    */
   @Get('module/:moduleId')
   async getModuleDiscussions(
     @Param('moduleId') moduleId: string,
+    @Query('sort') sort: 'recent' | 'active' = 'recent',
+    @Query('lessonIndex') lessonIndex: string | undefined,
     @Request() req,
   ) {
     const discussions = await this.discussionsService.getModuleDiscussions(
       moduleId,
       req.user.id,
       req.user.role,
+      sort,
+      lessonIndex !== undefined ? parseInt(lessonIndex, 10) : undefined,
     );
     return { success: true, data: discussions };
   }
 
   /**
    * GET /discussions/:discussionId
-   * Get a single discussion with its replies
+   * Get a single discussion thread with all its replies.
+   * Access: enrolled students, assigned instructors, admin.
    */
   @Get(':discussionId')
   async getDiscussion(
@@ -88,7 +104,8 @@ export class DiscussionsController {
 
   /**
    * POST /discussions/:discussionId/reply
-   * Add a reply (enrolled student or assigned instructor)
+   * Add a reply to a thread.
+   * Access: enrolled students, assigned instructors.
    */
   @Post(':discussionId/reply')
   async addReply(
@@ -96,7 +113,7 @@ export class DiscussionsController {
     @Body() dto: AddReplyDto,
     @Request() req,
   ) {
-    const role = req.user.role as 'student' | 'instructor';
+    const role = req.user.role as 'student' | 'instructor' | 'admin';
     const discussion = await this.discussionsService.addReply(
       discussionId,
       req.user.id,
@@ -112,11 +129,11 @@ export class DiscussionsController {
 
   /**
    * PUT /discussions/:discussionId/pin
-   * Pin or unpin a discussion (instructor only)
+   * Pin or unpin a discussion thread (assigned instructor or admin only).
    */
   @Put(':discussionId/pin')
   @UseGuards(RolesGuard)
-  @Roles(UserRole.INSTRUCTOR)
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
   async pinDiscussion(
     @Param('discussionId') discussionId: string,
     @Request() req,
@@ -124,19 +141,46 @@ export class DiscussionsController {
     const discussion = await this.discussionsService.pinDiscussion(
       discussionId,
       req.user.id,
+      req.user.role,
     );
     return {
       success: true,
-      message: discussion.isPinned
-        ? 'Discussion pinned'
-        : 'Discussion unpinned',
+      message: discussion.isPinned ? 'Discussion pinned' : 'Discussion unpinned',
+      data: discussion,
+    };
+  }
+
+  /**
+   * PUT /discussions/:discussionId/resolve
+   * Mark a discussion as resolved / answered (assigned instructor or admin only).
+   */
+  @Put(':discussionId/resolve')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  async resolveDiscussion(
+    @Param('discussionId') discussionId: string,
+    @Request() req,
+  ) {
+    const discussion = await this.discussionsService.resolveDiscussion(
+      discussionId,
+      req.user.id,
+      req.user.role,
+    );
+    return {
+      success: true,
+      message: discussion.isResolved
+        ? 'Discussion marked as resolved'
+        : 'Discussion re-opened',
       data: discussion,
     };
   }
 
   /**
    * DELETE /discussions/:discussionId
-   * Delete a discussion (admin or creator)
+   * Delete a discussion.
+   * - Admin: can delete any discussion
+   * - Instructor: can delete any discussion in their assigned module
+   * - Student: can only delete their own discussion
    */
   @Delete(':discussionId')
   async deleteDiscussion(

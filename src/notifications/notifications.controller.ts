@@ -67,4 +67,23 @@ export class NotificationsController {
       data: notification,
     };
   }
+
+  /**
+   * GET /notifications/reminders
+   * Get reminder notifications sent by instructors or admin.
+   * Query params: moduleId (optional), categoryId (optional)
+   */
+  @Get('reminders')
+  async getMyReminders(
+    @Request() req,
+    @Query('moduleId') moduleId?: string,
+    @Query('categoryId') categoryId?: string,
+  ) {
+    const reminders = await this.notificationsService.getStudentReminders(
+      req.user.id,
+      moduleId,
+      categoryId,
+    );
+    return { success: true, data: reminders, count: reminders.length };
+  }
 }

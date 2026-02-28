@@ -33,6 +33,57 @@ export class NotificationsService {
     return notification.save();
   }
 
+  /**
+   * Create a reminder notification (from instructor or admin).
+   * Supports optional moduleId and categoryId for student-side filtering.
+   */
+  async createReminderNotification(
+    userId: string,
+    type: NotificationType,
+    title: string,
+    message: string,
+    link?: string,
+    moduleId?: string,
+    categoryId?: string,
+  ): Promise<NotificationDocument> {
+    const notification = new this.notificationModel({
+      userId: new Types.ObjectId(userId),
+      type,
+      title,
+      message,
+      link: link || null,
+      moduleId: moduleId ? new Types.ObjectId(moduleId) : null,
+      categoryId: categoryId ? new Types.ObjectId(categoryId) : null,
+    });
+    return notification.save();
+  }
+
+  /**
+   * Get only reminder notifications (INSTRUCTOR_REMINDER / ADMIN_REMINDER)
+   * for a user, with optional module/category filter.
+   */
+  async getStudentReminders(
+    userId: string,
+    moduleId?: string,
+    categoryId?: string,
+  ): Promise<NotificationDocument[]> {
+    const query: any = {
+      userId: new Types.ObjectId(userId),
+      type: {
+        $in: [NotificationType.INSTRUCTOR_REMINDER, NotificationType.ADMIN_REMINDER],
+      },
+    };
+
+    if (moduleId) query.moduleId = new Types.ObjectId(moduleId);
+    if (categoryId) query.categoryId = new Types.ObjectId(categoryId);
+
+    return this.notificationModel
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean() as any;
+  }
+
   async getUserNotifications(
     userId: string,
     limit = 30,

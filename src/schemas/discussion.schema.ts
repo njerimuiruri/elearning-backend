@@ -3,16 +3,19 @@ import { Document, Types } from 'mongoose';
 
 class Reply {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  authorId: Types.ObjectId;
+  authorId!: Types.ObjectId;
 
   @Prop({ required: true })
-  authorName: string;
+  authorName!: string;
+
+  @Prop({ required: true, enum: ['student', 'instructor', 'admin'], default: 'student' })
+  authorRole!: 'student' | 'instructor' | 'admin';
 
   @Prop({ required: true })
-  content: string;
+  content!: string;
 
   @Prop({ default: 0 })
-  likes: number;
+  likes!: number;
 
   @Prop({ default: null })
   createdAt?: Date;
@@ -20,10 +23,10 @@ class Reply {
 
 class LastReadEntry {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  userId: Types.ObjectId;
+  userId!: Types.ObjectId;
 
   @Prop({ default: Date.now })
-  lastReadAt: Date;
+  lastReadAt!: Date;
 }
 
 @Schema({ timestamps: true })
@@ -37,61 +40,63 @@ export class Discussion extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Module' })
   moduleId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  instructorId: Types.ObjectId;
+  /** Optional: set when an instructor creates the thread. */
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  instructorId?: Types.ObjectId;
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
-  createdById: Types.ObjectId;
+  createdById!: Types.ObjectId;
 
-  @Prop({ required: true, enum: ['student', 'instructor'] })
-  createdByRole: 'student' | 'instructor';
+  @Prop({ required: true, enum: ['student', 'instructor', 'admin'] })
+  createdByRole!: 'student' | 'instructor' | 'admin';
 
-  @Prop({ required: true })
-  moduleIndex: number;
+  @Prop({ default: 0 })
+  moduleIndex!: number;
 
   @Prop()
   moduleTitle?: string;
 
   @Prop({ required: true })
-  title: string;
+  title!: string;
 
   @Prop({ required: true })
-  content: string;
+  content!: string;
 
   @Prop({ type: [Reply], default: [] })
-  replies: Reply[];
+  replies!: Reply[];
 
   @Prop({ default: false })
-  isResolved: boolean;
+  isResolved!: boolean;
 
   @Prop({ default: 0 })
-  views: number;
+  views!: number;
 
   @Prop({ default: 0 })
-  likes: number;
+  likes!: number;
 
   @Prop({ default: 'open', enum: ['open', 'resolved', 'closed'] })
-  status: string;
+  status!: string;
 
   @Prop({ default: false })
-  isPinned: boolean;
+  isPinned!: boolean;
 
   @Prop({ type: Date, default: null })
   pinnedAt?: Date | null;
 
   @Prop({ type: [LastReadEntry], default: [] })
-  lastRead: LastReadEntry[];
+  lastRead!: LastReadEntry[];
 
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt!: Date;
+  updatedAt!: Date;
 }
 
 export const DiscussionSchema = SchemaFactory.createForClass(Discussion);
 
-// Create indexes
+// Indexes
 DiscussionSchema.index({ courseId: 1 });
 DiscussionSchema.index({ moduleId: 1 });
 DiscussionSchema.index({ studentId: 1 });
 DiscussionSchema.index({ instructorId: 1 });
 DiscussionSchema.index({ status: 1 });
 DiscussionSchema.index({ createdAt: -1 });
+DiscussionSchema.index({ updatedAt: -1 });

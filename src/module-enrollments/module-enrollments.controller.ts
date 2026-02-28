@@ -5,6 +5,7 @@ import {
   Put,
   Body,
   Param,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -48,6 +49,38 @@ export class ModuleEnrollmentsController {
       req.user.id,
       moduleId,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Instructor: list all final-assessment submissions for their modules
+  // GET /module-enrollments/instructor/submissions?moduleId=&submissionType=&status=
+  // ---------------------------------------------------------------------------
+  @Get('instructor/submissions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async getInstructorSubmissions(
+    @Request() req,
+    @Query('moduleId') moduleId?: string,
+    @Query('submissionType') submissionType?: 'essay' | 'mcq' | 'all',
+    @Query('status') status?: 'pending' | 'passed' | 'failed' | 'all',
+  ) {
+    const data = await this.enrollmentsService.getInstructorSubmissions(
+      req.user.id,
+      { moduleId, submissionType, status },
+    );
+    return { success: true, data };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Instructor: list modules they teach (for filter dropdown)
+  // GET /module-enrollments/instructor/modules
+  // ---------------------------------------------------------------------------
+  @Get('instructor/modules')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async getInstructorModules(@Request() req) {
+    const data = await this.enrollmentsService.getInstructorModulesList(req.user.id);
+    return { success: true, data };
   }
 
   // Get enrollment details
