@@ -100,7 +100,6 @@ export class PaystackService {
         reference,
         metadata,
         callback_url: callbackUrl,
-        currency: 'KES', // Kenyan Shilling
       };
       if (channels && channels.length > 0) {
         body.channels = channels;
