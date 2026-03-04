@@ -46,10 +46,10 @@ export class PaymentsController {
   @Post('module/initialize')
   @UseGuards(JwtAuthGuard)
   async initializeModulePayment(
-    @Body() dto: CreateModulePaymentDto & { paymentType?: 'local' | 'international' },
+    @Body() dto: CreateModulePaymentDto & { paymentType?: 'local' | 'international'; callbackBaseUrl?: string },
     @CurrentUser() user: any,
   ) {
-    return this.paymentsService.initializeModulePayment(user._id, dto.moduleId, dto.paymentType);
+    return this.paymentsService.initializeModulePayment(user._id, dto.moduleId, dto.paymentType, dto.callbackBaseUrl);
   }
 
   /**
