@@ -336,7 +336,7 @@ export class PaymentsService {
   /**
    * Initialize a Paystack payment for a module (pays for the module's category)
    */
-  async initializeModulePayment(userId: string, moduleId: string, paymentType?: 'local' | 'international') {
+  async initializeModulePayment(userId: string, moduleId: string, paymentType?: 'local' | 'international', callbackBaseUrl?: string) {
     const [user, moduleDoc] = await Promise.all([
       this.userModel.findById(userId),
       this.moduleModel.findById(moduleId).populate('categoryId'),
@@ -374,7 +374,7 @@ export class PaymentsService {
 
     const reference = this.paystackService.generateReference('MOD');
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = callbackBaseUrl || this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     const callbackUrl = `${frontendUrl}/payment/verify?reference=${reference}`;
 
     const paystackResponse = await this.paystackService.initializeTransaction(
