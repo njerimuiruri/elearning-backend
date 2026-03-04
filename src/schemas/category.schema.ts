@@ -53,3 +53,7 @@ export class Category extends Document {
 }
 
 export const CategorySchema = SchemaFactory.createForClass(Category);
+
+// Indexes
+CategorySchema.index({ isActive: 1 });
+CategorySchema.index({ isActive: 1, createdAt: -1 });

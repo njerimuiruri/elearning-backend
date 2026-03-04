@@ -80,7 +80,7 @@ export class PaystackService {
   /**
    * Initialize a Paystack transaction
    * @param email - Customer email
-   * @param amount - Amount in Naira (will be converted to kobo)
+   * @param amount - Amount in KES (will be converted to cents)
    * @param reference - Unique transaction reference
    * @param metadata - Additional data to attach
    * @returns Paystack initialization response with authorization URL
@@ -96,11 +96,10 @@ export class PaystackService {
     try {
       const body: Record<string, any> = {
         email,
-        amount: Math.round(amount * 100), // Convert to kobo (smallest currency unit)
+        amount: Math.round(amount * 100), // Convert to cents (smallest currency unit)
         reference,
         metadata,
         callback_url: callbackUrl,
-        currency: 'NGN', // Nigerian Naira
       };
       if (channels && channels.length > 0) {
         body.channels = channels;
@@ -109,7 +108,7 @@ export class PaystackService {
 
       this.logger.log(`Initialized transaction ${reference} for ${email}`);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to initialize transaction: ${error.message}`);
       throw new BadRequestException(
         `Failed to initialize payment: ${error.response?.data?.message || error.message}`,
@@ -128,7 +127,7 @@ export class PaystackService {
 
       this.logger.log(`Verified transaction ${reference}: ${response.data.data.status}`);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to verify transaction ${reference}: ${error.message}`);
       throw new BadRequestException(
         `Failed to verify payment: ${error.response?.data?.message || error.message}`,
@@ -144,7 +143,7 @@ export class PaystackService {
     try {
       const response = await this.paystackApi.get(`/transaction/${transactionId}`);
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `Failed to fetch transaction: ${error.response?.data?.message || error.message}`,
       );
@@ -188,7 +187,7 @@ export class PaystackService {
     try {
       const response = await this.paystackApi.get('/transaction', { params });
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       throw new BadRequestException(
         `Failed to list transactions: ${error.response?.data?.message || error.message}`,
       );
@@ -219,16 +218,16 @@ export class PaystackService {
   }
 
   /**
-   * Convert amount from Naira to Kobo
+   * Convert amount from KES to cents (smallest currency unit)
    */
-  toKobo(amountInNaira: number): number {
-    return Math.round(amountInNaira * 100);
+  toCents(amountInKes: number): number {
+    return Math.round(amountInKes * 100);
   }
 
   /**
-   * Convert amount from Kobo to Naira
+   * Convert amount from cents to KES
    */
-  fromKobo(amountInKobo: number): number {
-    return amountInKobo / 100;
+  fromCents(amountInCents: number): number {
+    return amountInCents / 100;
   }
 }

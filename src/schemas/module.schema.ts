@@ -249,3 +249,4 @@ ModuleSchema.index({ status: 1 });
 ModuleSchema.index({ instructorIds: 1 });
 ModuleSchema.index({ createdAt: -1 });
 ModuleSchema.index({ categoryId: 1, level: 1, status: 1 }); // Compound for filtering
+ModuleSchema.index({ status: 1, isActive: 1, createdAt: -1 }); // Homepage query: published + active + sorted

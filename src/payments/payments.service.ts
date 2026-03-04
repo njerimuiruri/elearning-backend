@@ -197,7 +197,7 @@ export class PaymentsService {
         categoryId: payment.categoryId?.toString(),
         courseId: payment.courseId?.toString(),
         moduleId: payment.moduleId?.toString(),
-        amount: this.paystackService.fromKobo(transactionData.amount),
+        amount: this.paystackService.fromCents(transactionData.amount),
       };
     } else if (transactionData.status === 'failed') {
       // Payment failed
