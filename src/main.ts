@@ -16,17 +16,20 @@ async function bootstrap() {
     // 'http://localhost:3000',
     // 'http://localhost:3001',
     process.env.FRONTEND_URL,
-  ].filter(Boolean);
+  ]
+    .filter(Boolean)
+    .map((url) => (url as string).replace(/\/$/, '')); // strip trailing slashes
 
   app.enableCors({
-    origin: (origin, callback) => { 
+    origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, Postman, etc.)
       if (!origin) return callback(null, true);
-      
-      if (allowedOrigins.includes(origin)) {
+
+      const normalizedOrigin = origin.replace(/\/$/, '');
+      if (allowedOrigins.includes(normalizedOrigin)) {
         callback(null, true);
       } else {
-        console.warn(`⚠️ CORS blocked origin: ${origin}`);
+        console.warn(`⚠️ CORS blocked origin: ${origin} (allowed: ${allowedOrigins.join(', ')})`);
         callback(null, false);
       }
     },
