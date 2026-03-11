@@ -145,12 +145,15 @@ export class ModuleEnrollmentsService {
       category._id.toString(),
     );
 
+    // Flatten all lessons across all topics for progress tracking
+    const allLessons = (module.topics || []).flatMap((t: any) => t.lessons || []);
+
     // Create enrollment
     enrollment = new this.enrollmentModel({
       studentId: new Types.ObjectId(studentId),
       moduleId: new Types.ObjectId(moduleId),
-      totalLessons: module.lessons.length,
-      lessonProgress: module.lessons.map((_, index) => ({
+      totalLessons: allLessons.length,
+      lessonProgress: allLessons.map((_: any, index: number) => ({
         lessonIndex: index,
         isCompleted: false,
       })),
@@ -338,13 +341,15 @@ export class ModuleEnrollmentsService {
 
     const module = enrollment.moduleId as any;
 
-    // Validate lesson index
-    if (lessonIndex >= module.lessons.length) {
+    // Flatten all lessons across topics and look up by flat index
+    const allLessons: any[] = (module.topics || []).flatMap((t: any) => t.lessons || []);
+
+    if (lessonIndex >= allLessons.length) {
       throw new NotFoundException('Lesson not found');
     }
 
-    const lesson = module.lessons[lessonIndex];
-    if (!lesson.assessment) {
+    const lesson = allLessons[lessonIndex];
+    if (!lesson.assessmentQuiz || lesson.assessmentQuiz.length === 0) {
       throw new BadRequestException('This lesson has no assessment');
     }
 
@@ -370,7 +375,7 @@ export class ModuleEnrollmentsService {
       );
     }
 
-    const maxAttempts: number = lesson.assessment.maxAttempts ?? 3;
+    const maxAttempts: number = lesson.quizMaxAttempts ?? 3;
 
     // Guard: attempts exhausted (safety net for stale data)
     if (maxAttempts > 0 && lessonProgress.assessmentAttempts >= maxAttempts) {
@@ -379,11 +384,17 @@ export class ModuleEnrollmentsService {
       );
     }
 
-    // Grade assessment
+    // Normalise QuizQuestion fields (question/answer) to the shape gradeAssessment expects (text/correctAnswer)
+    const normalizedQuestions = (lesson.assessmentQuiz || []).map((q: any) => ({
+      ...q,
+      text: q.text || q.question,
+      correctAnswer: q.correctAnswer || q.answer,
+    }));
+
     const { score, results, passed } = this.gradeAssessment(
-      lesson.assessment.questions,
+      normalizedQuestions,
       submitDto.answers,
-      lesson.assessment.passingScore,
+      lesson.quizPassingScore ?? 70,
     );
 
     lessonProgress.assessmentAttempts++;

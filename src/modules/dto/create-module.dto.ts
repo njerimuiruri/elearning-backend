@@ -1,21 +1,183 @@
-import { IsString, IsNotEmpty, IsOptional, IsEnum, IsArray, ValidateNested, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  ValidateNested,
+  IsNumber,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ModuleLevel } from '../../schemas/module.schema';
 
-export class LessonResourceDto {
+// ─────────────────────────────────────────
+// Shared resource DTO (lesson & module level)
+// ─────────────────────────────────────────
+export class ResourceDto {
+  @IsOptional()
+  @IsString()
+  url?: string;
+
   @IsString()
   @IsNotEmpty()
-  url: string;
+  name: string;
 
   @IsOptional()
   @IsString()
-  name?: string;
+  description?: string;
 
   @IsOptional()
   @IsString()
   fileType?: string;
 }
 
+// ─────────────────────────────────────────
+// Quiz question DTO (per lesson)
+// ─────────────────────────────────────────
+export class QuizQuestionDto {
+  @IsString()
+  @IsNotEmpty()
+  question: string;
+
+  @IsString()
+  @IsEnum(['multiple-choice', 'true-false', 'short-answer'])
+  type: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  options?: string[];
+
+  @IsString()
+  @IsNotEmpty()
+  answer: string;
+
+  @IsOptional()
+  @IsString()
+  explanation?: string;
+
+  @IsOptional()
+  @IsNumber()
+  points?: number;
+}
+
+// ─────────────────────────────────────────
+// Lesson DTO
+// ─────────────────────────────────────────
+export class CreateLessonDto {
+  @IsString()
+  @IsNotEmpty()
+  lessonName: string;
+
+  @IsOptional()
+  @IsString()
+  lessonContent?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tasks?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  deliverables?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  evaluationCriteria?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => QuizQuestionDto)
+  assessmentQuiz?: QuizQuestionDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResourceDto)
+  lessonResources?: ResourceDto[];
+
+  @IsOptional()
+  @IsNumber()
+  order?: number;
+}
+
+// ─────────────────────────────────────────
+// Topic DTO
+// ─────────────────────────────────────────
+export class CreateTopicDto {
+  @IsString()
+  @IsNotEmpty()
+  topicName: string;
+
+  @IsOptional()
+  @IsString()
+  introduction?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  topicOutcomes?: string[];
+
+  @IsOptional()
+  @IsString()
+  duration?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateLessonDto)
+  lessons?: CreateLessonDto[];
+
+  @IsOptional()
+  @IsNumber()
+  order?: number;
+}
+
+// ─────────────────────────────────────────
+// Case Study Lesson DTO (content only)
+// ─────────────────────────────────────────
+export class CaseStudyLessonDto {
+  @IsString()
+  @IsEnum(['Introduction', 'Dataset', 'AI Task', 'Key Readings'])
+  lessonType: string;
+
+  @IsOptional()
+  @IsString()
+  content?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResourceDto)
+  resources?: ResourceDto[];
+}
+
+// ─────────────────────────────────────────
+// Case Study DTO
+// ─────────────────────────────────────────
+export class CreateCaseStudyDto {
+  @IsString()
+  @IsNotEmpty()
+  caseStudyName: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CaseStudyLessonDto)
+  lessons?: CaseStudyLessonDto[];
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+}
+
+// ─────────────────────────────────────────
+// Final Assessment Question DTO
+// ─────────────────────────────────────────
 export class QuestionDto {
   @IsString()
   @IsNotEmpty()
@@ -46,66 +208,9 @@ export class QuestionDto {
   rubric?: string;
 }
 
-export class LessonAssessmentDto {
-  @IsString()
-  @IsNotEmpty()
-  title: string;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => QuestionDto)
-  questions: QuestionDto[];
-
-  @IsOptional()
-  @IsNumber()
-  passingScore?: number;
-
-  @IsOptional()
-  @IsNumber()
-  maxAttempts?: number;
-}
-
-export class CreateLessonDto {
-  @IsString()
-  @IsNotEmpty()
-  title: string;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsString()
-  content?: string;
-
-  @IsOptional()
-  @IsString()
-  videoUrl?: string;
-
-  @IsOptional()
-  @IsString()
-  duration?: string;
-
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => LessonResourceDto)
-  resources?: LessonResourceDto[];
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => LessonAssessmentDto)
-  assessment?: LessonAssessmentDto;
-
-  @IsOptional()
-  @IsNumber()
-  order?: number;
-}
-
+// ─────────────────────────────────────────
+// Final Assessment DTO
+// ─────────────────────────────────────────
 export class FinalAssessmentDto {
   @IsString()
   @IsNotEmpty()
@@ -114,6 +219,10 @@ export class FinalAssessmentDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  instructions?: string;
 
   @IsArray()
   @ValidateNested({ each: true })
@@ -133,6 +242,9 @@ export class FinalAssessmentDto {
   timeLimit?: number;
 }
 
+// ─────────────────────────────────────────
+// Create Module DTO
+// ─────────────────────────────────────────
 export class CreateModuleDto {
   @IsString()
   @IsNotEmpty()
@@ -140,7 +252,11 @@ export class CreateModuleDto {
 
   @IsString()
   @IsNotEmpty()
-  description: string;
+  description: string; // introduction
+
+  @IsOptional()
+  @IsString()
+  capstone?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -153,13 +269,25 @@ export class CreateModuleDto {
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => CreateLessonDto)
-  lessons?: CreateLessonDto[];
+  @Type(() => CreateTopicDto)
+  topics?: CreateTopicDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateCaseStudyDto)
+  caseStudies?: CreateCaseStudyDto[];
 
   @IsOptional()
   @ValidateNested()
   @Type(() => FinalAssessmentDto)
   finalAssessment?: FinalAssessmentDto;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResourceDto)
+  moduleResources?: ResourceDto[];
 
   @IsOptional()
   @IsString()
@@ -183,21 +311,4 @@ export class CreateModuleDto {
   @IsArray()
   @IsString({ each: true })
   targetAudience?: string[];
-
-  @IsOptional()
-  @IsString()
-  welcomeMessage?: string;
-
-  @IsOptional()
-  @IsString()
-  deliveryMode?: string;
-
-  @IsOptional()
-  @IsString()
-  moduleAim?: string;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  moduleObjectives?: string[];
 }
