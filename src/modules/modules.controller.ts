@@ -102,47 +102,64 @@ export class ModulesController {
     );
   }
 
-  // Add lesson to module
-  @Post(':id/lessons')
+  // Delete entire topic
+  @Delete(':id/topics/:topicIndex')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async deleteTopic(
+    @Param('id') id: string,
+    @Param('topicIndex') topicIndex: string,
+    @Request() req,
+  ) {
+    return await this.modulesService.deleteTopic(id, parseInt(topicIndex), req.user.id);
+  }
+
+  // Add lesson to a specific topic
+  @Post(':id/topics/:topicIndex/lessons')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR)
   async addLesson(
     @Param('id') id: string,
+    @Param('topicIndex') topicIndex: string,
     @Request() req,
     @Body() lessonData: CreateLessonDto,
   ) {
-    return await this.modulesService.addLesson(id, req.user.id, lessonData);
+    return await this.modulesService.addLesson(id, req.user.id, parseInt(topicIndex), lessonData);
   }
 
-  // Update lesson
-  @Put(':id/lessons/:lessonIndex')
+  // Update lesson inside a topic
+  @Put(':id/topics/:topicIndex/lessons/:lessonIndex')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR)
   async updateLesson(
     @Param('id') id: string,
+    @Param('topicIndex') topicIndex: string,
     @Param('lessonIndex') lessonIndex: string,
     @Request() req,
     @Body() lessonData: CreateLessonDto,
   ) {
     return await this.modulesService.updateLesson(
       id,
+      parseInt(topicIndex),
       parseInt(lessonIndex),
       req.user.id,
       lessonData,
     );
   }
 
-  // Delete lesson
-  @Delete(':id/lessons/:lessonIndex')
+  // Delete lesson from a topic
+  @Delete(':id/topics/:topicIndex/lessons/:lessonIndex')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR)
   async deleteLesson(
     @Param('id') id: string,
+    @Param('topicIndex') topicIndex: string,
     @Param('lessonIndex') lessonIndex: string,
     @Request() req,
   ) {
     return await this.modulesService.deleteLesson(
       id,
+      parseInt(topicIndex),
       parseInt(lessonIndex),
       req.user.id,
     );

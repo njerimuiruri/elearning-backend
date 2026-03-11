@@ -28,18 +28,32 @@ export class ModulesService {
     private emailService: EmailService,
   ) {}
 
-  // Create module
-  async createModule(
-    instructorId: string,
-    createModuleDto: CreateModuleDto,
-  ): Promise<Module> {
-    // Validate category exists
-    const category = await this.categoryModel.findById(
-      createModuleDto.categoryId,
-    );
-    if (!category) {
-      throw new NotFoundException('Category not found');
-    }
+  // ── Helper: flatten all lessons across all topics ──────────────────────────
+  private getAllLessons(module: any): any[] {
+    return (module.topics || []).flatMap((t: any) => t.lessons || []);
+  }
+
+  // ── Helper: normalise resources (legacy string or new object) ──────────────
+  private normaliseResources(raw: any[]): { url: string; name: string; description: string; fileType: string }[] {
+    return (raw || []).map((r) => {
+      if (typeof r === 'string') {
+        const filename = r.split('/').pop() || 'Resource';
+        const ext = filename.split('.').pop()?.toLowerCase() || '';
+        return { url: r, name: filename, description: '', fileType: ext };
+      }
+      return {
+        url: r.url || '',
+        name: r.name || r.url?.split('/').pop() || 'Resource',
+        description: r.description || '',
+        fileType: r.fileType || r.url?.split('.').pop()?.toLowerCase() || '',
+      };
+    });
+  }
+
+  // Create module ──────────────────────────────────────────────────────────────
+  async createModule(instructorId: string, createModuleDto: CreateModuleDto): Promise<Module> {
+    const category = await this.categoryModel.findById(createModuleDto.categoryId);
+    if (!category) throw new NotFoundException('Category not found');
 
     const module = new this.moduleModel({
       ...createModuleDto,
@@ -51,20 +65,14 @@ export class ModulesService {
     return await module.save();
   }
 
-  // Get modules by level and category (for student browsing)
-  async getModulesByLevelAndCategory(
-    categoryId: string,
-    level: ModuleLevel,
-    status?: ModuleStatus,
-  ) {
+  // Get modules by level and category ─────────────────────────────────────────
+  async getModulesByLevelAndCategory(categoryId: string, level: ModuleLevel, status?: ModuleStatus) {
     return await this.moduleModel
       .find({
         categoryId: new Types.ObjectId(categoryId),
         level,
-        status: status
-          ? status
-          : { $in: [ModuleStatus.PUBLISHED, ModuleStatus.APPROVED] },
-        isActive: true
+        status: status ? status : { $in: [ModuleStatus.PUBLISHED, ModuleStatus.APPROVED] },
+        isActive: true,
       })
       .populate('instructorIds', 'firstName lastName avgRating')
       .populate('categoryId', 'name')
@@ -72,7 +80,7 @@ export class ModulesService {
       .lean();
   }
 
-  // Get all published modules with filters
+  // Get all published modules with filters ─────────────────────────────────────
   async getAllPublishedModules(filters?: {
     category?: string;
     level?: ModuleLevel;
@@ -85,14 +93,8 @@ export class ModulesService {
       isActive: true,
     };
 
-    if (filters?.category) {
-      query.categoryId = new Types.ObjectId(filters.category);
-    }
-
-    if (filters?.level) {
-      query.level = filters.level;
-    }
-
+    if (filters?.category) query.categoryId = new Types.ObjectId(filters.category);
+    if (filters?.level) query.level = filters.level;
     if (filters?.search) {
       query.$or = [
         { title: { $regex: filters.search, $options: 'i' } },
@@ -100,9 +102,9 @@ export class ModulesService {
       ];
     }
 
-    const page = filters?.page || 1;
+    const page  = filters?.page  || 1;
     const limit = filters?.limit || 20;
-    const skip = (page - 1) * limit;
+    const skip  = (page - 1) * limit;
 
     const [modules, total] = await Promise.all([
       this.moduleModel
@@ -116,52 +118,34 @@ export class ModulesService {
       this.moduleModel.countDocuments(query),
     ]);
 
-    return {
-      modules,
-      total,
-      pages: Math.ceil(total / limit),
-    };
+    return { modules, total, pages: Math.ceil(total / limit) };
   }
 
-  // Get instructor's modules
+  // Get instructor's modules ───────────────────────────────────────────────────
   async getInstructorModules(instructorId: string) {
     return await this.moduleModel
-      .find({
-        instructorIds: new Types.ObjectId(instructorId),
-        isActive: true,
-      })
+      .find({ instructorIds: new Types.ObjectId(instructorId), isActive: true })
       .populate('categoryId', 'name')
       .sort({ createdAt: -1 })
       .lean();
   }
 
-  // Get module by ID
+  // Get module by ID ───────────────────────────────────────────────────────────
   async getModuleById(moduleId: string): Promise<Module> {
     const module = await this.moduleModel
       .findById(moduleId)
       .populate('instructorIds', 'firstName lastName email avgRating')
       .populate('categoryId', 'name price accessType');
 
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
-
+    if (!module) throw new NotFoundException('Module not found');
     return module;
   }
 
-  // Update module
-  async updateModule(
-    moduleId: string,
-    instructorId: string,
-    updateModuleDto: UpdateModuleDto,
-  ): Promise<Module> {
+  // Update module ──────────────────────────────────────────────────────────────
+  async updateModule(moduleId: string, instructorId: string, updateModuleDto: UpdateModuleDto): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
+    if (!module) throw new NotFoundException('Module not found');
 
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
-
-    // Authorization check
     if (!module.instructorIds.some((id) => id.toString() === instructorId)) {
       throw new UnauthorizedException('Not authorized to update this module');
     }
@@ -174,85 +158,75 @@ export class ModulesService {
     return await module.save();
   }
 
-  // Normalise resources: accept both legacy string URLs and new {url,name,fileType} objects
-  private normaliseResources(raw: any[]): { url: string; name: string; fileType: string }[] {
-    return (raw || []).map((r) => {
-      if (typeof r === 'string') {
-        const filename = r.split('/').pop() || 'Resource';
-        const ext = filename.split('.').pop()?.toLowerCase() || '';
-        return { url: r, name: filename, fileType: ext };
-      }
-      return {
-        url: r.url || '',
-        name: r.name || r.url?.split('/').pop() || 'Resource',
-        fileType: r.fileType || r.url?.split('.').pop()?.toLowerCase() || '',
-      };
-    });
-  }
-
-  // Add lesson to module
-  async addLesson(
-    moduleId: string,
-    instructorId: string,
-    lessonData: CreateLessonDto,
-  ): Promise<Module> {
+  // Delete entire topic ────────────────────────────────────────────────────────
+  async deleteTopic(moduleId: string, topicIndex: number, instructorId: string): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
+    if (!module) throw new NotFoundException('Module not found');
 
-    // Authorization check
     if (!module.instructorIds.some((id) => id.toString() === instructorId)) {
       throw new UnauthorizedException('Not authorized');
     }
 
-    const lessonToAdd: any = {
-      ...lessonData,
-      resources: this.normaliseResources(lessonData.resources as any[]),
-      order: lessonData.order || module.lessons.length,
-    };
+    if (topicIndex >= module.topics.length) throw new NotFoundException('Topic not found');
 
-    // Auto-create assessment placeholder if not provided
-    if (!lessonToAdd.assessment) {
-      lessonToAdd.assessment = {
-        title: `${lessonData.title} Assessment`,
-        description: '',
-        questions: [],
-        passingScore: 70,
-        maxAttempts: 3,
-      };
-    }
-
-    module.lessons.push(lessonToAdd);
-
+    module.topics.splice(topicIndex, 1);
     module.lastEditedBy = new Types.ObjectId(instructorId);
     module.lastEditedAt = new Date();
 
     return await module.save();
   }
 
-  // Update lesson
-  async updateLesson(
+  // Add lesson to a specific topic ─────────────────────────────────────────────
+  async addLesson(
     moduleId: string,
-    lessonIndex: number,
     instructorId: string,
+    topicIndex: number,
     lessonData: CreateLessonDto,
   ): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
+    if (!module) throw new NotFoundException('Module not found');
 
     if (!module.instructorIds.some((id) => id.toString() === instructorId)) {
       throw new UnauthorizedException('Not authorized');
     }
 
-    if (lessonIndex >= module.lessons.length) {
-      throw new NotFoundException('Lesson not found');
+    if (topicIndex >= module.topics.length) {
+      throw new NotFoundException('Topic not found');
     }
 
-    Object.assign(module.lessons[lessonIndex], lessonData, {
-      resources: this.normaliseResources(lessonData.resources as any[]),
+    const lessonToAdd: any = {
+      ...lessonData,
+      lessonResources: this.normaliseResources(lessonData.lessonResources as any[]),
+      order: lessonData.order ?? module.topics[topicIndex].lessons.length,
+    };
+
+    module.topics[topicIndex].lessons.push(lessonToAdd);
+    module.lastEditedBy = new Types.ObjectId(instructorId);
+    module.lastEditedAt = new Date();
+
+    return await module.save();
+  }
+
+  // Update lesson inside a topic ───────────────────────────────────────────────
+  async updateLesson(
+    moduleId: string,
+    topicIndex: number,
+    lessonIndex: number,
+    instructorId: string,
+    lessonData: CreateLessonDto,
+  ): Promise<Module> {
+    const module = await this.moduleModel.findById(moduleId);
+    if (!module) throw new NotFoundException('Module not found');
+
+    if (!module.instructorIds.some((id) => id.toString() === instructorId)) {
+      throw new UnauthorizedException('Not authorized');
+    }
+
+    if (topicIndex >= module.topics.length) throw new NotFoundException('Topic not found');
+    if (lessonIndex >= module.topics[topicIndex].lessons.length) throw new NotFoundException('Lesson not found');
+
+    Object.assign(module.topics[topicIndex].lessons[lessonIndex], lessonData, {
+      lessonResources: this.normaliseResources(lessonData.lessonResources as any[]),
       lastEditedBy: new Types.ObjectId(instructorId),
       lastEditedAt: new Date(),
     });
@@ -263,42 +237,34 @@ export class ModulesService {
     return await module.save();
   }
 
-  // Delete lesson
+  // Delete lesson from a topic ─────────────────────────────────────────────────
   async deleteLesson(
     moduleId: string,
+    topicIndex: number,
     lessonIndex: number,
     instructorId: string,
   ): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
+    if (!module) throw new NotFoundException('Module not found');
 
     if (!module.instructorIds.some((id) => id.toString() === instructorId)) {
       throw new UnauthorizedException('Not authorized');
     }
 
-    if (lessonIndex >= module.lessons.length) {
-      throw new NotFoundException('Lesson not found');
-    }
+    if (topicIndex >= module.topics.length) throw new NotFoundException('Topic not found');
+    if (lessonIndex >= module.topics[topicIndex].lessons.length) throw new NotFoundException('Lesson not found');
 
-    module.lessons.splice(lessonIndex, 1);
+    module.topics[topicIndex].lessons.splice(lessonIndex, 1);
     module.lastEditedBy = new Types.ObjectId(instructorId);
     module.lastEditedAt = new Date();
 
     return await module.save();
   }
 
-  // Set final assessment (required)
-  async setFinalAssessment(
-    moduleId: string,
-    instructorId: string,
-    assessmentData: FinalAssessmentDto,
-  ): Promise<Module> {
+  // Set final assessment ───────────────────────────────────────────────────────
+  async setFinalAssessment(moduleId: string, instructorId: string, assessmentData: FinalAssessmentDto): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
+    if (!module) throw new NotFoundException('Module not found');
 
     if (!module.instructorIds.some((id) => id.toString() === instructorId)) {
       throw new UnauthorizedException('Not authorized');
@@ -311,26 +277,21 @@ export class ModulesService {
     return await module.save();
   }
 
-  // Submit for approval
-  async submitForApproval(
-    moduleId: string,
-    instructorId: string,
-  ): Promise<Module> {
+  // Submit for approval ────────────────────────────────────────────────────────
+  async submitForApproval(moduleId: string, instructorId: string): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
+    if (!module) throw new NotFoundException('Module not found');
 
     if (!module.instructorIds.some((id) => id.toString() === instructorId)) {
       throw new UnauthorizedException('Not authorized');
     }
 
-    // Validation
     if (!module.finalAssessment || module.finalAssessment.questions.length === 0) {
       throw new BadRequestException('Module must have a final assessment');
     }
 
-    if (module.lessons.length === 0) {
+    const totalLessons = this.getAllLessons(module).length;
+    if (totalLessons === 0) {
       throw new BadRequestException('Module must have at least one lesson');
     }
 
@@ -339,19 +300,15 @@ export class ModulesService {
 
     await module.save();
 
-    // Fetch instructor and category details for notifications
     const [instructor, category] = await Promise.all([
       this.userModel.findById(instructorId).select('firstName lastName email').lean(),
       this.categoryModel.findById(module.categoryId).select('name').lean(),
     ]);
 
-    const instructorName = instructor
-      ? `${instructor.firstName || ''} ${instructor.lastName || ''}`.trim()
-      : 'Unknown Instructor';
+    const instructorName  = instructor ? `${instructor.firstName || ''} ${instructor.lastName || ''}`.trim() : 'Unknown Instructor';
     const instructorEmail = (instructor as any)?.email || '';
-    const categoryName = (category as any)?.name || 'Unknown Category';
+    const categoryName    = (category as any)?.name || 'Unknown Category';
 
-    // Log activity so it appears in the admin dashboard notification feed
     try {
       await this.activityLogModel.create({
         type: ActivityType.COURSE_CREATED,
@@ -364,7 +321,6 @@ export class ModulesService {
       console.error('Failed to log module submission activity:', err);
     }
 
-    // Email admin about the new module submission
     try {
       await this.emailService.sendModuleSubmissionNotificationToAdmin(
         ADMIN_EMAIL,
@@ -381,12 +337,10 @@ export class ModulesService {
     return module;
   }
 
-  // Admin: Approve module
-  async approveModule(moduleId: string, adminId: string): Promise<Module> {
+  // Admin: Approve ─────────────────────────────────────────────────────────────
+  async approveModule(moduleId: string, _adminId: string): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
+    if (!module) throw new NotFoundException('Module not found');
 
     module.status = ModuleStatus.APPROVED;
     module.approvedBy = new Types.ObjectId(adminId);
@@ -395,17 +349,13 @@ export class ModulesService {
     return await module.save();
   }
 
-  // Admin: Publish module
+  // Admin: Publish ─────────────────────────────────────────────────────────────
   async publishModule(moduleId: string, adminId: string): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
+    if (!module) throw new NotFoundException('Module not found');
 
     if (module.status !== ModuleStatus.APPROVED) {
-      throw new BadRequestException(
-        'Module must be approved before publishing',
-      );
+      throw new BadRequestException('Module must be approved before publishing');
     }
 
     module.status = ModuleStatus.PUBLISHED;
@@ -414,16 +364,10 @@ export class ModulesService {
     return await module.save();
   }
 
-  // Admin: Reject module
-  async rejectModule(
-    moduleId: string,
-    adminId: string,
-    rejectionReason: string,
-  ): Promise<Module> {
+  // Admin: Reject ──────────────────────────────────────────────────────────────
+  async rejectModule(moduleId: string, _adminId: string, rejectionReason: string): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
+    if (!module) throw new NotFoundException('Module not found');
 
     module.status = ModuleStatus.REJECTED;
     module.rejectionReason = rejectionReason;
@@ -431,12 +375,10 @@ export class ModulesService {
     return await module.save();
   }
 
-  // Delete module (soft delete)
+  // Delete module (soft) ───────────────────────────────────────────────────────
   async deleteModule(moduleId: string, instructorId: string): Promise<void> {
     const module = await this.moduleModel.findById(moduleId);
-    if (!module) {
-      throw new NotFoundException('Module not found');
-    }
+    if (!module) throw new NotFoundException('Module not found');
 
     if (!module.instructorIds.some((id) => id.toString() === instructorId)) {
       throw new UnauthorizedException('Not authorized');
@@ -446,14 +388,10 @@ export class ModulesService {
     await module.save();
   }
 
-  // Get instructor's module stats
+  // Instructor stats ───────────────────────────────────────────────────────────
   async getInstructorModuleStats(instructorId: string) {
     const instructorObjId = new Types.ObjectId(instructorId);
-
-    const modules = await this.moduleModel
-      .find({ instructorIds: instructorObjId, isActive: true })
-      .lean();
-
+    const modules = await this.moduleModel.find({ instructorIds: instructorObjId, isActive: true }).lean();
     const moduleIds = modules.map((m) => m._id);
 
     const enrollmentStats = await this.moduleEnrollmentModel.aggregate([
@@ -461,9 +399,9 @@ export class ModulesService {
       {
         $group: {
           _id: null,
-          totalStudents: { $sum: 1 },
+          totalStudents:    { $sum: 1 },
           completedStudents: { $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] } },
-          avgProgress: { $avg: '$overallProgress' },
+          avgProgress:      { $avg: '$overallProgress' },
         },
       },
     ]);
@@ -471,17 +409,18 @@ export class ModulesService {
     const stats = enrollmentStats[0] || { totalStudents: 0, completedStudents: 0, avgProgress: 0 };
 
     const modulesByStatus = {
-      draft: modules.filter((m) => m.status === ModuleStatus.DRAFT).length,
+      draft:     modules.filter((m) => m.status === ModuleStatus.DRAFT).length,
       submitted: modules.filter((m) => m.status === ModuleStatus.SUBMITTED).length,
-      approved: modules.filter((m) => m.status === ModuleStatus.APPROVED).length,
+      approved:  modules.filter((m) => m.status === ModuleStatus.APPROVED).length,
       published: modules.filter((m) => m.status === ModuleStatus.PUBLISHED).length,
-      rejected: modules.filter((m) => m.status === ModuleStatus.REJECTED).length,
+      rejected:  modules.filter((m) => m.status === ModuleStatus.REJECTED).length,
     };
 
-    // Calculate total content hours
+    // Calculate total content hours by flattening lessons from topics
     let totalDurationMinutes = 0;
     for (const mod of modules) {
-      for (const lesson of mod.lessons || []) {
+      const allLessons = (mod.topics || []).flatMap((t: any) => t.lessons || []);
+      for (const lesson of allLessons) {
         if (lesson.duration) {
           const match = lesson.duration.match(/(\d+)/);
           if (match) totalDurationMinutes += parseInt(match[1]);

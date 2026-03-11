@@ -16,85 +16,98 @@ export enum ModuleLevel {
   ADVANCED = 'advanced',
 }
 
-// Question class (reused across assessments)
-export class Question {
+// ─────────────────────────────────────────
+// Quiz Question (per lesson assessment)
+// ─────────────────────────────────────────
+export class QuizQuestion {
   @Prop({ required: true })
-  text: string;
+  question!: string;
 
-  @Prop({ required: true, enum: ['multiple-choice', 'essay', 'true-false'] })
-  type: string;
-
-  @Prop({ required: true })
-  points: number;
+  @Prop({ required: true, enum: ['multiple-choice', 'true-false', 'short-answer'] })
+  type!: string;
 
   @Prop([String])
   options?: string[];
 
-  @Prop()
-  correctAnswer?: string;
+  @Prop({ required: true })
+  answer!: string;
 
   @Prop()
   explanation?: string;
 
-  @Prop()
-  rubric?: string; // For AI essay grading
+  @Prop({ default: 1 })
+  points?: number;
 }
 
-// Lesson Assessment (Optional per lesson)
-export class LessonAssessment {
-  @Prop({ required: true })
-  title: string;
+// ─────────────────────────────────────────
+// Lesson Resource
+// ─────────────────────────────────────────
+export class LessonResource {
+  @Prop()
+  url?: string;
+
+  @Prop({ default: 'Resource' })
+  name!: string;
 
   @Prop()
   description?: string;
 
-  @Prop({ type: [Question], default: [] })
-  questions: Question[];
-
-  @Prop({ default: 70 })
-  passingScore: number;
-
-  @Prop({ default: 3 })
-  maxAttempts: number; // -1 for unlimited
+  @Prop()
+  fileType?: string;
 }
 
-// Lesson resource (stores URL + display name + file type)
-export class LessonResource {
-  url: string;
-  name: string;
-  fileType?: string; // e.g. 'pdf', 'docx', 'pptx'
-}
-
-// Lesson schema
+// ─────────────────────────────────────────
+// Lesson (belongs inside a Topic)
+// ─────────────────────────────────────────
 export class Lesson {
   @Prop({ required: true })
-  title: string;
+  lessonName!: string;
 
   @Prop()
-  description?: string;
+  lessonContent?: string;
 
   @Prop()
-  content?: string;
+  duration?: string;
 
-  @Prop()
-  videoUrl?: string;
+  @Prop({ type: [String], default: [] })
+  tasks!: string[];
 
-  @Prop()
-  duration?: string; // e.g., "45 minutes"
+  @Prop({ type: [String], default: [] })
+  deliverables!: string[];
+
+  @Prop({ type: [String], default: [] })
+  evaluationCriteria!: string[];
 
   @Prop({
-    type: [{ url: String, name: { type: String, default: 'Resource' }, fileType: String }],
+    type: [
+      {
+        question: String,
+        type: { type: String, enum: ['multiple-choice', 'true-false', 'short-answer'] },
+        options: [String],
+        answer: String,
+        explanation: String,
+        points: { type: Number, default: 1 },
+      },
+    ],
     default: [],
   })
-  resources?: LessonResource[]; // Downloadable resources with name metadata
+  assessmentQuiz!: QuizQuestion[];
 
-  @Prop({ type: LessonAssessment })
-  assessment?: LessonAssessment; // Optional assessment per lesson
+  @Prop({ default: 70 })
+  quizPassingScore!: number;
+
+  @Prop({ default: 3 })
+  quizMaxAttempts!: number;
+
+  @Prop({
+    type: [{ url: String, name: { type: String, default: 'Resource' }, description: String, fileType: String }],
+    default: [],
+  })
+  lessonResources!: LessonResource[];
 
   @Prop({ default: 0 })
-  order: number;
+  order!: number;
 
-  // Lock/collaboration fields
   @Prop({ type: Types.ObjectId, ref: 'User' })
   lockedBy?: Types.ObjectId;
 
@@ -108,89 +121,189 @@ export class Lesson {
   lastEditedAt?: Date;
 }
 
-// Module Final Assessment (Required)
-export class ModuleFinalAssessment {
+// ─────────────────────────────────────────
+// Topic (groups lessons)
+// ─────────────────────────────────────────
+export class Topic {
   @Prop({ required: true })
-  title: string;
+  topicName!: string;
+
+  @Prop()
+  introduction?: string;
+
+  @Prop({ type: [String], default: [] })
+  topicOutcomes!: string[];
+
+  @Prop()
+  duration?: string;
+
+  @Prop({ type: [Lesson], default: [] })
+  lessons!: Lesson[];
+
+  @Prop({ default: 0 })
+  order!: number;
+}
+
+// ─────────────────────────────────────────
+// Case Study Lesson (content-only, no quiz)
+// ─────────────────────────────────────────
+export class CaseStudyLesson {
+  @Prop({ required: true, enum: ['Introduction', 'Dataset', 'AI Task', 'Key Readings'] })
+  lessonType!: string;
+
+  @Prop()
+  content?: string;
+
+  @Prop({
+    type: [{ url: String, name: { type: String, default: 'Resource' }, description: String, fileType: String }],
+    default: [],
+  })
+  resources!: LessonResource[];
+}
+
+// ─────────────────────────────────────────
+// Case Study
+// ─────────────────────────────────────────
+export class CaseStudy {
+  @Prop({ required: true })
+  caseStudyName!: string;
+
+  @Prop({ type: [CaseStudyLesson], default: [] })
+  lessons!: CaseStudyLesson[];
+
+  @Prop({ default: 'Case studies do not have quizzes; they only provide content.' })
+  note?: string;
+}
+
+// ─────────────────────────────────────────
+// Module Resource (module-level)
+// ─────────────────────────────────────────
+export class ModuleResource {
+  @Prop()
+  url?: string;
+
+  @Prop({ required: true })
+  name!: string;
 
   @Prop()
   description?: string;
 
-  @Prop({ type: [Question], default: [] })
-  questions: Question[];
-
-  @Prop({ default: 70 })
-  passingScore: number;
-
-  @Prop({ default: 3 })
-  maxAttempts: number; // -1 for unlimited
-
   @Prop()
-  timeLimit?: number; // in minutes, optional
+  fileType?: string;
 }
 
+// ─────────────────────────────────────────
+// Final Assessment Question
+// ─────────────────────────────────────────
+export class Question {
+  @Prop({ required: true })
+  text!: string;
+
+  @Prop({ required: true, enum: ['multiple-choice', 'essay', 'true-false'] })
+  type!: string;
+
+  @Prop({ required: true })
+  points!: number;
+
+  @Prop([String])
+  options?: string[];
+
+  @Prop()
+  correctAnswer?: string;
+
+  @Prop()
+  explanation?: string;
+
+  @Prop()
+  rubric?: string;
+}
+
+// ─────────────────────────────────────────
+// Final Assessment
+// ─────────────────────────────────────────
+export class ModuleFinalAssessment {
+  @Prop({ required: true })
+  title!: string;
+
+  @Prop()
+  description?: string;
+
+  @Prop()
+  instructions?: string;
+
+  @Prop({ type: [Question], default: [] })
+  questions!: Question[];
+
+  @Prop({ default: 70 })
+  passingScore!: number;
+
+  @Prop({ default: 3 })
+  maxAttempts!: number;
+
+  @Prop()
+  timeLimit?: number;
+}
+
+// ─────────────────────────────────────────
+// Module (top level)
+// ─────────────────────────────────────────
 @Schema({ timestamps: true })
 export class Module extends Document {
   @Prop({ required: true, trim: true })
-  title: string;
+  declare title: string;
 
   @Prop({ required: true })
-  description: string;
+  declare description: string;
 
-  // Category (determines pricing)
+  @Prop()
+  capstone?: string;
+
   @Prop({ type: Types.ObjectId, ref: 'Category', required: true })
-  categoryId: Types.ObjectId;
+  declare categoryId: Types.ObjectId;
 
-  // Level - determines progression order
   @Prop({ enum: ModuleLevel, required: true })
-  level: ModuleLevel;
+  declare level: ModuleLevel;
 
-  // Status workflow
   @Prop({ enum: ModuleStatus, default: ModuleStatus.DRAFT })
-  status: ModuleStatus;
+  declare status: ModuleStatus;
 
-  // Instructor(s)
   @Prop({ type: [Types.ObjectId], ref: 'User', required: true })
-  instructorIds: Types.ObjectId[];
+  declare instructorIds: Types.ObjectId[];
 
-  // Module content
-  @Prop({ type: [Lesson], default: [] })
-  lessons: Lesson[];
+  // ── Content ────────────────────────────
+  @Prop({ type: [Topic], default: [] })
+  declare topics: Topic[];
 
-  // Required final assessment
+  @Prop({ type: [CaseStudy], default: [] })
+  declare caseStudies: CaseStudy[];
+
   @Prop({ type: ModuleFinalAssessment, required: false })
   finalAssessment?: ModuleFinalAssessment;
 
-  // Metadata
+  // ── Module-level resources ─────────────
+  @Prop({
+    type: [{ url: String, name: String, description: String, fileType: String }],
+    default: [],
+  })
+  declare moduleResources: ModuleResource[];
+
+  // ── Metadata ───────────────────────────
   @Prop()
   bannerUrl?: string;
 
   @Prop()
-  duration?: string; // Total estimated duration
+  duration?: string;
 
   @Prop({ type: [String], default: [] })
-  prerequisites?: string[]; // Array of prerequisite module IDs
+  declare prerequisites: string[];
 
   @Prop({ type: [String], default: [] })
-  learningOutcomes: string[];
+  declare learningOutcomes: string[];
 
   @Prop({ type: [String], default: [] })
-  targetAudience: string[];
+  declare targetAudience: string[];
 
-  // New fields per ADMIN_SYSTEM.md
-  @Prop()
-  welcomeMessage?: string;
-
-  @Prop()
-  deliveryMode?: string;
-
-  @Prop()
-  moduleAim?: string;
-
-  @Prop({ type: [String], default: [] })
-  moduleObjectives: string[];
-
-  // Approval workflow
+  // ── Approval workflow ──────────────────
   @Prop({ type: Types.ObjectId, ref: 'User' })
   approvedBy?: Types.ObjectId;
 
@@ -206,24 +319,23 @@ export class Module extends Document {
   @Prop()
   publishedAt?: Date;
 
-  // Analytics
+  // ── Analytics ─────────────────────────
   @Prop({ default: 0 })
-  enrollmentCount: number;
+  declare enrollmentCount: number;
 
   @Prop({ default: 0 })
-  completionRate: number;
+  declare completionRate: number;
 
   @Prop({ default: true })
-  isActive: boolean;
-
-  // Ratings (updated whenever a student submits a rating)
-  @Prop({ default: 0 })
-  avgRating: number;
+  declare isActive: boolean;
 
   @Prop({ default: 0 })
-  totalRatings: number;
+  declare avgRating: number;
 
-  // Lock management
+  @Prop({ default: 0 })
+  declare totalRatings: number;
+
+  // ── Lock management ────────────────────
   @Prop({ type: Types.ObjectId, ref: 'User' })
   lockedBy?: Types.ObjectId;
 
@@ -236,8 +348,8 @@ export class Module extends Document {
   @Prop()
   lastEditedAt?: Date;
 
-  createdAt: Date;
-  updatedAt: Date;
+  declare createdAt: Date;
+  declare updatedAt: Date;
 }
 
 export const ModuleSchema = SchemaFactory.createForClass(Module);
@@ -248,5 +360,5 @@ ModuleSchema.index({ level: 1 });
 ModuleSchema.index({ status: 1 });
 ModuleSchema.index({ instructorIds: 1 });
 ModuleSchema.index({ createdAt: -1 });
-ModuleSchema.index({ categoryId: 1, level: 1, status: 1 }); // Compound for filtering
-ModuleSchema.index({ status: 1, isActive: 1, createdAt: -1 }); // Homepage query: published + active + sorted
+ModuleSchema.index({ categoryId: 1, level: 1, status: 1 });
+ModuleSchema.index({ status: 1, isActive: 1, createdAt: -1 });
