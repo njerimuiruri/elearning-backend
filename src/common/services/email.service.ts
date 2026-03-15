@@ -1798,4 +1798,250 @@ Go to Dashboard: ${dashboardUrl}
       return { success: false, message: error.message };
     }
   }
+
+  // ─────────────────────────────────────────────────────────────────
+  // FELLOW INVITATION EMAIL — modern, mobile-friendly template
+  // ─────────────────────────────────────────────────────────────────
+  async sendFellowInvitationEmail(
+    email: string,
+    firstName: string,
+    temporaryPassword: string,
+    options?: { track?: string; cohort?: string },
+  ) {
+    const subject = 'Welcome to the Arin Fellowship Programme — Complete Your Profile';
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const loginUrl = `${frontendUrl}/login`;
+    const supportEmail = this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
+    const name = firstName || 'Fellow';
+    const track = options?.track || '';
+    const cohort = options?.cohort || new Date().getFullYear().toString();
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to the Arin Fellowship</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#16a34a 0%,#15803d 100%);padding:40px 40px 32px;text-align:center;">
+              <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:64px;height:64px;line-height:64px;font-size:28px;margin-bottom:16px;">🎓</div>
+              <h1 style="color:#ffffff;margin:0;font-size:26px;font-weight:700;letter-spacing:-0.5px;">Welcome to the<br/>Arin Fellowship!</h1>
+              ${cohort ? `<p style="color:rgba(255,255,255,0.85);margin:10px 0 0;font-size:14px;">Cohort ${cohort}${track ? ' · ' + track + ' Track' : ''}</p>` : ''}
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:40px;">
+              <p style="color:#374151;font-size:16px;margin:0 0 16px;">Dear <strong>${name}</strong>,</p>
+              <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px;">
+                Congratulations! Your fellowship account has been created by the Arin Academy administrator. We are thrilled to have you join our community of innovators and change-makers across Africa.
+              </p>
+              <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 32px;">
+                To get started, please log in to your account and complete your profile so we can personalise your learning experience.
+              </p>
+
+              <!-- Credentials box -->
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:24px;margin-bottom:32px;">
+                <p style="color:#15803d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 16px;">Your Login Credentials</p>
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:6px 0;">
+                      <span style="color:#6b7280;font-size:13px;">Email address</span><br/>
+                      <span style="color:#111827;font-size:15px;font-weight:600;">${email}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:12px 0 6px;">
+                      <span style="color:#6b7280;font-size:13px;">Temporary password</span><br/>
+                      <span style="display:inline-block;background:#e5e7eb;color:#111827;font-family:monospace;font-size:15px;font-weight:700;padding:6px 14px;border-radius:6px;letter-spacing:1px;margin-top:4px;">${temporaryPassword}</span>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <!-- Security note -->
+              <div style="background:#fef9c3;border-left:4px solid #fbbf24;border-radius:0 8px 8px 0;padding:14px 16px;margin-bottom:32px;">
+                <p style="color:#92400e;font-size:13px;margin:0;line-height:1.5;">
+                  <strong>🔒 Security:</strong> You will be asked to set a new password the first time you log in. Please do not share your temporary password with anyone.
+                </p>
+              </div>
+
+              <!-- Steps -->
+              <p style="color:#111827;font-size:15px;font-weight:600;margin:0 0 16px;">Here's how to get started:</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+                ${[
+                  ['1', 'Click the button below to go to the login page'],
+                  ['2', 'Enter your email and temporary password'],
+                  ['3', 'Create a new secure password when prompted'],
+                  ['4', 'Complete your profile to personalise your experience'],
+                  ['5', 'Start learning and engaging with your fellowship community'],
+                ].map(([n, text]) => `
+                <tr>
+                  <td style="padding:6px 0;">
+                    <table cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="vertical-align:top;padding-right:12px;">
+                          <div style="width:28px;height:28px;border-radius:50%;background:#16a34a;color:#fff;text-align:center;line-height:28px;font-size:13px;font-weight:700;">${n}</div>
+                        </td>
+                        <td style="vertical-align:middle;color:#374151;font-size:14px;line-height:1.5;">${text}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>`).join('')}
+              </table>
+
+              <!-- CTA -->
+              <div style="text-align:center;margin-bottom:40px;">
+                <a href="${loginUrl}" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:16px 40px;border-radius:10px;letter-spacing:0.3px;">
+                  Complete Your Profile →
+                </a>
+              </div>
+
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;" />
+
+              <!-- Support -->
+              <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0;">
+                Need help? Our support team is ready to assist you.<br/>
+                📧 <a href="mailto:${supportEmail}" style="color:#16a34a;text-decoration:none;">${supportEmail}</a>
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center;">
+              <p style="color:#9ca3af;font-size:12px;margin:0;">
+                © ${new Date().getFullYear()} Arin Publishing Academy · All rights reserved<br/>
+                This email was sent because an administrator created a fellowship account for you.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const plainText = `
+Welcome to the Arin Fellowship Programme!
+
+Dear ${name},
+
+Congratulations! Your fellowship account has been created by the Arin Academy administrator.
+${cohort ? `Cohort: ${cohort}` : ''}${track ? `\nTrack: ${track}` : ''}
+
+YOUR LOGIN CREDENTIALS
+Email: ${email}
+Temporary Password: ${temporaryPassword}
+
+IMPORTANT: You will be asked to set a new password on first login.
+
+HOW TO GET STARTED:
+1. Visit the login page: ${loginUrl}
+2. Enter your email and temporary password
+3. Create a new secure password when prompted
+4. Complete your profile
+5. Start learning!
+
+Need help? Contact us at: ${supportEmail}
+
+Best regards,
+Arin Publishing Academy Team
+    `.trim();
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@arin-africa.org',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainText,
+      });
+      return { success: true, message: `Fellow invitation sent to ${email}` };
+    } catch (error) {
+      console.error('Error sending fellow invitation email:', error);
+      return { success: false, message: error.message };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // BULK CUSTOM EMAIL — with CC / BCC support
+  // ─────────────────────────────────────────────────────────────────
+  async sendCustomEmail(
+    to: string,
+    subject: string,
+    message: string,
+    options?: { cc?: string[]; bcc?: string[]; fromName?: string },
+  ) {
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const supportEmail = this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
+    const fromEmail = this.configService.get('SMTP_FROM_EMAIL') || 'noreply@arin-africa.org';
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:32px 40px;text-align:center;">
+            <h2 style="color:#fff;margin:0;font-size:22px;font-weight:700;">Arin Publishing Academy</h2>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px;">
+            <div style="color:#374151;font-size:15px;line-height:1.8;white-space:pre-wrap;">${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;">
+            <p style="color:#9ca3af;font-size:12px;margin:0;">
+              © ${new Date().getFullYear()} Arin Publishing Academy<br/>
+              Need help? <a href="mailto:${supportEmail}" style="color:#16a34a;">${supportEmail}</a>
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+    `;
+
+    const mailOptions: any = {
+      from: options?.fromName
+        ? `"${options.fromName}" <${fromEmail}>`
+        : fromEmail,
+      to,
+      subject,
+      html: htmlContent,
+      text: message,
+    };
+
+    if (options?.cc?.length) mailOptions.cc = options.cc.join(', ');
+    if (options?.bcc?.length) mailOptions.bcc = options.bcc.join(', ');
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      return { success: true };
+    } catch (error) {
+      console.error(`Failed to send email to ${to}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
 }

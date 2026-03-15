@@ -42,6 +42,12 @@ class FellowData {
 
   @Prop([{ type: Types.ObjectId, ref: 'Category' }])
   assignedCategories: Types.ObjectId[];
+
+  @Prop({ default: null })
+  region: string;
+
+  @Prop({ default: null })
+  track: string;
 }
 
 @Schema({ timestamps: true })
@@ -82,8 +88,18 @@ export class User extends Document {
   @Prop({ default: null })
   country: string;
 
+  @Prop({ default: null })
+  gender: string;
+
   @Prop({ default: true })
   isActive: boolean;
+
+  // Fellow invitation email tracking
+  @Prop({ default: false })
+  invitationEmailSent: boolean;
+
+  @Prop({ default: null })
+  invitationEmailSentAt: Date;
 
   @Prop({ default: false })
   emailVerified: boolean;
