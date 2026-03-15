@@ -147,6 +147,11 @@ export class ReminderService {
         .populate('courseId', 'title description');
 
       if (!enrollment) {
+        // Fall back: check if this is a module enrollment ID
+        const moduleExists = await this.moduleEnrollmentModel.exists({ _id: enrollmentId });
+        if (moduleExists) {
+          return this.sendModuleReminder(enrollmentId, triggerType);
+        }
         throw new Error('Enrollment not found');
       }
 

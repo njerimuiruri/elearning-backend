@@ -10,6 +10,7 @@ import { CurrentUser } from '../decorators/current-user.decorator';
 import { UserRole } from '../schemas/user.schema';
 import { CreateStudentDto, BulkCreateStudentsDto } from './dto/student.dto';
 import { CreateInstructorDto } from './dto/instructor.dto';
+import { CreateFellowDto, BulkCreateFellowsDto, BulkSendEmailDto } from './dto/fellow.dto';
 
 @Controller('api/admin')
 @ApiTags('Admin')
@@ -208,13 +209,44 @@ export class AdminController {
     @Query('status') status?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
+    @Query('search') search?: string,
   ) {
-    return this.adminService.getAllFellows({ status, page, limit });
+    return this.adminService.getAllFellows({ status, page, limit, search });
   }
 
   @Get('fellows/at-risk')
   async getFellowsAtRisk() {
     return this.adminService.getFellowsAtRisk();
+  }
+
+  @Post('fellows')
+  async createFellow(@Body() dto: CreateFellowDto) {
+    return this.adminService.createFellow(dto);
+  }
+
+  @Post('fellows/bulk')
+  async bulkCreateFellows(@Body() dto: BulkCreateFellowsDto) {
+    return this.adminService.bulkCreateFellows(dto.fellows, dto.sendEmails ?? false);
+  }
+
+  @Post('fellows/bulk-email')
+  async sendBulkEmail(@Body() dto: BulkSendEmailDto) {
+    return this.adminService.sendBulkEmailToFellows(dto.fellowIds, dto.subject, dto.message, dto.cc, dto.bcc);
+  }
+
+  @Post('fellows/send-invitations')
+  async sendFellowInvitations(@Body('fellowIds') fellowIds: string[]) {
+    return this.adminService.sendFellowInvitations(fellowIds);
+  }
+
+  @Put('fellows/:id')
+  async updateFellow(@Param('id') id: string, @Body() updateData: any) {
+    return this.adminService.updateFellow(id, updateData);
+  }
+
+  @Delete('fellows/:id')
+  async deleteFellow(@Param('id') id: string) {
+    return this.adminService.deleteFellow(id);
   }
 
   @Post('fellows/:id/send-reminder')

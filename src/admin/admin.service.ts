@@ -894,13 +894,254 @@ export class AdminService {
     return { message: 'Student deleted successfully' };
   }
 
+  // ─── Fellow CRUD ──────────────────────────────────────────────────
+
+  async createFellow(dto: any) {
+    const { firstName, lastName, email, gender, country, region, track, category, phoneNumber, sendEmail } = dto;
+
+    if (!email) throw new BadRequestException('Email is required');
+
+    const existing = await this.userModel.findOne({ email });
+    if (existing) throw new BadRequestException(`A user with email ${email} already exists`);
+
+    const temporaryPassword = crypto.randomBytes(8).toString('hex');
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+
+    const fellow = await this.userModel.create({
+      firstName: firstName || '',
+      lastName: lastName || '',
+      email,
+      gender: gender || null,
+      country: country || null,
+      phoneNumber: phoneNumber || null,
+      password: hashedPassword,
+      role: UserRole.STUDENT,
+      userType: 'fellow',
+      isActive: true,
+      mustSetPassword: true,
+      invitationEmailSent: false,
+      fellowData: {
+        fellowId: `FELLOW-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
+        cohort: new Date().getFullYear().toString(),
+        deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        requiredCourses: [],
+        fellowshipStatus: FellowshipStatus.ACTIVE,
+        assignedCategories: category ? [new Types.ObjectId(category)] : [],
+        region: region || null,
+        track: track || null,
+      },
+    });
+
+    const setupToken = crypto.randomBytes(32).toString('hex');
+    await this.passwordResetModel.create({
+      userId: fellow._id,
+      email,
+      token: crypto.createHash('sha256').update(setupToken).digest('hex'),
+    });
+
+    await this.logActivity(
+      ActivityType.STUDENT_CREATED,
+      `Fellow ${firstName || ''} ${lastName || ''} (${email}) created by admin`,
+      undefined,
+      fellow._id.toString(),
+      undefined,
+      { email, track, region },
+      'UserPlus',
+    );
+
+    let emailSent = false;
+    if (sendEmail) {
+      try {
+        await this.emailService.sendFellowInvitationEmail(email, firstName || 'Fellow', temporaryPassword, { track, cohort: fellow.fellowData.cohort });
+        await this.userModel.findByIdAndUpdate(fellow._id, { invitationEmailSent: true, invitationEmailSentAt: new Date() });
+        emailSent = true;
+      } catch (err) {
+        console.error('Failed to send invitation email:', err);
+      }
+    }
+
+    return {
+      message: 'Fellow created successfully.',
+      fellow: { _id: fellow._id, firstName: fellow.firstName, lastName: fellow.lastName, email: fellow.email, invitationEmailSent: emailSent },
+      temporaryPassword,
+    };
+  }
+
+  async bulkCreateFellows(fellowsData: any[], sendEmails = false) {
+    const results = { created: 0, failed: 0, errors: [] as any[], fellows: [] as any[] };
+
+    for (const dto of fellowsData) {
+      if (!dto.email) {
+        results.failed++;
+        results.errors.push({ email: dto.email || '(missing)', error: 'Email is required' });
+        continue;
+      }
+      try {
+        const existing = await this.userModel.findOne({ email: dto.email });
+        if (existing) {
+          results.failed++;
+          results.errors.push({ email: dto.email, error: 'Email already exists' });
+          continue;
+        }
+
+        const temporaryPassword = crypto.randomBytes(8).toString('hex');
+        const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+
+        const fellow = await this.userModel.create({
+          firstName: dto.firstName || '',
+          lastName: dto.lastName || '',
+          email: dto.email,
+          gender: dto.gender || null,
+          country: dto.country || null,
+          phoneNumber: dto.phoneNumber || null,
+          password: hashedPassword,
+          role: UserRole.STUDENT,
+          userType: 'fellow',
+          isActive: true,
+          mustSetPassword: true,
+          invitationEmailSent: false,
+          fellowData: {
+            fellowId: `FELLOW-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
+            cohort: new Date().getFullYear().toString(),
+            deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+            requiredCourses: [],
+            fellowshipStatus: FellowshipStatus.ACTIVE,
+            assignedCategories: dto.category ? [new Types.ObjectId(dto.category)] : [],
+            region: dto.region || null,
+            track: dto.track || null,
+          },
+        });
+
+        await this.passwordResetModel.create({
+          userId: fellow._id,
+          email: dto.email,
+          token: crypto.createHash('sha256').update(crypto.randomBytes(32).toString('hex')).digest('hex'),
+        });
+
+        let emailSent = false;
+        if (sendEmails) {
+          try {
+            await this.emailService.sendFellowInvitationEmail(dto.email, dto.firstName || 'Fellow', temporaryPassword, { track: dto.track, cohort: fellow.fellowData.cohort });
+            await this.userModel.findByIdAndUpdate(fellow._id, { invitationEmailSent: true, invitationEmailSentAt: new Date() });
+            emailSent = true;
+          } catch (err) {
+            console.error(`Failed to send invitation to ${dto.email}:`, err);
+          }
+        }
+
+        results.created++;
+        results.fellows.push({
+          _id: fellow._id,
+          firstName: fellow.firstName,
+          lastName: fellow.lastName,
+          email: fellow.email,
+          invitationEmailSent: emailSent,
+          // Only expose temporaryPassword when email was not sent (admin may need to share manually)
+          temporaryPassword: emailSent ? undefined : temporaryPassword,
+        });
+      } catch (err: any) {
+        results.failed++;
+        results.errors.push({ email: dto.email, error: err.message });
+      }
+    }
+
+    return {
+      message: `Bulk creation complete. ${results.created} created, ${results.failed} failed.`,
+      ...results,
+    };
+  }
+
+  async updateFellow(id: string, updateData: any) {
+    const allowed = ['firstName', 'lastName', 'gender', 'country', 'phoneNumber', 'isActive'];
+    const fellowAllowed = ['region', 'track'];
+    const userUpdate: any = {};
+    const fellowUpdate: any = {};
+
+    for (const f of allowed) {
+      if (f in updateData) userUpdate[f] = updateData[f];
+    }
+    for (const f of fellowAllowed) {
+      if (f in updateData) fellowUpdate[`fellowData.${f}`] = updateData[f];
+    }
+
+    const fellow = await this.userModel.findByIdAndUpdate(id, { ...userUpdate, ...fellowUpdate }, { new: true }).select('-password');
+    if (!fellow) throw new NotFoundException('Fellow not found');
+    return { message: 'Fellow updated', fellow };
+  }
+
+  async deleteFellow(id: string) {
+    const fellow = await this.userModel.findByIdAndDelete(id);
+    if (!fellow) throw new NotFoundException('Fellow not found');
+    return { message: 'Fellow deleted' };
+  }
+
+  async sendBulkEmailToFellows(fellowIds: string[], subject: string, message: string, cc?: string[], bcc?: string[]) {
+    const fellows = await this.userModel.find({ _id: { $in: fellowIds } }).select('email firstName lastName invitationEmailSent');
+    const results = { sent: 0, failed: 0, details: [] as any[] };
+
+    for (const fellow of fellows) {
+      const result = await this.emailService.sendCustomEmail(fellow.email, subject, message, { cc, bcc });
+      if (result.success) {
+        results.sent++;
+        results.details.push({ email: fellow.email, status: 'sent' });
+      } else {
+        results.failed++;
+        results.details.push({ email: fellow.email, status: 'failed', error: (result as any).error });
+      }
+    }
+
+    return {
+      message: `Bulk email complete. ${results.sent} sent, ${results.failed} failed.`,
+      ...results,
+    };
+  }
+
+  async sendFellowInvitations(fellowIds: string[]) {
+    const fellows = await this.userModel.find({ _id: { $in: fellowIds } }).select('email firstName fellowData invitationEmailSent');
+    const results = { sent: 0, failed: 0, details: [] as any[] };
+
+    for (const fellow of fellows) {
+      const temporaryPassword = crypto.randomBytes(8).toString('hex');
+      const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+      await this.userModel.findByIdAndUpdate(fellow._id, { password: hashedPassword, mustSetPassword: true });
+
+      const result = await this.emailService.sendFellowInvitationEmail(
+        fellow.email,
+        fellow.firstName || 'Fellow',
+        temporaryPassword,
+        { track: (fellow.fellowData as any)?.track, cohort: fellow.fellowData?.cohort },
+      );
+
+      if (result.success) {
+        results.sent++;
+        await this.userModel.findByIdAndUpdate(fellow._id, { invitationEmailSent: true, invitationEmailSentAt: new Date() });
+        results.details.push({ email: fellow.email, status: 'sent' });
+      } else {
+        results.failed++;
+        results.details.push({ email: fellow.email, status: 'failed', error: result.message });
+      }
+    }
+
+    return { message: `Invitations sent. ${results.sent} succeeded, ${results.failed} failed.`, ...results };
+  }
+
   // Fellows Management
-  async getAllFellows(filters: { status?: string; page?: number; limit?: number }) {
-    const { status, page = 1, limit = 20 } = filters;
+  async getAllFellows(filters: { status?: string; page?: number; limit?: number; search?: string } = {}) {
+    const { status, page = 1, limit = 50, search } = filters;
     const query: any = { 'fellowData.fellowId': { $exists: true } };
 
-    if (status) {
+    if (status && status !== 'all') {
       query['fellowData.fellowshipStatus'] = status;
+    }
+
+    if (search) {
+      query.$or = [
+        { firstName: { $regex: search, $options: 'i' } },
+        { lastName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { 'fellowData.track': { $regex: search, $options: 'i' } },
+        { 'fellowData.region': { $regex: search, $options: 'i' } },
+      ];
     }
 
     const skip = (page - 1) * limit;
@@ -909,7 +1150,7 @@ export class AdminService {
       this.userModel
         .find(query)
         .select('-password')
-        .sort({ 'fellowData.deadline': 1 })
+        .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -972,8 +1213,18 @@ export class AdminService {
       throw new NotFoundException('Fellow not found');
     }
 
-    // TODO: Implement email sending logic here
-    console.log(`Sending reminder to ${fellow.email}: ${message}`);
+    if (!message || message.trim().length === 0) {
+      throw new BadRequestException('Reminder message is required');
+    }
+
+    const subject = 'Reminder from Arin Academy';
+    const personalised = `Dear ${fellow.firstName || 'Fellow'},\n\n${message.trim()}`;
+
+    const result = await this.emailService.sendCustomEmail(fellow.email, subject, personalised);
+
+    if (!result.success) {
+      throw new BadRequestException('Failed to send reminder email');
+    }
 
     return {
       message: 'Reminder sent successfully',

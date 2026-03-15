@@ -338,7 +338,7 @@ export class ModulesService {
   }
 
   // Admin: Approve ─────────────────────────────────────────────────────────────
-  async approveModule(moduleId: string, _adminId: string): Promise<Module> {
+  async approveModule(moduleId: string, adminId: string): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
     if (!module) throw new NotFoundException('Module not found');
 
@@ -350,7 +350,7 @@ export class ModulesService {
   }
 
   // Admin: Publish ─────────────────────────────────────────────────────────────
-  async publishModule(moduleId: string, adminId: string): Promise<Module> {
+  async publishModule(moduleId: string, _adminId: string): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
     if (!module) throw new NotFoundException('Module not found');
 
