@@ -2321,7 +2321,7 @@ export class AdminService {
 
   async getAllModules(filters: { status?: string; level?: string; category?: string; page?: number; limit?: number } = {}) {
     const { status, level, category, page = 1, limit = 20 } = filters;
-    const query: any = {};
+    const query: any = { isActive: { $ne: false } };
 
     if (status) query.status = status;
     if (level) query.level = level;
@@ -2349,7 +2349,7 @@ export class AdminService {
 
   async getPendingModules(filters: { page?: number; limit?: number } = {}) {
     const { page = 1, limit = 20 } = filters;
-    const query = { status: ModuleStatus.SUBMITTED };
+    const query: any = { status: ModuleStatus.SUBMITTED, isActive: { $ne: false } };
     const skip = (page - 1) * limit;
 
     const [modules, total] = await Promise.all([
@@ -2675,12 +2675,12 @@ export class AdminService {
       totalModuleEnrollments,
       completedModuleEnrollments,
     ] = await Promise.all([
-      this.moduleModel.countDocuments(),
-      this.moduleModel.countDocuments({ status: ModuleStatus.DRAFT }),
-      this.moduleModel.countDocuments({ status: ModuleStatus.SUBMITTED }),
-      this.moduleModel.countDocuments({ status: ModuleStatus.APPROVED }),
-      this.moduleModel.countDocuments({ status: ModuleStatus.PUBLISHED }),
-      this.moduleModel.countDocuments({ status: ModuleStatus.REJECTED }),
+      this.moduleModel.countDocuments({ isActive: { $ne: false } }),
+      this.moduleModel.countDocuments({ status: ModuleStatus.DRAFT,      isActive: { $ne: false } }),
+      this.moduleModel.countDocuments({ status: ModuleStatus.SUBMITTED,  isActive: { $ne: false } }),
+      this.moduleModel.countDocuments({ status: ModuleStatus.APPROVED,   isActive: { $ne: false } }),
+      this.moduleModel.countDocuments({ status: ModuleStatus.PUBLISHED,  isActive: { $ne: false } }),
+      this.moduleModel.countDocuments({ status: ModuleStatus.REJECTED,   isActive: { $ne: false } }),
       this.moduleEnrollmentModel.countDocuments(),
       this.moduleEnrollmentModel.countDocuments({ isCompleted: true }),
     ]);
