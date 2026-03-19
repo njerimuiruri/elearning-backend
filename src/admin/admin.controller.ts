@@ -11,6 +11,7 @@ import { UserRole } from '../schemas/user.schema';
 import { CreateStudentDto, BulkCreateStudentsDto } from './dto/student.dto';
 import { CreateInstructorDto } from './dto/instructor.dto';
 import { CreateFellowDto, BulkCreateFellowsDto, BulkSendEmailDto } from './dto/fellow.dto';
+import { CreateModuleDto } from '../modules/dto/create-module.dto';
 
 @Controller('api/admin')
 @ApiTags('Admin')
@@ -457,6 +458,15 @@ export class AdminController {
 
   // ===================== MODULE MANAGEMENT =====================
 
+  @Post('modules')
+  @ApiOperation({ summary: 'Admin creates a module on behalf of an instructor' })
+  async createModuleAsAdmin(
+    @Body() createModuleDto: CreateModuleDto,
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.createModuleAsAdmin(admin._id?.toString(), createModuleDto);
+  }
+
   @Get('modules')
   @ApiOperation({ summary: 'Get all modules with filters (Admin only)' })
   async getAllModules(
@@ -516,5 +526,33 @@ export class AdminController {
     @CurrentUser() admin: any,
   ) {
     return this.adminService.rejectModule(id, reason, admin._id?.toString());
+  }
+
+  @Delete('modules/:id')
+  @ApiOperation({ summary: 'Delete (deactivate) a module — admin can remove any module regardless of status' })
+  async deleteModule(
+    @Param('id') id: string,
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.deleteModuleAsAdmin(id, admin._id?.toString());
+  }
+
+  @Put('modules/:id/approve-assessment')
+  @ApiOperation({ summary: 'Approve a pending assessment update' })
+  async approveAssessment(
+    @Param('id') id: string,
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.approveAssessment(id, admin._id?.toString());
+  }
+
+  @Put('modules/:id/reject-assessment')
+  @ApiOperation({ summary: 'Reject a pending assessment update' })
+  async rejectAssessment(
+    @Param('id') id: string,
+    @Body('reason') reason: string,
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.rejectAssessment(id, reason, admin._id?.toString());
   }
 }

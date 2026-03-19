@@ -161,68 +161,128 @@ E-Learning Platform System
     }
   }
 
-  async sendStudentRegistrationEmail(email: string, firstName: string, temporaryPassword: string) {
-    const subject = 'Welcome to Arin Publishing Academy - Your Account Has Been Created';
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
-    const loginUrl = `${frontendUrl}/login`;
+  async sendStudentRegistrationEmail(email: string, firstName: string, temporaryPassword: string, categoryNames: string[] = []) {
+    const subject = 'Welcome to the ARIN eLearning Platform!';
+    const categoryLine = categoryNames.length > 0
+      ? `<strong>${categoryNames.join(', ')}</strong>`
+      : 'the ARIN eLearning Platform';
 
     const htmlContent = `
-      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-        <h2 style="color: #16a34a; border-bottom: 3px solid #16a34a; padding-bottom: 10px;">Welcome to Arin Publishing Academy!</h2>
-        <p>Dear <strong>${firstName}</strong>,</p>
-        <p>Your account has been successfully created by the administrator. We're excited to have you on board at <strong>Arin Publishing Academy</strong>!</p>
-        
-        <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0;">
-          <h3 style="color: #16a34a; margin-top: 0;">Your Login Credentials</h3>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Temporary Password:</strong> <code style="background-color: #e8e8e8; padding: 5px 10px; border-radius: 3px; font-family: monospace;">${temporaryPassword}</code></p>
-        </div>
-        
-        <h3 style="color: #16a34a;">Important Security Note</h3>
-        <p>For your account security, you will be required to create a new password on your first login. This ensures your account remains protected.</p>
-        
-        <h3 style="color: #16a34a;">Next Steps</h3>
-        <ol>
-          <li>Visit our platform at: <a href="${loginUrl}" style="color: #16a34a; text-decoration: none;"><strong>${loginUrl}</strong></a></li>
-          <li>Log in with your email and temporary password</li>
-          <li>Create a new secure password when prompted</li>
-          <li>Start exploring our courses and learning materials</li>
-        </ol>
-        
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${loginUrl}" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px;">Login to Your Account</a>
-        </div>
-        
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
-        <p style="font-size: 14px; color: #666;">If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
-        <p style="font-size: 14px;">Best regards,<br/><strong>Arin Publishing Academy Team</strong></p>
-      </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to ARIN eLearning</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#16a34a 0%,#15803d 100%);padding:40px 40px 32px;text-align:center;">
+              <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:64px;height:64px;line-height:64px;font-size:28px;margin-bottom:16px;">🎓</div>
+              <h1 style="color:#ffffff;margin:0;font-size:26px;font-weight:700;letter-spacing:-0.5px;">Welcome to ARIN eLearning!</h1>
+              <p style="color:rgba(255,255,255,0.85);margin:10px 0 0;font-size:14px;">We're delighted to have you with us</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:40px;">
+              <p style="color:#374151;font-size:16px;margin:0 0 16px;">Dear <strong>${firstName}</strong>,</p>
+              <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">
+                We are pleased to inform you that you have been successfully enrolled in the <strong>ARIN eLearning Platform</strong>. Your learning journey with us starts now!
+              </p>
+
+              ${categoryNames.length > 0 ? `
+              <!-- Category highlight -->
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
+                <p style="color:#15803d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;">You have been enrolled in</p>
+                <p style="color:#111827;font-size:18px;font-weight:700;margin:0;">${categoryLine}</p>
+              </div>
+              ` : ''}
+
+              <!-- Credentials box -->
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px;margin-bottom:28px;">
+                <p style="color:#475569;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 16px;">Your Login Credentials</p>
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:6px 0;">
+                      <span style="color:#6b7280;font-size:13px;">Email address</span><br/>
+                      <span style="color:#111827;font-size:15px;font-weight:600;">${email}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:12px 0 6px;">
+                      <span style="color:#6b7280;font-size:13px;">Temporary password</span><br/>
+                      <span style="display:inline-block;background:#e5e7eb;color:#111827;font-family:monospace;font-size:15px;font-weight:700;padding:6px 14px;border-radius:6px;letter-spacing:1px;margin-top:4px;">${temporaryPassword}</span>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+
+              <!-- Security note -->
+              <div style="background:#fef9c3;border-left:4px solid #fbbf24;border-radius:0 8px 8px 0;padding:14px 16px;margin-bottom:28px;">
+                <p style="color:#92400e;font-size:13px;margin:0;line-height:1.5;">
+                  <strong>🔒 Security reminder:</strong> You will be prompted to set a new password the first time you log in. Please keep your credentials safe and do not share them with anyone.
+                </p>
+              </div>
+
+              <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 12px;">
+                We will be in touch with further details about your programme, course materials, and what to expect in the coming days. Keep an eye on your inbox — more information will be sent to you shortly.
+              </p>
+              <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 32px;">
+                We look forward to supporting you through this learning experience and are excited to be part of your journey.
+              </p>
+
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;" />
+              <p style="color:#6b7280;font-size:13px;margin:0 0 4px;">Warm regards,</p>
+              <p style="color:#111827;font-size:14px;font-weight:700;margin:0;">The ARIN eLearning Team</p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f8fafc;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb;">
+              <p style="color:#9ca3af;font-size:12px;margin:0;">This email was sent to ${email}. If you believe you received this in error, please contact our support team.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
     `;
 
+    const categoryText = categoryNames.length > 0
+      ? `You have been enrolled in: ${categoryNames.join(', ')}\n\n`
+      : '';
+
     const plainTextContent = `
-Welcome to Arin Publishing Academy!
+Welcome to ARIN eLearning!
 
 Dear ${firstName},
 
-Your account has been successfully created by the administrator. We're excited to have you on board!
+We are pleased to inform you that you have been successfully enrolled in the ARIN eLearning Platform. Your learning journey with us starts now!
 
-Your Login Credentials:
+${categoryText}Your Login Credentials:
 Email: ${email}
 Temporary Password: ${temporaryPassword}
 
-Important Security Note:
-For your account security, you will be required to create a new password on your first login.
+Security reminder: You will be prompted to set a new password the first time you log in. Please keep your credentials safe.
 
-Next Steps:
-1. Visit our platform: ${loginUrl}
-2. Log in with your email and temporary password
-3. Create a new secure password when prompted
-4. Start exploring our courses and learning materials
+We will be in touch with further details about your programme, course materials, and what to expect in the coming days. Keep an eye on your inbox — more information will be sent to you shortly.
 
-If you have any questions or need assistance, please don't hesitate to contact our support team.
+We look forward to supporting you through this learning experience.
 
-Best regards,
-Arin Publishing Academy Team
+Warm regards,
+The ARIN eLearning Team
     `;
 
     try {

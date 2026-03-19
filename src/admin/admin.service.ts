@@ -10,9 +10,11 @@ import { Course, CourseStatus } from '../schemas/course.schema';
 import { CourseFormat } from '../schemas/course-format.schema';
 import { PasswordReset } from '../schemas/password-reset.schema';
 import { ActivityLog, ActivityType } from '../schemas/activity-log.schema';
-import { Module as ModuleEntity, ModuleStatus } from '../schemas/module.schema';
+import { Module as ModuleEntity, ModuleStatus, AssessmentReviewStatus } from '../schemas/module.schema';
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
+import { Category } from '../schemas/category.schema';
 import { EmailService } from '../common/services/email.service';
+import { CreateModuleDto } from '../modules/dto/create-module.dto';
 
 @Injectable()
 export class AdminService {
@@ -46,6 +48,7 @@ export class AdminService {
     @InjectModel(ActivityLog.name) private activityLogModel: Model<ActivityLog>,
     @InjectModel(ModuleEntity.name) private moduleModel: Model<ModuleEntity>,
     @InjectModel(ModuleEnrollment.name) private moduleEnrollmentModel: Model<ModuleEnrollment>,
+    @InjectModel(Category.name) private categoryModel: Model<Category>,
     private emailService: EmailService,
   ) {}
 
@@ -390,6 +393,9 @@ export class AdminService {
       console.error('Failed to send admin notification:', error);
     }
 
+    // Link any modules that were pre-assigned to this instructor via email
+    await this.linkPendingModules(instructor._id.toString(), instructor.email);
+
     return {
       message: 'Instructor approved successfully',
       instructor,
@@ -642,9 +648,19 @@ export class AdminService {
       token: hashedToken,
     });
 
+    // Fetch category names if assigned
+    let categoryNames: string[] = [];
+    if (assignedCategories && assignedCategories.length > 0) {
+      const categories = await this.categoryModel
+        .find({ _id: { $in: assignedCategories.map((id: string) => new Types.ObjectId(id)) } })
+        .select('name')
+        .lean();
+      categoryNames = categories.map((c: any) => c.name);
+    }
+
     // Send registration email with credentials
     try {
-      await this.emailService.sendStudentRegistrationEmail(email, firstName, temporaryPassword);
+      await this.emailService.sendStudentRegistrationEmail(email, firstName, temporaryPassword, categoryNames);
     } catch (error) {
       console.error('Failed to send registration email:', error);
       // Don't fail the creation if email fails
@@ -897,7 +913,7 @@ export class AdminService {
   // ─── Fellow CRUD ──────────────────────────────────────────────────
 
   async createFellow(dto: any) {
-    const { firstName, lastName, email, gender, country, region, track, category, phoneNumber, sendEmail } = dto;
+    const { fullName, firstName, lastName, email, gender, country, region, track, category, phoneNumber, sendEmail } = dto;
 
     if (!email) throw new BadRequestException('Email is required');
 
@@ -908,6 +924,7 @@ export class AdminService {
     const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
     const fellow = await this.userModel.create({
+      fullName: fullName || `${firstName || ''} ${lastName || ''}`.trim(),
       firstName: firstName || '',
       lastName: lastName || '',
       email,
@@ -988,6 +1005,7 @@ export class AdminService {
         const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
         const fellow = await this.userModel.create({
+          fullName: dto.fullName || `${dto.firstName || ''} ${dto.lastName || ''}`.trim(),
           firstName: dto.firstName || '',
           lastName: dto.lastName || '',
           email: dto.email,
@@ -1052,7 +1070,7 @@ export class AdminService {
   }
 
   async updateFellow(id: string, updateData: any) {
-    const allowed = ['firstName', 'lastName', 'gender', 'country', 'phoneNumber', 'isActive'];
+    const allowed = ['fullName', 'firstName', 'lastName', 'gender', 'country', 'phoneNumber', 'isActive'];
     const fellowAllowed = ['region', 'track'];
     const userUpdate: any = {};
     const fellowUpdate: any = {};
@@ -2514,6 +2532,136 @@ export class AdminService {
     }
 
     return { message: 'Module rejected', module: moduleDoc };
+  }
+
+  // ── Admin: Create module on behalf of an instructor ───────────────────────
+  async createModuleAsAdmin(adminId: string, createModuleDto: CreateModuleDto): Promise<ModuleEntity> {
+    const { assignedInstructorId, pendingInstructorEmail, pendingInstructorName, ...rest } = createModuleDto;
+
+    const category = await this.categoryModel.findById(rest.categoryId);
+    if (!category) throw new NotFoundException('Category not found');
+
+    let instructorIds: Types.ObjectId[] = [];
+
+    if (assignedInstructorId) {
+      const instructor = await this.userModel.findById(assignedInstructorId);
+      if (!instructor) throw new NotFoundException('Assigned instructor not found');
+      instructorIds = [new Types.ObjectId(assignedInstructorId)];
+    }
+
+    const module = new this.moduleModel({
+      ...rest,
+      categoryId: new Types.ObjectId(rest.categoryId),
+      instructorIds,
+      ...(pendingInstructorEmail && !assignedInstructorId ? { pendingInstructorEmail, pendingInstructorName } : {}),
+      createdBy: new Types.ObjectId(adminId),
+      createdByRole: 'admin',
+      status: ModuleStatus.DRAFT,
+    });
+
+    const saved = await module.save();
+
+    await this.logActivity(
+      ActivityType.COURSE_CREATED,
+      `Admin created module "${saved.title}" ${assignedInstructorId ? 'for instructor' : pendingInstructorEmail ? `for pending instructor ${pendingInstructorEmail}` : '(unassigned)'}`,
+      adminId,
+      assignedInstructorId,
+      undefined,
+      { moduleId: saved._id, moduleTitle: saved.title },
+      'BookOpen',
+    );
+
+    return saved;
+  }
+
+  // ── Delete a module (admin can remove any module regardless of status) ────
+  async deleteModuleAsAdmin(moduleId: string, adminId: string): Promise<void> {
+    const moduleDoc = await this.moduleModel.findById(moduleId);
+    if (!moduleDoc) throw new NotFoundException('Module not found');
+
+    moduleDoc.isActive = false;
+    await moduleDoc.save();
+
+    await this.logActivity(
+      ActivityType.COURSE_CREATED,
+      `Admin removed module "${moduleDoc.title}"`,
+      adminId,
+      undefined,
+      undefined,
+      { moduleId: moduleDoc._id, moduleTitle: moduleDoc.title },
+      'Trash2',
+    );
+  }
+
+  // ── Link pending modules to a newly approved instructor ──────────────────
+  private async linkPendingModules(instructorId: string, instructorEmail: string) {
+    try {
+      await this.moduleModel.updateMany(
+        { pendingInstructorEmail: instructorEmail },
+        {
+          $push: { instructorIds: new Types.ObjectId(instructorId) },
+          $unset: { pendingInstructorEmail: '', pendingInstructorName: '' },
+        },
+      );
+    } catch (err) {
+      console.error('Failed to link pending modules for instructor:', err);
+    }
+  }
+
+  // ── Approve assessment update ─────────────────────────────────────────────
+  async approveAssessment(moduleId: string, adminId?: string) {
+    const moduleDoc = await this.moduleModel.findById(moduleId);
+    if (!moduleDoc) throw new NotFoundException('Module not found');
+
+    if (moduleDoc.assessmentReviewStatus !== AssessmentReviewStatus.PENDING) {
+      throw new BadRequestException('No pending assessment update to approve');
+    }
+
+    moduleDoc.assessmentReviewStatus = AssessmentReviewStatus.APPROVED;
+    moduleDoc.assessmentRejectionReason = undefined;
+    await moduleDoc.save();
+
+    await this.logActivity(
+      ActivityType.COURSE_CREATED,
+      `Assessment for module "${moduleDoc.title}" has been approved`,
+      adminId,
+      undefined,
+      undefined,
+      { moduleId, moduleTitle: moduleDoc.title },
+      'CheckCircle',
+    );
+
+    return { message: 'Assessment approved', module: moduleDoc };
+  }
+
+  // ── Reject assessment update ──────────────────────────────────────────────
+  async rejectAssessment(moduleId: string, reason: string, adminId?: string) {
+    if (!reason || reason.trim().length === 0) {
+      throw new BadRequestException('Rejection reason is required');
+    }
+
+    const moduleDoc = await this.moduleModel.findById(moduleId);
+    if (!moduleDoc) throw new NotFoundException('Module not found');
+
+    if (moduleDoc.assessmentReviewStatus !== AssessmentReviewStatus.PENDING) {
+      throw new BadRequestException('No pending assessment update to reject');
+    }
+
+    moduleDoc.assessmentReviewStatus = AssessmentReviewStatus.REJECTED;
+    moduleDoc.assessmentRejectionReason = reason;
+    await moduleDoc.save();
+
+    await this.logActivity(
+      ActivityType.COURSE_REJECTED,
+      `Assessment for module "${moduleDoc.title}" has been rejected`,
+      adminId,
+      undefined,
+      undefined,
+      { moduleId, moduleTitle: moduleDoc.title, reason },
+      'XCircle',
+    );
+
+    return { message: 'Assessment rejected', module: moduleDoc };
   }
 
   async getModuleDashboardStats() {

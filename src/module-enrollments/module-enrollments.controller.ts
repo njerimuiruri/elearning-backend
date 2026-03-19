@@ -90,6 +90,25 @@ export class ModuleEnrollmentsController {
     return await this.enrollmentsService.getEnrollmentById(enrollmentId);
   }
 
+  // Track slide progress (engagement: time spent + scroll)
+  @Put(':enrollmentId/lessons/:lessonIndex/slides/:slideIndex/progress')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT)
+  async trackSlideProgress(
+    @Param('enrollmentId') enrollmentId: string,
+    @Param('lessonIndex') lessonIndex: string,
+    @Param('slideIndex') slideIndex: string,
+    @Body() body: { timeSpent: number; scrolledToBottom: boolean },
+  ) {
+    return await this.enrollmentsService.trackSlideProgress(
+      enrollmentId,
+      parseInt(lessonIndex),
+      parseInt(slideIndex),
+      body.timeSpent,
+      body.scrolledToBottom,
+    );
+  }
+
   // Complete lesson
   @Put(':enrollmentId/lessons/:lessonIndex/complete')
   @UseGuards(JwtAuthGuard, RolesGuard)
