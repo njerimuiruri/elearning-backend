@@ -12,6 +12,7 @@ import { CreateStudentDto, BulkCreateStudentsDto } from './dto/student.dto';
 import { CreateInstructorDto } from './dto/instructor.dto';
 import { CreateFellowDto, BulkCreateFellowsDto, BulkSendEmailDto } from './dto/fellow.dto';
 import { CreateModuleDto } from '../modules/dto/create-module.dto';
+import { UpdateModuleDto } from '../modules/dto/update-module.dto';
 
 @Controller('api/admin')
 @ApiTags('Admin')
@@ -526,6 +527,16 @@ export class AdminController {
     @CurrentUser() admin: any,
   ) {
     return this.adminService.rejectModule(id, reason, admin._id?.toString());
+  }
+
+  @Put('modules/:id')
+  @ApiOperation({ summary: 'Update any module — admin can edit regardless of status or ownership' })
+  async updateModuleAsAdmin(
+    @Param('id') id: string,
+    @Body() dto: UpdateModuleDto,
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.updateModuleAsAdmin(id, admin._id?.toString(), dto);
   }
 
   @Delete('modules/:id')

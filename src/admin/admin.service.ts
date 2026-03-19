@@ -15,6 +15,7 @@ import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
 import { Category } from '../schemas/category.schema';
 import { EmailService } from '../common/services/email.service';
 import { CreateModuleDto } from '../modules/dto/create-module.dto';
+import { UpdateModuleDto } from '../modules/dto/update-module.dto';
 
 @Injectable()
 export class AdminService {
@@ -2419,8 +2420,8 @@ export class AdminService {
       throw new NotFoundException('Module not found');
     }
 
-    if (moduleDoc.status !== ModuleStatus.SUBMITTED) {
-      throw new BadRequestException('Only submitted modules can be approved');
+    if (moduleDoc.status === ModuleStatus.PUBLISHED || moduleDoc.status === ModuleStatus.ARCHIVED) {
+      throw new BadRequestException('Module is already published or archived');
     }
 
     moduleDoc.status = ModuleStatus.APPROVED;
@@ -2461,10 +2462,6 @@ export class AdminService {
 
     if (!moduleDoc) {
       throw new NotFoundException('Module not found');
-    }
-
-    if (moduleDoc.status !== ModuleStatus.APPROVED) {
-      throw new BadRequestException('Only approved modules can be published');
     }
 
     moduleDoc.status = ModuleStatus.PUBLISHED;
@@ -2556,7 +2553,8 @@ export class AdminService {
       ...(pendingInstructorEmail && !assignedInstructorId ? { pendingInstructorEmail, pendingInstructorName } : {}),
       createdBy: new Types.ObjectId(adminId),
       createdByRole: 'admin',
-      status: ModuleStatus.DRAFT,
+      status: ModuleStatus.PUBLISHED,
+      publishedAt: new Date(),
     });
 
     const saved = await module.save();
@@ -2569,6 +2567,31 @@ export class AdminService {
       undefined,
       { moduleId: saved._id, moduleTitle: saved.title },
       'BookOpen',
+    );
+
+    return saved;
+  }
+
+  // ── Update a module (admin can edit any module regardless of status/owner) ──
+  async updateModuleAsAdmin(moduleId: string, adminId: string, dto: UpdateModuleDto): Promise<ModuleEntity> {
+    const moduleDoc = await this.moduleModel.findById(moduleId);
+    if (!moduleDoc) throw new NotFoundException('Module not found');
+
+    Object.assign(moduleDoc, dto, {
+      lastEditedBy: new Types.ObjectId(adminId),
+      lastEditedAt: new Date(),
+    });
+
+    const saved = await moduleDoc.save();
+
+    await this.logActivity(
+      ActivityType.COURSE_CREATED,
+      `Admin updated module "${saved.title}"`,
+      adminId,
+      undefined,
+      undefined,
+      { moduleId: saved._id, moduleTitle: saved.title },
+      'Edit',
     );
 
     return saved;

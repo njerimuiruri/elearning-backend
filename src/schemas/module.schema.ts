@@ -134,6 +134,9 @@ export class ModuleLesson {
   @Prop({ type: [String], default: [] })
   learningOutcomes!: string[];
 
+  @Prop()
+  slidesTitle?: string;
+
   // Slides (ordered content blocks)
   @Prop({
     type: [
@@ -360,7 +363,7 @@ export class Question {
 // Final Assessment
 // ─────────────────────────────────────────
 export class ModuleFinalAssessment {
-  @Prop({ required: true })
+  @Prop({ required: false, default: '' })
   title!: string;
 
   @Prop()
@@ -391,7 +394,7 @@ export class Module extends Document {
   @Prop({ required: true, trim: true })
   declare title: string;
 
-  @Prop({ required: true })
+  @Prop({ required: false, default: '' })
   declare description: string;
 
   @Prop()
@@ -406,7 +409,7 @@ export class Module extends Document {
   @Prop({ enum: ModuleStatus, default: ModuleStatus.DRAFT })
   declare status: ModuleStatus;
 
-  @Prop({ type: [Types.ObjectId], ref: 'User', required: true })
+  @Prop({ type: [Types.ObjectId], ref: 'User', default: [] })
   declare instructorIds: Types.ObjectId[];
 
   // ── NEW: Direct lessons (Category → Module → Lesson) ───────────────────
@@ -416,6 +419,7 @@ export class Module extends Document {
         title: { type: String, required: true },
         description: String,
         learningOutcomes: [String],
+        slidesTitle: String,
         slides: [
           {
             type: { type: String, enum: Object.values(SlideType), required: true },
@@ -514,8 +518,17 @@ export class Module extends Document {
   @Prop({ type: [String], default: [] })
   declare prerequisites: string[];
 
-  @Prop({ type: [String], default: [] })
-  declare learningOutcomes: string[];
+  @Prop({ default: '' })
+  declare learningOutcomes: string;
+
+  @Prop({ default: '' })
+  learningObjectives?: string;
+
+  @Prop({ default: '' })
+  moduleTopics?: string;
+
+  @Prop({ default: '' })
+  coreReadingMaterials?: string;
 
   @Prop({ type: [String], default: [] })
   declare targetAudience: string[];

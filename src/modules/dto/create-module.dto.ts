@@ -9,7 +9,7 @@ import {
   IsBoolean,
   IsEmail,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { ModuleLevel, SlideType } from '../../schemas/module.schema';
 
 // ─────────────────────────────────────────
@@ -139,9 +139,14 @@ export class CreateModuleLessonDto {
   description?: string;
 
   @IsOptional()
+  @Transform(({ value }) => value == null ? undefined : value)
   @IsArray()
   @IsString({ each: true })
   learningOutcomes?: string[];
+
+  @IsOptional()
+  @IsString()
+  slidesTitle?: string;
 
   @IsOptional()
   @IsArray()
@@ -329,9 +334,9 @@ export class QuestionDto {
 // Final Assessment DTO
 // ─────────────────────────────────────────
 export class FinalAssessmentDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  title!: string;
+  title?: string;
 
   @IsOptional()
   @IsString()
@@ -341,10 +346,11 @@ export class FinalAssessmentDto {
   @IsString()
   instructions?: string;
 
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => QuestionDto)
-  questions!: QuestionDto[];
+  questions?: QuestionDto[];
 
   @IsOptional()
   @IsNumber()
@@ -367,9 +373,9 @@ export class CreateModuleDto {
   @IsNotEmpty()
   title!: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  description!: string;
+  description?: string;
 
   @IsOptional()
   @IsString()
@@ -423,16 +429,29 @@ export class CreateModuleDto {
   duration?: string;
 
   @IsOptional()
+  @Transform(({ value }) => value == null ? undefined : value)
   @IsArray()
   @IsString({ each: true })
   prerequisites?: string[];
 
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  learningOutcomes?: string[];
+  @IsString()
+  learningOutcomes?: string;
 
   @IsOptional()
+  @IsString()
+  learningObjectives?: string;
+
+  @IsOptional()
+  @IsString()
+  moduleTopics?: string;
+
+  @IsOptional()
+  @IsString()
+  coreReadingMaterials?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => value == null ? undefined : value)
   @IsArray()
   @IsString({ each: true })
   targetAudience?: string[];
