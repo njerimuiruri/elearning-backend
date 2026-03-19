@@ -47,7 +47,7 @@ async function bootstrap() {
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
   
-  app.useGlobalPipes(new ValidationPipe());
+  app.useGlobalPipes(new ValidationPipe({ transform: true }));
   
   // Swagger Configuration
   const config = new DocumentBuilder()

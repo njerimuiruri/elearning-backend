@@ -191,7 +191,10 @@ export class ModulesService {
     const module = await this.moduleModel.findById(moduleId);
     if (!module) throw new NotFoundException('Module not found');
 
-    if (!module.instructorIds.some((id) => id.toString() === instructorId)) {
+    const isAssigned = module.instructorIds.some((id) => id.toString() === instructorId);
+    const isAdminCreatedUnassigned = module.instructorIds.length === 0;
+
+    if (!isAssigned && !isAdminCreatedUnassigned) {
       throw new UnauthorizedException('Not authorized to update this module');
     }
 
@@ -620,10 +623,6 @@ export class ModulesService {
   async publishModule(moduleId: string, _adminId: string): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
     if (!module) throw new NotFoundException('Module not found');
-
-    if (module.status !== ModuleStatus.APPROVED) {
-      throw new BadRequestException('Module must be approved before publishing');
-    }
 
     module.status = ModuleStatus.PUBLISHED;
     module.publishedAt = new Date();
