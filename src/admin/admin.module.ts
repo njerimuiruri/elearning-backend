@@ -17,6 +17,7 @@ import {
   ModuleEnrollment,
   ModuleEnrollmentSchema,
 } from '../schemas/module-enrollment.schema';
+import { Category, CategorySchema } from '../schemas/category.schema';
 import { EmailService } from '../common/services/email.service';
 import { ReminderService } from '../services/reminder.service';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -33,6 +34,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       { name: ActivityLog.name, schema: ActivityLogSchema },
       { name: ModuleSchema.name, schema: ModuleSchemaDefinition },
       { name: ModuleEnrollment.name, schema: ModuleEnrollmentSchema },
+      { name: Category.name, schema: CategorySchema },
     ]),
     NotificationsModule,
   ],

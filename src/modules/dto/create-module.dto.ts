@@ -6,9 +6,11 @@ import {
   IsArray,
   ValidateNested,
   IsNumber,
+  IsBoolean,
+  IsEmail,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ModuleLevel } from '../../schemas/module.schema';
+import { ModuleLevel, SlideType } from '../../schemas/module.schema';
 
 // ─────────────────────────────────────────
 // Shared resource DTO (lesson & module level)
@@ -20,7 +22,7 @@ export class ResourceDto {
 
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name!: string;
 
   @IsOptional()
   @IsString()
@@ -32,16 +34,78 @@ export class ResourceDto {
 }
 
 // ─────────────────────────────────────────
+// Slide DTO
+// ─────────────────────────────────────────
+export class SlideDto {
+  @IsEnum(SlideType)
+  @IsNotEmpty()
+  type!: SlideType;
+
+  @IsOptional()
+  @IsNumber()
+  order?: number;
+
+  // Text / Diagram
+  @IsOptional()
+  @IsString()
+  content?: string;
+
+  // Image
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  imageCaption?: string;
+
+  // Video
+  @IsOptional()
+  @IsString()
+  videoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  videoCaption?: string;
+
+  // Code Snippet
+  @IsOptional()
+  @IsEnum(['python', 'r'])
+  codeLanguage?: string;
+
+  @IsOptional()
+  @IsString()
+  codeInstructions?: string;
+
+  @IsOptional()
+  @IsString()
+  starterCode?: string;
+
+  @IsOptional()
+  @IsString()
+  expectedOutput?: string;
+
+  // Engagement
+  @IsOptional()
+  @IsNumber()
+  minViewingTime?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  scrollTrackingEnabled?: boolean;
+}
+
+// ─────────────────────────────────────────
 // Quiz question DTO (per lesson)
 // ─────────────────────────────────────────
 export class QuizQuestionDto {
   @IsString()
   @IsNotEmpty()
-  question: string;
+  question!: string;
 
   @IsString()
   @IsEnum(['multiple-choice', 'true-false', 'short-answer'])
-  type: string;
+  type!: string;
 
   @IsOptional()
   @IsArray()
@@ -50,7 +114,7 @@ export class QuizQuestionDto {
 
   @IsString()
   @IsNotEmpty()
-  answer: string;
+  answer!: string;
 
   @IsOptional()
   @IsString()
@@ -62,12 +126,65 @@ export class QuizQuestionDto {
 }
 
 // ─────────────────────────────────────────
-// Lesson DTO
+// NEW: Module Lesson DTO (direct child of module)
+// Hierarchy: Module → Lesson → Slides
+// ─────────────────────────────────────────
+export class CreateModuleLessonDto {
+  @IsString()
+  @IsNotEmpty()
+  title!: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  learningOutcomes?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SlideDto)
+  slides?: SlideDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => QuizQuestionDto)
+  assessmentQuiz?: QuizQuestionDto[];
+
+  @IsOptional()
+  @IsNumber()
+  quizPassingScore?: number;
+
+  @IsOptional()
+  @IsNumber()
+  quizMaxAttempts?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResourceDto)
+  lessonResources?: ResourceDto[];
+
+  @IsOptional()
+  @IsNumber()
+  order?: number;
+
+  @IsOptional()
+  @IsString()
+  duration?: string;
+}
+
+// ─────────────────────────────────────────
+// Legacy Lesson DTO (inside topic)
 // ─────────────────────────────────────────
 export class CreateLessonDto {
   @IsString()
   @IsNotEmpty()
-  lessonName: string;
+  lessonName!: string;
 
   @IsOptional()
   @IsString()
@@ -106,12 +223,12 @@ export class CreateLessonDto {
 }
 
 // ─────────────────────────────────────────
-// Topic DTO
+// Topic DTO (legacy)
 // ─────────────────────────────────────────
 export class CreateTopicDto {
   @IsString()
   @IsNotEmpty()
-  topicName: string;
+  topicName!: string;
 
   @IsOptional()
   @IsString()
@@ -143,7 +260,7 @@ export class CreateTopicDto {
 export class CaseStudyLessonDto {
   @IsString()
   @IsEnum(['Introduction', 'Dataset', 'AI Task', 'Key Readings'])
-  lessonType: string;
+  lessonType!: string;
 
   @IsOptional()
   @IsString()
@@ -162,7 +279,7 @@ export class CaseStudyLessonDto {
 export class CreateCaseStudyDto {
   @IsString()
   @IsNotEmpty()
-  caseStudyName: string;
+  caseStudyName!: string;
 
   @IsOptional()
   @IsArray()
@@ -181,14 +298,14 @@ export class CreateCaseStudyDto {
 export class QuestionDto {
   @IsString()
   @IsNotEmpty()
-  text: string;
+  text!: string;
 
   @IsString()
   @IsEnum(['multiple-choice', 'essay', 'true-false'])
-  type: string;
+  type!: string;
 
   @IsNumber()
-  points: number;
+  points!: number;
 
   @IsOptional()
   @IsArray()
@@ -214,7 +331,7 @@ export class QuestionDto {
 export class FinalAssessmentDto {
   @IsString()
   @IsNotEmpty()
-  title: string;
+  title!: string;
 
   @IsOptional()
   @IsString()
@@ -227,7 +344,7 @@ export class FinalAssessmentDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => QuestionDto)
-  questions: QuestionDto[];
+  questions!: QuestionDto[];
 
   @IsOptional()
   @IsNumber()
@@ -248,11 +365,11 @@ export class FinalAssessmentDto {
 export class CreateModuleDto {
   @IsString()
   @IsNotEmpty()
-  title: string;
+  title!: string;
 
   @IsString()
   @IsNotEmpty()
-  description: string; // introduction
+  description!: string;
 
   @IsOptional()
   @IsString()
@@ -260,12 +377,20 @@ export class CreateModuleDto {
 
   @IsString()
   @IsNotEmpty()
-  categoryId: string;
+  categoryId!: string;
 
   @IsEnum(ModuleLevel)
   @IsNotEmpty()
-  level: ModuleLevel;
+  level!: ModuleLevel;
 
+  // New: direct lessons
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateModuleLessonDto)
+  lessons?: CreateModuleLessonDto[];
+
+  // Legacy: topics
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -311,4 +436,20 @@ export class CreateModuleDto {
   @IsArray()
   @IsString({ each: true })
   targetAudience?: string[];
+
+  // ── Admin-only: instructor assignment ─────────────────────────────────────
+  /** ID of an existing instructor to assign as module owner (admin use only) */
+  @IsOptional()
+  @IsString()
+  assignedInstructorId?: string;
+
+  /** Email of a not-yet-registered instructor (admin use only) */
+  @IsOptional()
+  @IsEmail()
+  pendingInstructorEmail?: string;
+
+  /** Display name for the pending instructor (admin use only) */
+  @IsOptional()
+  @IsString()
+  pendingInstructorName?: string;
 }

@@ -52,10 +52,13 @@ class FellowData {
 
 @Schema({ timestamps: true })
 export class User extends Document {
-  @Prop({ required: true, trim: true })
+  @Prop({ required: false, trim: true, default: '' })
+  fullName: string;
+
+  @Prop({ required: false, trim: true, default: '' })
   firstName: string;
 
-  @Prop({ required: true, trim: true })
+  @Prop({ required: false, trim: true, default: '' })
   lastName: string;
 
   @Prop({ required: true, unique: true, lowercase: true, trim: true })

@@ -16,6 +16,70 @@ export enum ModuleLevel {
   ADVANCED = 'advanced',
 }
 
+export enum AssessmentReviewStatus {
+  NONE = 'none',
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+}
+
+export enum SlideType {
+  TEXT = 'text',
+  IMAGE = 'image',
+  VIDEO = 'video',
+  DIAGRAM = 'diagram',
+  CODE_SNIPPET = 'codeSnippet',
+}
+
+// ─────────────────────────────────────────
+// Slide (belongs inside a Lesson)
+// ─────────────────────────────────────────
+export class Slide {
+  @Prop({ required: true, enum: Object.values(SlideType) })
+  type!: SlideType;
+
+  @Prop({ default: 0 })
+  order!: number;
+
+  // Text / Diagram content (HTML/rich text)
+  @Prop()
+  content?: string;
+
+  // Image
+  @Prop()
+  imageUrl?: string;
+
+  @Prop()
+  imageCaption?: string;
+
+  // Video
+  @Prop()
+  videoUrl?: string;
+
+  @Prop()
+  videoCaption?: string;
+
+  // Code Snippet (interactive)
+  @Prop({ enum: ['python', 'r'] })
+  codeLanguage?: string;
+
+  @Prop()
+  codeInstructions?: string;
+
+  @Prop()
+  starterCode?: string;
+
+  @Prop()
+  expectedOutput?: string;
+
+  // Engagement settings
+  @Prop({ default: 15 })
+  minViewingTime!: number; // seconds
+
+  @Prop({ default: false })
+  scrollTrackingEnabled!: boolean;
+}
+
 // ─────────────────────────────────────────
 // Quiz Question (per lesson assessment)
 // ─────────────────────────────────────────
@@ -57,7 +121,80 @@ export class LessonResource {
 }
 
 // ─────────────────────────────────────────
-// Lesson (belongs inside a Topic)
+// ModuleLesson — direct child of a Module
+// Structure: Category → Module → Lesson → Slides
+// ─────────────────────────────────────────
+export class ModuleLesson {
+  @Prop({ required: true })
+  title!: string;
+
+  @Prop()
+  description?: string;
+
+  @Prop({ type: [String], default: [] })
+  learningOutcomes!: string[];
+
+  // Slides (ordered content blocks)
+  @Prop({
+    type: [
+      {
+        type: { type: String, enum: Object.values(SlideType), required: true },
+        order: { type: Number, default: 0 },
+        content: String,
+        imageUrl: String,
+        imageCaption: String,
+        videoUrl: String,
+        videoCaption: String,
+        codeLanguage: { type: String, enum: ['python', 'r'] },
+        codeInstructions: String,
+        starterCode: String,
+        expectedOutput: String,
+        minViewingTime: { type: Number, default: 15 },
+        scrollTrackingEnabled: { type: Boolean, default: false },
+      },
+    ],
+    default: [],
+  })
+  slides!: Slide[];
+
+  // Lesson assessment (quiz at end of lesson)
+  @Prop({
+    type: [
+      {
+        question: String,
+        type: { type: String, enum: ['multiple-choice', 'true-false', 'short-answer'] },
+        options: [String],
+        answer: String,
+        explanation: String,
+        points: { type: Number, default: 1 },
+      },
+    ],
+    default: [],
+  })
+  assessmentQuiz!: QuizQuestion[];
+
+  @Prop({ default: 70 })
+  quizPassingScore!: number;
+
+  @Prop({ default: 3 })
+  quizMaxAttempts!: number;
+
+  @Prop({
+    type: [{ url: String, name: { type: String, default: 'Resource' }, description: String, fileType: String }],
+    default: [],
+  })
+  lessonResources!: LessonResource[];
+
+  @Prop({ default: 0 })
+  order!: number;
+
+  @Prop()
+  duration?: string;
+}
+
+// ─────────────────────────────────────────
+// Legacy: Lesson (belongs inside a Topic)
+// Kept for backward compatibility
 // ─────────────────────────────────────────
 export class Lesson {
   @Prop({ required: true })
@@ -122,7 +259,8 @@ export class Lesson {
 }
 
 // ─────────────────────────────────────────
-// Topic (groups lessons)
+// Legacy: Topic (groups lessons)
+// Kept for backward compatibility
 // ─────────────────────────────────────────
 export class Topic {
   @Prop({ required: true })
@@ -246,6 +384,7 @@ export class ModuleFinalAssessment {
 
 // ─────────────────────────────────────────
 // Module (top level)
+// Hierarchy: Category → Module → Lesson → Slide
 // ─────────────────────────────────────────
 @Schema({ timestamps: true })
 export class Module extends Document {
@@ -270,24 +409,102 @@ export class Module extends Document {
   @Prop({ type: [Types.ObjectId], ref: 'User', required: true })
   declare instructorIds: Types.ObjectId[];
 
-  // ── Content ────────────────────────────
+  // ── NEW: Direct lessons (Category → Module → Lesson) ───────────────────
+  @Prop({
+    type: [
+      {
+        title: { type: String, required: true },
+        description: String,
+        learningOutcomes: [String],
+        slides: [
+          {
+            type: { type: String, enum: Object.values(SlideType), required: true },
+            order: { type: Number, default: 0 },
+            content: String,
+            imageUrl: String,
+            imageCaption: String,
+            videoUrl: String,
+            videoCaption: String,
+            codeLanguage: { type: String, enum: ['python', 'r'] },
+            codeInstructions: String,
+            starterCode: String,
+            expectedOutput: String,
+            minViewingTime: { type: Number, default: 15 },
+            scrollTrackingEnabled: { type: Boolean, default: false },
+          },
+        ],
+        assessmentQuiz: [
+          {
+            question: String,
+            type: { type: String, enum: ['multiple-choice', 'true-false', 'short-answer'] },
+            options: [String],
+            answer: String,
+            explanation: String,
+            points: { type: Number, default: 1 },
+          },
+        ],
+        quizPassingScore: { type: Number, default: 70 },
+        quizMaxAttempts: { type: Number, default: 3 },
+        lessonResources: [
+          { url: String, name: { type: String, default: 'Resource' }, description: String, fileType: String },
+        ],
+        order: { type: Number, default: 0 },
+        duration: String,
+      },
+    ],
+    default: [],
+  })
+  declare lessons: ModuleLesson[];
+
+  // ── LEGACY: Topics → Lessons (kept for backward compat) ────────────────
   @Prop({ type: [Topic], default: [] })
   declare topics: Topic[];
 
   @Prop({ type: [CaseStudy], default: [] })
   declare caseStudies: CaseStudy[];
 
+  // ── Creator tracking ────────────────────────────────────────────────────
+  /** The user (admin or instructor) who actually created the module record */
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  createdBy?: Types.ObjectId;
+
+  /** 'admin' | 'instructor' — who created this module */
+  @Prop({ type: String, enum: ['admin', 'instructor'], default: 'instructor' })
+  createdByRole?: string;
+
+  /**
+   * Email of an instructor who does not yet have a User account.
+   * When they register/are approved, their ObjectId is pushed into instructorIds
+   * and this field is cleared.
+   */
+  @Prop()
+  pendingInstructorEmail?: string;
+
+  /** Display name for the pending (unregistered) instructor */
+  @Prop()
+  pendingInstructorName?: string;
+
   @Prop({ type: ModuleFinalAssessment, required: false })
   finalAssessment?: ModuleFinalAssessment;
 
-  // ── Module-level resources ─────────────
+  // ── Assessment review workflow ─────────────────────────────────────────
+  @Prop({ enum: AssessmentReviewStatus, default: AssessmentReviewStatus.NONE })
+  declare assessmentReviewStatus: AssessmentReviewStatus;
+
+  @Prop()
+  assessmentUpdatedAt?: Date;
+
+  @Prop()
+  assessmentRejectionReason?: string;
+
+  // ── Module-level resources ─────────────────────────────────────────────
   @Prop({
     type: [{ url: String, name: String, description: String, fileType: String }],
     default: [],
   })
   declare moduleResources: ModuleResource[];
 
-  // ── Metadata ───────────────────────────
+  // ── Metadata ───────────────────────────────────────────────────────────
   @Prop()
   bannerUrl?: string;
 
@@ -303,7 +520,7 @@ export class Module extends Document {
   @Prop({ type: [String], default: [] })
   declare targetAudience: string[];
 
-  // ── Approval workflow ──────────────────
+  // ── Approval workflow ──────────────────────────────────────────────────
   @Prop({ type: Types.ObjectId, ref: 'User' })
   approvedBy?: Types.ObjectId;
 
@@ -319,7 +536,7 @@ export class Module extends Document {
   @Prop()
   publishedAt?: Date;
 
-  // ── Analytics ─────────────────────────
+  // ── Analytics ─────────────────────────────────────────────────────────
   @Prop({ default: 0 })
   declare enrollmentCount: number;
 
@@ -335,7 +552,7 @@ export class Module extends Document {
   @Prop({ default: 0 })
   declare totalRatings: number;
 
-  // ── Lock management ────────────────────
+  // ── Lock management ────────────────────────────────────────────────────
   @Prop({ type: Types.ObjectId, ref: 'User' })
   lockedBy?: Types.ObjectId;
 

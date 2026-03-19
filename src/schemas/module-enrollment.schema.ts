@@ -2,6 +2,24 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 import * as crypto from 'crypto';
 
+// Per-slide progress tracking
+export class SlideProgress {
+  @Prop({ required: true })
+  slideIndex: number;
+
+  @Prop({ default: false })
+  isCompleted: boolean;
+
+  @Prop({ default: 0 })
+  timeSpent: number; // seconds viewed
+
+  @Prop({ default: false })
+  scrolledToBottom: boolean;
+
+  @Prop()
+  completedAt?: Date;
+}
+
 // Lesson progress tracking
 export class LessonProgress {
   @Prop({ required: true })
@@ -12,6 +30,24 @@ export class LessonProgress {
 
   @Prop()
   completedAt?: Date;
+
+  // Slide-level tracking
+  @Prop({
+    type: [
+      {
+        slideIndex: { type: Number, required: true },
+        isCompleted: { type: Boolean, default: false },
+        timeSpent: { type: Number, default: 0 },
+        scrolledToBottom: { type: Boolean, default: false },
+        completedAt: Date,
+      },
+    ],
+    default: [],
+  })
+  slideProgress: SlideProgress[];
+
+  @Prop({ default: 0 })
+  completedSlides: number;
 
   // If lesson has assessment
   @Prop({ default: 0 })

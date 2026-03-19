@@ -12,6 +12,10 @@ import { Type } from 'class-transformer';
 export class CreateFellowDto {
   @IsString()
   @IsOptional()
+  fullName?: string;
+
+  @IsString()
+  @IsOptional()
   firstName?: string;
 
   @IsString()

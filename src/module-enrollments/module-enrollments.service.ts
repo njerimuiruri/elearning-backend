@@ -145,8 +145,10 @@ export class ModuleEnrollmentsService {
       category._id.toString(),
     );
 
-    // Flatten all lessons across all topics for progress tracking
-    const allLessons = (module.topics || []).flatMap((t: any) => t.lessons || []);
+    // Resolve lessons — prefer direct lessons[], fall back to topics
+    const allLessons = (module.lessons && module.lessons.length > 0)
+      ? [...module.lessons].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+      : (module.topics || []).flatMap((t: any) => t.lessons || []);
 
     // Create enrollment
     enrollment = new this.enrollmentModel({
@@ -221,6 +223,103 @@ export class ModuleEnrollmentsService {
           select: 'firstName lastName name price',
         },
       });
+  }
+
+  // ── Track slide progress (engagement: time + scroll) ──────────────────────
+  async trackSlideProgress(
+    enrollmentId: string,
+    lessonIndex: number,
+    slideIndex: number,
+    timeSpent: number,
+    scrolledToBottom: boolean,
+  ): Promise<{ enrollment: ModuleEnrollment; slideCompleted: boolean; lessonUnlocked: boolean }> {
+    if (!Types.ObjectId.isValid(enrollmentId)) {
+      throw new BadRequestException('Invalid enrollment ID');
+    }
+
+    const enrollment = await this.enrollmentModel.findById(enrollmentId).populate('moduleId');
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+
+    const module = enrollment.moduleId as any;
+
+    // Resolve lessons
+    const allLessons: any[] = (module.lessons && module.lessons.length > 0)
+      ? [...module.lessons].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+      : (module.topics || []).flatMap((t: any) => t.lessons || []);
+
+    if (lessonIndex >= allLessons.length) throw new NotFoundException('Lesson not found');
+
+    const lesson = allLessons[lessonIndex];
+    const slides = lesson.slides || [];
+
+    if (slideIndex >= slides.length && slides.length > 0) {
+      throw new NotFoundException('Slide not found');
+    }
+
+    const slide = slides[slideIndex] || null;
+    const minTime = slide?.minViewingTime ?? 15;
+    const needsScroll = slide?.scrollTrackingEnabled ?? false;
+
+    // Find or create lesson progress entry
+    let lessonProgress = enrollment.lessonProgress.find((lp) => lp.lessonIndex === lessonIndex);
+    if (!lessonProgress) {
+      // If missing, this is an older enrollment — add it
+      (enrollment.lessonProgress as any).push({
+        lessonIndex,
+        isCompleted: false,
+        slideProgress: [],
+        completedSlides: 0,
+        assessmentAttempts: 0,
+        assessmentPassed: false,
+        lastScore: 0,
+      });
+      lessonProgress = enrollment.lessonProgress.find((lp) => lp.lessonIndex === lessonIndex)!;
+    }
+
+    // Find or create slide progress entry
+    if (!lessonProgress.slideProgress) {
+      (lessonProgress as any).slideProgress = [];
+    }
+
+    let slideProgress = lessonProgress.slideProgress.find((sp) => sp.slideIndex === slideIndex);
+    if (!slideProgress) {
+      (lessonProgress.slideProgress as any).push({
+        slideIndex,
+        isCompleted: false,
+        timeSpent: 0,
+        scrolledToBottom: false,
+      });
+      slideProgress = lessonProgress.slideProgress.find((sp) => sp.slideIndex === slideIndex)!;
+    }
+
+    // Accumulate time
+    slideProgress.timeSpent = (slideProgress.timeSpent || 0) + timeSpent;
+    if (scrolledToBottom) slideProgress.scrolledToBottom = true;
+
+    // Check if slide is now complete
+    const timeRequirementMet = slideProgress.timeSpent >= minTime;
+    const scrollRequirementMet = !needsScroll || slideProgress.scrolledToBottom;
+    const slideCompleted = timeRequirementMet && scrollRequirementMet;
+
+    if (slideCompleted && !slideProgress.isCompleted) {
+      slideProgress.isCompleted = true;
+      slideProgress.completedAt = new Date();
+
+      // Recount completed slides
+      (lessonProgress as any).completedSlides = lessonProgress.slideProgress.filter((sp) => sp.isCompleted).length;
+    }
+
+    // Check if all slides in this lesson are done (lessonUnlocked = ready for assessment)
+    const totalSlides = slides.length;
+    const completedSlides = lessonProgress.slideProgress.filter((sp) => sp.isCompleted).length;
+    const lessonUnlocked = totalSlides === 0 || completedSlides >= totalSlides;
+
+    enrollment.lastAccessedAt = new Date();
+    enrollment.lastAccessedLesson = lessonIndex;
+
+    await enrollment.save();
+
+    return { enrollment, slideCompleted, lessonUnlocked };
   }
 
   // Complete lesson
@@ -341,8 +440,10 @@ export class ModuleEnrollmentsService {
 
     const module = enrollment.moduleId as any;
 
-    // Flatten all lessons across topics and look up by flat index
-    const allLessons: any[] = (module.topics || []).flatMap((t: any) => t.lessons || []);
+    // Resolve lessons — prefer direct lessons[], fall back to topics
+    const allLessons: any[] = (module.lessons && module.lessons.length > 0)
+      ? [...module.lessons].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
+      : (module.topics || []).flatMap((t: any) => t.lessons || []);
 
     if (lessonIndex >= allLessons.length) {
       throw new NotFoundException('Lesson not found');
