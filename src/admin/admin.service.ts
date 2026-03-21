@@ -2597,6 +2597,44 @@ export class AdminService {
     return saved;
   }
 
+  // ── Add a lesson to any module (admin, bypasses ownership check) ──────────
+  async addModuleLessonAsAdmin(moduleId: string, adminId: string, lessonData: any): Promise<ModuleEntity> {
+    const moduleDoc = await this.moduleModel.findById(moduleId);
+    if (!moduleDoc) throw new NotFoundException('Module not found');
+
+    const lesson: any = {
+      ...lessonData,
+      order: lessonData.order ?? moduleDoc.lessons.length,
+      slides: (lessonData.slides || []).map((s: any, i: number) => ({
+        ...s,
+        order: s.order ?? i,
+        minViewingTime: s.minViewingTime ?? 15,
+        scrollTrackingEnabled: s.scrollTrackingEnabled ?? false,
+      })),
+    };
+
+    moduleDoc.lessons.push(lesson);
+    moduleDoc.lastEditedBy = new Types.ObjectId(adminId);
+    moduleDoc.lastEditedAt = new Date();
+
+    return await moduleDoc.save();
+  }
+
+  // ── Delete a lesson from any module (admin, bypasses ownership check) ─────
+  async deleteModuleLessonAsAdmin(moduleId: string, lessonIndex: number, adminId: string): Promise<ModuleEntity> {
+    const moduleDoc = await this.moduleModel.findById(moduleId);
+    if (!moduleDoc) throw new NotFoundException('Module not found');
+
+    if (lessonIndex >= moduleDoc.lessons.length) throw new NotFoundException('Lesson not found');
+
+    moduleDoc.lessons.splice(lessonIndex, 1);
+    moduleDoc.lessons.forEach((l: any, i: number) => { l.order = i; });
+    moduleDoc.lastEditedBy = new Types.ObjectId(adminId);
+    moduleDoc.lastEditedAt = new Date();
+
+    return await moduleDoc.save();
+  }
+
   // ── Delete a module (admin can remove any module regardless of status) ────
   async deleteModuleAsAdmin(moduleId: string, adminId: string): Promise<void> {
     const moduleDoc = await this.moduleModel.findById(moduleId);
