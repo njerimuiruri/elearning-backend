@@ -539,6 +539,26 @@ export class AdminController {
     return this.adminService.updateModuleAsAdmin(id, admin._id?.toString(), dto);
   }
 
+  @Post('modules/:id/lessons')
+  @ApiOperation({ summary: 'Add a lesson to any module — admin can add lessons regardless of status or ownership' })
+  async addModuleLessonAsAdmin(
+    @Param('id') id: string,
+    @Body() lessonData: any,
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.addModuleLessonAsAdmin(id, admin._id?.toString(), lessonData);
+  }
+
+  @Delete('modules/:id/lessons/:lessonIndex')
+  @ApiOperation({ summary: 'Delete a lesson from any module — admin can remove lessons regardless of status or ownership' })
+  async deleteModuleLessonAsAdmin(
+    @Param('id') id: string,
+    @Param('lessonIndex') lessonIndex: string,
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.deleteModuleLessonAsAdmin(id, parseInt(lessonIndex), admin._id?.toString());
+  }
+
   @Delete('modules/:id')
   @ApiOperation({ summary: 'Delete (deactivate) a module — admin can remove any module regardless of status' })
   async deleteModule(
