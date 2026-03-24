@@ -72,6 +72,9 @@ export class Slide {
   @Prop()
   expectedOutput?: string;
 
+  @Prop()
+  sectionTitle?: string;
+
   // Engagement settings
   @Prop({ default: 15 })
   minViewingTime!: number; // seconds
@@ -152,6 +155,7 @@ export class ModuleLesson {
         codeInstructions: String,
         starterCode: String,
         expectedOutput: String,
+        sectionTitle: String,
         minViewingTime: { type: Number, default: 15 },
         scrollTrackingEnabled: { type: Boolean, default: false },
       },
@@ -433,6 +437,7 @@ export class Module extends Document {
             codeInstructions: String,
             starterCode: String,
             expectedOutput: String,
+            sectionTitle: String,
             minViewingTime: { type: Number, default: 15 },
             scrollTrackingEnabled: { type: Boolean, default: false },
           },

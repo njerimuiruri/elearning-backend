@@ -26,6 +26,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { DiscussionsModule } from './discussions/discussions.module';
 import { BulkMessagingModule } from './bulk-messaging/bulk-messaging.module';
 import { ModuleRatingsModule } from './module-ratings/module-ratings.module';
+import { DraftsModule } from './drafts/drafts.module';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { ModuleRatingsModule } from './module-ratings/module-ratings.module';
     DiscussionsModule,
     BulkMessagingModule,
     ModuleRatingsModule,
+    DraftsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
