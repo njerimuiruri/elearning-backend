@@ -241,6 +241,7 @@ export class AuthController {
         emailVerified: user.emailVerified,
         lastLogin: user.lastLogin,
         createdAt: user.createdAt,
+        instructorStatus: user.instructorStatus,
       },
     };
   }
