@@ -209,10 +209,11 @@ export class ModuleEnrollment extends Document {
   updatedAt: Date;
 }
 
-export const ModuleEnrollmentSchema = SchemaFactory.createForClass(ModuleEnrollment);
+export const ModuleEnrollmentSchema =
+  SchemaFactory.createForClass(ModuleEnrollment);
 
 // Generate certificate public ID when certificate is earned
-ModuleEnrollmentSchema.pre('save', function(next) {
+ModuleEnrollmentSchema.pre('save', function (next) {
   if (this.certificateEarned && !this.certificatePublicId) {
     this.certificatePublicId = crypto.randomUUID();
   }
@@ -224,8 +225,11 @@ ModuleEnrollmentSchema.index({ studentId: 1, moduleId: 1 }, { unique: true });
 ModuleEnrollmentSchema.index({ moduleId: 1 });
 ModuleEnrollmentSchema.index({ studentId: 1 });
 ModuleEnrollmentSchema.index({ isCompleted: 1 });
-ModuleEnrollmentSchema.index({ certificatePublicId: 1 }, {
-  unique: true,
-  sparse: true,
-  partialFilterExpression: { certificatePublicId: { $ne: null } }
-});
+ModuleEnrollmentSchema.index(
+  { certificatePublicId: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: { certificatePublicId: { $ne: null } },
+  },
+);

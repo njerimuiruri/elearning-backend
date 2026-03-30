@@ -10,7 +10,10 @@ import {
   Request,
 } from '@nestjs/common';
 import { ModuleEnrollmentsService } from './module-enrollments.service';
-import { SubmitFinalAssessmentDto, SubmitLessonAssessmentDto } from './dto/submit-assessment.dto';
+import {
+  SubmitFinalAssessmentDto,
+  SubmitLessonAssessmentDto,
+} from './dto/submit-assessment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
@@ -18,9 +21,7 @@ import { UserRole } from '../schemas/user.schema';
 
 @Controller('module-enrollments')
 export class ModuleEnrollmentsController {
-  constructor(
-    private readonly enrollmentsService: ModuleEnrollmentsService,
-  ) {}
+  constructor(private readonly enrollmentsService: ModuleEnrollmentsService) {}
 
   // Enroll in module
   @Post('modules/:moduleId/enroll')
@@ -79,7 +80,9 @@ export class ModuleEnrollmentsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR)
   async getInstructorModules(@Request() req) {
-    const data = await this.enrollmentsService.getInstructorModulesList(req.user.id);
+    const data = await this.enrollmentsService.getInstructorModulesList(
+      req.user.id,
+    );
     return { success: true, data };
   }
 

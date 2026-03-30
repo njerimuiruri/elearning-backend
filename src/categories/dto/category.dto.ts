@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsBoolean, IsEnum, IsArray, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  IsEnum,
+  IsArray,
+  IsNumber,
+} from 'class-validator';
 import { AccessType } from '../../schemas/category.schema';
 
 export class CreateCategoryDto {

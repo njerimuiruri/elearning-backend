@@ -12,8 +12,16 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  FileFieldsInterceptor,
+  FileInterceptor,
+} from '@nestjs/platform-express';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { diskStorage } from 'multer';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
@@ -47,11 +55,14 @@ export class AuthController {
 
   @Post('login')
   @ApiOperation({ summary: 'Login user' })
-  @ApiResponse({ status: 200, description: 'Login successful, returns JWT token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Login successful, returns JWT token',
+  })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() loginDto: LoginDto, @Res() response: Response) {
     const result = await this.authService.login(loginDto);
-    
+
     // Set HTTP-only cookie with 24-hour expiration
     response.cookie('token', result.token, {
       httpOnly: true,
@@ -78,11 +89,16 @@ export class AuthController {
   }
 
   @Post('google')
-  @ApiOperation({ summary: 'Login or register with Google for students and instructors' })
-  @ApiResponse({ status: 200, description: 'Google login successful, returns JWT token' })
+  @ApiOperation({
+    summary: 'Login or register with Google for students and instructors',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Google login successful, returns JWT token',
+  })
   async googleLogin(@Body() body: GoogleLoginDto, @Res() response: Response) {
     const result = await this.authService.googleLogin(body);
-    
+
     // Set HTTP-only cookie with 24-hour expiration
     response.cookie('token', result.token, {
       httpOnly: true,
@@ -119,9 +135,11 @@ export class AuthController {
     response.clearCookie('user', { path: '/' });
 
     // Update last logout time asynchronously (non-blocking)
-    this.usersService.updateUser(user._id.toString(), {
-      lastLogout: new Date(),
-    } as any).catch(err => console.error('Failed to update last logout:', err));
+    this.usersService
+      .updateUser(user._id.toString(), {
+        lastLogout: new Date(),
+      } as any)
+      .catch((err) => console.error('Failed to update last logout:', err));
 
     return response.json({
       message: 'Logged out successfully',
@@ -141,21 +159,30 @@ export class AuthController {
           destination: (req, file, cb) => {
             let dest = uploadsDir;
             if (file.fieldname === 'cv') dest = uploadsCvsDir;
-            else if (file.fieldname === 'profilePicture') dest = uploadsProfilesDir;
+            else if (file.fieldname === 'profilePicture')
+              dest = uploadsProfilesDir;
             cb(null, dest);
           },
           filename: (req, file, cb) => {
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+            const uniqueSuffix =
+              Date.now() + '-' + Math.round(Math.random() * 1e9);
             const ext = path.extname(file.originalname);
-            
+
             if (file.fieldname === 'cv') {
               // For CV, include first and last name from the request body
-              const firstName = (req.body.firstName || 'instructor').replace(/\s+/g, '-').toLowerCase();
-              const lastName = (req.body.lastName || 'cv').replace(/\s+/g, '-').toLowerCase();
+              const firstName = (req.body.firstName || 'instructor')
+                .replace(/\s+/g, '-')
+                .toLowerCase();
+              const lastName = (req.body.lastName || 'cv')
+                .replace(/\s+/g, '-')
+                .toLowerCase();
               cb(null, `cv-${firstName}-${lastName}-${uniqueSuffix}${ext}`);
             } else {
               // For profile pictures, keep the existing format
-              const base = file.fieldname === 'profilePicture' ? 'profile' : file.fieldname;
+              const base =
+                file.fieldname === 'profilePicture'
+                  ? 'profile'
+                  : file.fieldname;
               cb(null, `${base}-${uniqueSuffix}${ext}`);
             }
           },
@@ -165,7 +192,9 @@ export class AuthController {
           if (file.fieldname === 'profilePicture') {
             if (!file.mimetype.match(/\/(jpg|jpeg|png|gif)$/)) {
               return cb(
-                new BadRequestException('Only image files are allowed for profile picture'),
+                new BadRequestException(
+                  'Only image files are allowed for profile picture',
+                ),
                 false,
               );
             }
@@ -173,7 +202,9 @@ export class AuthController {
             // Only accept PDF files for CV
             if (file.mimetype !== 'application/pdf') {
               return cb(
-                new BadRequestException('Only PDF files are allowed for CV. Please convert your document to PDF format.'),
+                new BadRequestException(
+                  'Only PDF files are allowed for CV. Please convert your document to PDF format.',
+                ),
                 false,
               );
             }
@@ -201,7 +232,9 @@ export class AuthController {
       };
 
       if (!instructorDto.cvUrl) {
-        throw new BadRequestException('CV is required for instructor registration');
+        throw new BadRequestException(
+          'CV is required for instructor registration',
+        );
       }
 
       return this.authService.registerInstructor(instructorDto);
@@ -287,7 +320,8 @@ export class AuthController {
       storage: diskStorage({
         destination: uploadsProfilesDir,
         filename: (req, file, cb) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          const uniqueSuffix =
+            Date.now() + '-' + Math.round(Math.random() * 1e9);
           const ext = path.extname(file.originalname);
           cb(null, `profile-${uniqueSuffix}${ext}`);
         },
@@ -392,7 +426,11 @@ export class AuthController {
     @Body('password') password: string,
     @Body('confirmPassword') confirmPassword: string,
   ) {
-    return this.authService.setInitialPassword(token, password, confirmPassword);
+    return this.authService.setInitialPassword(
+      token,
+      password,
+      confirmPassword,
+    );
   }
 
   @Put('change-password')
@@ -403,6 +441,11 @@ export class AuthController {
     @Body('newPassword') newPassword: string,
     @Body('confirmPassword') confirmPassword: string,
   ) {
-    return this.authService.changePassword(user._id.toString(), currentPassword, newPassword, confirmPassword);
+    return this.authService.changePassword(
+      user._id.toString(),
+      currentPassword,
+      newPassword,
+      confirmPassword,
+    );
   }
 }

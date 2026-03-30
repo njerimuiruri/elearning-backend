@@ -26,7 +26,9 @@ export async function up(db: any) {
       },
     );
 
-    console.log(`✓ Added purchasedCategories to ${updateAllUsersResult.modifiedCount} users`);
+    console.log(
+      `✓ Added purchasedCategories to ${updateAllUsersResult.modifiedCount} users`,
+    );
 
     // Initialize assignedCategories for existing fellows
     const updateFellowsResult = await db.collection('users').updateMany(
@@ -41,14 +43,18 @@ export async function up(db: any) {
       },
     );
 
-    console.log(`✓ Initialized assignedCategories for ${updateFellowsResult.modifiedCount} fellows`);
+    console.log(
+      `✓ Initialized assignedCategories for ${updateFellowsResult.modifiedCount} fellows`,
+    );
 
     // Create index on purchasedCategories for faster queries
     await db.collection('users').createIndex({ purchasedCategories: 1 });
     console.log('✓ Created index on purchasedCategories');
 
     // Create index on fellowData.assignedCategories for faster queries
-    await db.collection('users').createIndex({ 'fellowData.assignedCategories': 1 });
+    await db
+      .collection('users')
+      .createIndex({ 'fellowData.assignedCategories': 1 });
     console.log('✓ Created index on fellowData.assignedCategories');
 
     console.log('✅ Migration 001-add-category-access completed successfully');
@@ -104,11 +110,15 @@ export async function down(db: any) {
 
 // Script to run migration directly
 if (require.main === module) {
-  const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/elearning';
+  const MONGODB_URI =
+    process.env.MONGODB_URI || 'mongodb://localhost:27017/elearning';
   const DB_NAME = process.env.DB_NAME || 'elearning';
 
   console.log('Starting migration...');
-  console.log('MongoDB URI:', MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@')); // Hide password in logs
+  console.log(
+    'MongoDB URI:',
+    MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@'),
+  ); // Hide password in logs
 
   async function runMigration() {
     const client = new MongoClient(MONGODB_URI);

@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { JwtService } from '@nestjs/jwt';
@@ -21,7 +26,8 @@ export class AuthService {
 
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
-    @InjectModel(PasswordReset.name) private passwordResetModel: Model<PasswordReset>,
+    @InjectModel(PasswordReset.name)
+    private passwordResetModel: Model<PasswordReset>,
     @InjectModel(ActivityLog.name) private activityLogModel: Model<ActivityLog>,
     private jwtService: JwtService,
     private emailService: EmailService,
@@ -54,7 +60,16 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto) {
-    const { email, password, firstName, lastName, country, organization, otherOrganization, role } = registerDto;
+    const {
+      email,
+      password,
+      firstName,
+      lastName,
+      country,
+      organization,
+      otherOrganization,
+      role,
+    } = registerDto;
 
     // Check if user exists
     const existingUser = await this.userModel.findOne({ email });
@@ -74,7 +89,8 @@ export class AuthService {
       country,
       organization: organization === 'Other' ? otherOrganization : organization,
       role: role || UserRole.STUDENT,
-      instructorStatus: role === UserRole.INSTRUCTOR ? InstructorStatus.PENDING : undefined,
+      instructorStatus:
+        role === UserRole.INSTRUCTOR ? InstructorStatus.PENDING : undefined,
     });
 
     // Log the registration activity
@@ -171,10 +187,10 @@ export class AuthService {
       ActivityType.USER_REGISTRATION,
       `${firstName} ${lastName} registered as instructor (pending approval)`,
       instructor._id.toString(),
-      { 
-        email, 
-        role: UserRole.INSTRUCTOR, 
-        institution, 
+      {
+        email,
+        role: UserRole.INSTRUCTOR,
+        institution,
         country,
         status: InstructorStatus.PENDING,
       },
@@ -184,14 +200,14 @@ export class AuthService {
     // Send notification to admin about pending instructor registration
     try {
       const adminUsers = await this.userModel.find({ role: UserRole.ADMIN });
-      const adminEmails = adminUsers.map(admin => admin.email);
-      
+      const adminEmails = adminUsers.map((admin) => admin.email);
+
       // Also add the default admin email to ensure notifications are received
       const defaultAdminEmail = 'faith.muiruri@strathmore.edu';
       if (!adminEmails.includes(defaultAdminEmail)) {
         adminEmails.push(defaultAdminEmail);
       }
-      
+
       for (const adminEmail of adminEmails) {
         await this.emailService.sendInstructorRegistrationNotificationToAdmin(
           adminEmail,
@@ -209,7 +225,8 @@ export class AuthService {
 
     return {
       user: this.sanitizeUser(instructor),
-      message: 'Instructor registration submitted for approval. You will be notified once your account is approved.',
+      message:
+        'Instructor registration submitted for approval. You will be notified once your account is approved.',
     };
   }
 
@@ -230,20 +247,27 @@ export class AuthService {
 
     // Check if user is active
     if (!user.isActive) {
-      throw new UnauthorizedException('Your account has been deactivated. Please contact support.');
+      throw new UnauthorizedException(
+        'Your account has been deactivated. Please contact support.',
+      );
     }
 
     // Allow instructors to login regardless of approval status
     // The frontend will handle redirection based on instructorStatus
 
     // Update last login asynchronously (non-blocking - don't await)
-    this.userModel.updateOne(
-      { _id: user._id },
-      { lastLogin: new Date() },
-    ).exec().catch(err => console.error('Failed to update last login:', err));
+    this.userModel
+      .updateOne({ _id: user._id }, { lastLogin: new Date() })
+      .exec()
+      .catch((err) => console.error('Failed to update last login:', err));
 
     // Log the login activity
-    const loginType = user.role === UserRole.ADMIN ? 'Admin' : user.role === UserRole.INSTRUCTOR ? 'Instructor' : 'Student';
+    const loginType =
+      user.role === UserRole.ADMIN
+        ? 'Admin'
+        : user.role === UserRole.INSTRUCTOR
+          ? 'Instructor'
+          : 'Student';
     await this.logActivity(
       ActivityType.USER_REGISTRATION, // Using this for now, can create new LOGIN type if needed
       `${loginType} ${user.firstName} ${user.lastName} logged in`,
@@ -312,7 +336,8 @@ export class AuthService {
       }
     } else {
       // Create new user with role preference
-      const desiredRole = role === UserRole.INSTRUCTOR ? UserRole.INSTRUCTOR : UserRole.STUDENT;
+      const desiredRole =
+        role === UserRole.INSTRUCTOR ? UserRole.INSTRUCTOR : UserRole.STUDENT;
       const randomPassword = crypto.randomBytes(32).toString('hex');
       const hashedPassword = await bcrypt.hash(randomPassword, 10);
 
@@ -322,7 +347,10 @@ export class AuthService {
         firstName,
         lastName,
         role: desiredRole,
-        instructorStatus: desiredRole === UserRole.INSTRUCTOR ? InstructorStatus.PENDING : undefined,
+        instructorStatus:
+          desiredRole === UserRole.INSTRUCTOR
+            ? InstructorStatus.PENDING
+            : undefined,
         profilePhotoUrl: picture,
         emailVerified,
         googleId,
@@ -335,11 +363,14 @@ export class AuthService {
         ActivityType.USER_REGISTRATION,
         `${firstName} ${lastName} registered via Google as ${desiredRole}${desiredRole === UserRole.INSTRUCTOR ? ' (pending approval)' : ''}`,
         user._id.toString(),
-        { 
-          email, 
-          role: desiredRole, 
+        {
+          email,
+          role: desiredRole,
           provider: 'google',
-          status: desiredRole === UserRole.INSTRUCTOR ? InstructorStatus.PENDING : 'active',
+          status:
+            desiredRole === UserRole.INSTRUCTOR
+              ? InstructorStatus.PENDING
+              : 'active',
         },
         'UserPlus',
       );
@@ -385,12 +416,19 @@ export class AuthService {
     const user = await this.userModel.findOne({ email });
     if (!user) {
       // Don't reveal if email exists for security
-      return { success: true, message: 'If an account exists with this email, a reset link will be sent.' };
+      return {
+        success: true,
+        message:
+          'If an account exists with this email, a reset link will be sent.',
+      };
     }
 
     // Generate reset token
     const resetToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
 
     // Save reset token
     await this.passwordResetModel.create({
@@ -402,7 +440,11 @@ export class AuthService {
     // Send reset email
     try {
       const resetUrl = `${process.env.FRONTEND_URL}/auth/reset-password/${resetToken}`;
-      await this.emailService.sendPasswordResetEmail(email, user.firstName, resetUrl);
+      await this.emailService.sendPasswordResetEmail(
+        email,
+        user.firstName,
+        resetUrl,
+      );
     } catch (error) {
       console.error('Failed to send password reset email:', error);
       throw new Error('Failed to send password reset email');
@@ -410,11 +452,16 @@ export class AuthService {
 
     return {
       success: true,
-      message: 'If an account exists with this email, a reset link will be sent.',
+      message:
+        'If an account exists with this email, a reset link will be sent.',
     };
   }
 
-  async resetPassword(token: string, newPassword: string, confirmPassword: string) {
+  async resetPassword(
+    token: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
     if (newPassword !== confirmPassword) {
       throw new BadRequestException('Passwords do not match');
     }
@@ -444,7 +491,11 @@ export class AuthService {
     return { success: true, message: 'Password reset successful' };
   }
 
-  async setInitialPassword(token: string, password: string, confirmPassword: string) {
+  async setInitialPassword(
+    token: string,
+    password: string,
+    confirmPassword: string,
+  ) {
     if (password !== confirmPassword) {
       throw new BadRequestException('Passwords do not match');
     }
@@ -470,7 +521,12 @@ export class AuthService {
     return { success: true, message: 'Password set successfully' };
   }
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string, confirmPassword: string) {
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) {
     if (newPassword !== confirmPassword) {
       throw new BadRequestException('New passwords do not match');
     }
@@ -480,7 +536,10 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
-    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
     if (!isPasswordValid) {
       throw new BadRequestException('Current password is incorrect');
     }
@@ -493,5 +552,4 @@ export class AuthService {
 
     return { success: true, message: 'Password changed successfully' };
   }
-
 }

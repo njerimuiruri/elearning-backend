@@ -9,7 +9,9 @@ import {
   Query,
   UseGuards,
   Request,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { ModulesService } from './modules.service';
 import {
   CreateModuleDto,
@@ -77,10 +79,20 @@ export class ModulesController {
     @Param('categoryId') categoryId: string,
     @Param('level') level: ModuleLevel,
   ) {
-    return await this.modulesService.getModulesByLevelAndCategory(categoryId, level);
+    return await this.modulesService.getModulesByLevelAndCategory(
+      categoryId,
+      level,
+    );
   }
 
   // ── Get module by ID ──────────────────────────────────────────────────────
+  // ── Download module as ZIP ────────────────────────────────────────────────
+  @Get(':id/download')
+  @UseGuards(JwtAuthGuard)
+  async downloadModule(@Param('id') id: string, @Res() res: Response) {
+    return await this.modulesService.downloadModule(id, res);
+  }
+
   @Get(':id')
   async getModuleById(@Param('id') id: string) {
     return await this.modulesService.getModuleById(id);
@@ -95,7 +107,11 @@ export class ModulesController {
     @Request() req,
     @Body() updateModuleDto: UpdateModuleDto,
   ) {
-    return await this.modulesService.updateModule(id, req.user.id, updateModuleDto);
+    return await this.modulesService.updateModule(
+      id,
+      req.user.id,
+      updateModuleDto,
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -111,7 +127,11 @@ export class ModulesController {
     @Request() req,
     @Body() lessonData: CreateModuleLessonDto,
   ) {
-    return await this.modulesService.addModuleLesson(id, req.user.id, lessonData);
+    return await this.modulesService.addModuleLesson(
+      id,
+      req.user.id,
+      lessonData,
+    );
   }
 
   // ── Update a lesson ───────────────────────────────────────────────────────
@@ -155,9 +175,14 @@ export class ModulesController {
   async reorderLessons(
     @Param('id') id: string,
     @Request() req,
-    @Body() body: { lessonOrders: Array<{ lessonIndex: number; order: number }> },
+    @Body()
+    body: { lessonOrders: Array<{ lessonIndex: number; order: number }> },
   ) {
-    return await this.modulesService.reorderLessons(id, req.user.id, body.lessonOrders);
+    return await this.modulesService.reorderLessons(
+      id,
+      req.user.id,
+      body.lessonOrders,
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -251,7 +276,11 @@ export class ModulesController {
     @Param('topicIndex') topicIndex: string,
     @Request() req,
   ) {
-    return await this.modulesService.deleteTopic(id, parseInt(topicIndex), req.user.id);
+    return await this.modulesService.deleteTopic(
+      id,
+      parseInt(topicIndex),
+      req.user.id,
+    );
   }
 
   // ── Add lesson to a specific topic (legacy) ───────────────────────────────
@@ -264,7 +293,12 @@ export class ModulesController {
     @Request() req,
     @Body() lessonData: CreateLessonDto,
   ) {
-    return await this.modulesService.addLesson(id, req.user.id, parseInt(topicIndex), lessonData);
+    return await this.modulesService.addLesson(
+      id,
+      req.user.id,
+      parseInt(topicIndex),
+      lessonData,
+    );
   }
 
   // ── Update lesson inside a topic (legacy) ─────────────────────────────────
@@ -318,7 +352,11 @@ export class ModulesController {
     @Request() req,
     @Body() assessmentData: FinalAssessmentDto,
   ) {
-    return await this.modulesService.setFinalAssessment(id, req.user.id, assessmentData);
+    return await this.modulesService.setFinalAssessment(
+      id,
+      req.user.id,
+      assessmentData,
+    );
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -354,7 +392,11 @@ export class ModulesController {
     @Request() req,
     @Body('rejectionReason') rejectionReason: string,
   ) {
-    return await this.modulesService.rejectModule(id, req.user.id, rejectionReason);
+    return await this.modulesService.rejectModule(
+      id,
+      req.user.id,
+      rejectionReason,
+    );
   }
 
   @Delete(':id')

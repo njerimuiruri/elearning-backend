@@ -10,7 +10,11 @@ export class DraftsService {
     @InjectModel(Draft.name) private readonly draftModel: Model<DraftDocument>,
   ) {}
 
-  async upsert(userId: string, draftKey: string, dto: UpsertDraftDto): Promise<Draft> {
+  async upsert(
+    userId: string,
+    draftKey: string,
+    dto: UpsertDraftDto,
+  ): Promise<Draft> {
     return this.draftModel
       .findOneAndUpdate(
         { userId, draftKey },

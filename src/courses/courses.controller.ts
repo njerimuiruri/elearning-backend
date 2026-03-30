@@ -1,5 +1,24 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiParam,
+} from '@nestjs/swagger';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CourseService } from './courses.service';
@@ -44,7 +63,13 @@ export class CourseController {
     @Body() lessonData: any,
     @CurrentUser() user: any,
   ) {
-    return this.courseService.saveLessonDraft(courseId, moduleIndex, lessonIndex, lessonData, user._id);
+    return this.courseService.saveLessonDraft(
+      courseId,
+      moduleIndex,
+      lessonIndex,
+      lessonData,
+      user._id,
+    );
   }
 
   @Put('/:courseId/modules/:moduleIndex/lessons/:lessonIndex/submit')
@@ -58,21 +83,33 @@ export class CourseController {
     @Param('lessonIndex') lessonIndex: number,
     @CurrentUser() user: any,
   ) {
-    return this.courseService.submitLessonForReview(courseId, moduleIndex, lessonIndex, user._id);
+    return this.courseService.submitLessonForReview(
+      courseId,
+      moduleIndex,
+      lessonIndex,
+      user._id,
+    );
   }
 
   @Put('/:courseId/modules/:moduleIndex/lessons/:lessonIndex/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
   @ApiBearerAuth('jwt-auth')
-  @ApiOperation({ summary: 'Approve and publish lesson (Lead Instructor/Admin)' })
+  @ApiOperation({
+    summary: 'Approve and publish lesson (Lead Instructor/Admin)',
+  })
   async approveLesson(
     @Param('courseId') courseId: string,
     @Param('moduleIndex') moduleIndex: number,
     @Param('lessonIndex') lessonIndex: number,
     @CurrentUser() user: any,
   ) {
-    return this.courseService.approveLesson(courseId, moduleIndex, lessonIndex, user._id);
+    return this.courseService.approveLesson(
+      courseId,
+      moduleIndex,
+      lessonIndex,
+      user._id,
+    );
   }
 
   @Put('/:courseId/modules/:moduleIndex/draft')
@@ -86,7 +123,12 @@ export class CourseController {
     @Body() moduleData: any,
     @CurrentUser() user: any,
   ) {
-    return this.courseService.saveModuleDraft(courseId, moduleIndex, moduleData, user._id);
+    return this.courseService.saveModuleDraft(
+      courseId,
+      moduleIndex,
+      moduleData,
+      user._id,
+    );
   }
 
   @Put('/:courseId/modules/:moduleIndex/submit')
@@ -99,14 +141,20 @@ export class CourseController {
     @Param('moduleIndex') moduleIndex: number,
     @CurrentUser() user: any,
   ) {
-    return this.courseService.submitModuleForReview(courseId, moduleIndex, user._id);
+    return this.courseService.submitModuleForReview(
+      courseId,
+      moduleIndex,
+      user._id,
+    );
   }
 
   @Put('/:courseId/modules/:moduleIndex/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
   @ApiBearerAuth('jwt-auth')
-  @ApiOperation({ summary: 'Approve and publish module (Lead Instructor/Admin)' })
+  @ApiOperation({
+    summary: 'Approve and publish module (Lead Instructor/Admin)',
+  })
   async approveModule(
     @Param('courseId') courseId: string,
     @Param('moduleIndex') moduleIndex: number,
@@ -127,7 +175,12 @@ export class CourseController {
     @Body() instructor: any,
     @CurrentUser() user: any,
   ) {
-    return this.courseService.assignModuleInstructor(courseId, moduleIndex, instructor, user._id);
+    return this.courseService.assignModuleInstructor(
+      courseId,
+      moduleIndex,
+      instructor,
+      user._id,
+    );
   }
 
   @Delete('/:courseId/modules/:moduleIndex/instructors/:instructorId')
@@ -141,7 +194,12 @@ export class CourseController {
     @Param('instructorId') instructorId: string,
     @CurrentUser() user: any,
   ) {
-    return this.courseService.removeModuleInstructor(courseId, moduleIndex, instructorId, user._id);
+    return this.courseService.removeModuleInstructor(
+      courseId,
+      moduleIndex,
+      instructorId,
+      user._id,
+    );
   }
 
   @Get('/:courseId/modules/:moduleIndex/instructors')
@@ -155,21 +213,21 @@ export class CourseController {
   ) {
     return this.courseService.getModuleInstructors(courseId, moduleIndex);
   }
-    // Admin - Set course price
-    @Put('/:id/set-price')
-    @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(UserRole.ADMIN)
-    @ApiBearerAuth('jwt-auth')
-    @ApiOperation({ summary: 'Set course price (Admin only)' })
-    @ApiParam({ name: 'id', description: 'Course ID' })
-    @ApiResponse({ status: 200, description: 'Price set successfully' })
-    async setCoursePrice(
-      @Param('id') id: string,
-      @Body('price') price: number,
-      @CurrentUser() user: any,
-    ) {
-      return this.courseService.setCoursePrice(id, price, user._id);
-    }
+  // Admin - Set course price
+  @Put('/:id/set-price')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Set course price (Admin only)' })
+  @ApiParam({ name: 'id', description: 'Course ID' })
+  @ApiResponse({ status: 200, description: 'Price set successfully' })
+  async setCoursePrice(
+    @Param('id') id: string,
+    @Body('price') price: number,
+    @CurrentUser() user: any,
+  ) {
+    return this.courseService.setCoursePrice(id, price, user._id);
+  }
   constructor(
     private readonly courseService: CourseService,
     @InjectModel(Enrollment.name) private enrollmentModel: Model<Enrollment>,
@@ -183,7 +241,10 @@ export class CourseController {
   @ApiOperation({ summary: 'Create a new course (Instructor only)' })
   @ApiResponse({ status: 201, description: 'Course created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Forbidden - only instructors can create courses' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - only instructors can create courses',
+  })
   async createCourse(
     @Body() createCourseDto: CreateCourseDto,
     @CurrentUser() user: any,
@@ -210,14 +271,13 @@ export class CourseController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR)
   @ApiBearerAuth('jwt-auth')
-  @ApiOperation({ summary: 'Submit course for admin approval (Instructor only)' })
+  @ApiOperation({
+    summary: 'Submit course for admin approval (Instructor only)',
+  })
   @ApiParam({ name: 'id', description: 'Course ID' })
   @ApiResponse({ status: 200, description: 'Course submitted for approval' })
   @ApiResponse({ status: 404, description: 'Course not found' })
-  async submitCourse(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async submitCourse(@Param('id') id: string, @CurrentUser() user: any) {
     console.log('========================================');
     console.log('SUBMIT COURSE REQUEST');
     console.log('========================================');
@@ -225,26 +285,31 @@ export class CourseController {
     console.log('User ID:', user._id);
     console.log('User Email:', user.email);
     console.log('User Role:', user.role);
-    
+
     const course = await this.courseService.getCourseById(id);
-    
+
     console.log('Course found:', !!course);
     if (course) {
       console.log('Course Title:', course.title);
       console.log('Course Status:', course.status);
       console.log('Course InstructorIds:', course.instructorIds);
     }
-    
+
     if (!course) {
       console.log('❌ Course not found');
       throw new NotFoundException('Course not found');
     }
     // If course has no instructors OR current user is not among them, assign
-    if (!course.instructorIds || !normalizeInstructorIds(course.instructorIds).includes(user._id.toString())) {
+    if (
+      !course.instructorIds ||
+      !normalizeInstructorIds(course.instructorIds).includes(
+        user._id.toString(),
+      )
+    ) {
       console.log('⚠️ Assigning course to current instructor');
       await this.courseService.assignInstructorToCourse(id, user._id);
     }
-    
+
     console.log('✅ Authorization passed, submitting course');
     return this.courseService.submitCourse(id, user._id);
   }
@@ -269,10 +334,7 @@ export class CourseController {
   @Put('/:id/reject')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  async rejectCourse(
-    @Param('id') id: string,
-    @Body('reason') reason: string,
-  ) {
+  async rejectCourse(@Param('id') id: string, @Body('reason') reason: string) {
     return this.courseService.rejectCourse(id, reason);
   }
 
@@ -297,7 +359,12 @@ export class CourseController {
     if (!course) {
       throw new NotFoundException('Course not found');
     }
-    if (!course.instructorIds || !normalizeInstructorIds(course.instructorIds).includes(user._id.toString())) {
+    if (
+      !course.instructorIds ||
+      !normalizeInstructorIds(course.instructorIds).includes(
+        user._id.toString(),
+      )
+    ) {
       throw new UnauthorizedException('Unauthorized');
     }
     return this.courseService.addFinalAssessment(id, assessmentData);
@@ -321,7 +388,12 @@ export class CourseController {
     if (!course) {
       throw new NotFoundException('Course not found');
     }
-    if (!course.instructorIds || !normalizeInstructorIds(course.instructorIds).includes(user._id.toString())) {
+    if (
+      !course.instructorIds ||
+      !normalizeInstructorIds(course.instructorIds).includes(
+        user._id.toString(),
+      )
+    ) {
       throw new UnauthorizedException('Unauthorized');
     }
     return this.courseService.updateFinalAssessment(id, assessmentData);
@@ -331,10 +403,7 @@ export class CourseController {
   @Post('/:id/enroll')
   @UseGuards(JwtAuthGuard, RolesGuard, CategoryAccessGuard)
   @Roles(UserRole.STUDENT)
-  async enrollCourse(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async enrollCourse(@Param('id') id: string, @CurrentUser() user: any) {
     return this.courseService.enrollStudent(user._id, id);
   }
 
@@ -355,7 +424,10 @@ export class CourseController {
     @Param('enrollmentId') enrollmentId: string,
     @CurrentUser() user: any,
   ) {
-    return this.courseService.getAssessmentForEnrollment(enrollmentId, user._id);
+    return this.courseService.getAssessmentForEnrollment(
+      enrollmentId,
+      user._id,
+    );
   }
 
   @Get('/:id/resume-destination')
@@ -400,7 +472,12 @@ export class CourseController {
     @Body('score') score: number,
     @Body('answers') answers: any[],
   ) {
-    return this.courseService.updateProgress(enrollmentId, moduleIndex, score, answers);
+    return this.courseService.updateProgress(
+      enrollmentId,
+      moduleIndex,
+      score,
+      answers,
+    );
   }
 
   // Track lesson-level progress and last visited lesson for resume
@@ -413,7 +490,12 @@ export class CourseController {
     @Body('lessonIndex') lessonIndex: number,
     @Body('completed') completed: boolean,
   ) {
-    return this.courseService.updateLessonProgress(enrollmentId, moduleIndex, lessonIndex, completed);
+    return this.courseService.updateLessonProgress(
+      enrollmentId,
+      moduleIndex,
+      lessonIndex,
+      completed,
+    );
   }
 
   @Get('enrollment/:enrollmentId/progress')
@@ -438,7 +520,8 @@ export class CourseController {
       studentId: user.role === UserRole.STUDENT ? user._id : undefined,
       instructorId: discussionData.instructorId || undefined,
       createdById: user._id,
-      createdByRole: user.role === UserRole.INSTRUCTOR ? 'instructor' : 'student',
+      createdByRole:
+        user.role === UserRole.INSTRUCTOR ? 'instructor' : 'student',
     });
   }
 
@@ -447,8 +530,10 @@ export class CourseController {
   async getDiscussions(
     @Param('id') id: string,
     @Query('moduleIndex') moduleIndex?: string,
-    @Query('sortBy') sortBy?: 'recent' | 'popular' | 'unanswered' | 'mostReplies',
-    @Query('filterByStatus') filterByStatus?: 'open' | 'resolved' | 'closed' | 'all',
+    @Query('sortBy')
+    sortBy?: 'recent' | 'popular' | 'unanswered' | 'mostReplies',
+    @Query('filterByStatus')
+    filterByStatus?: 'open' | 'resolved' | 'closed' | 'all',
     @CurrentUser() user?: any,
   ) {
     return this.courseService.getCoursesDiscussions(
@@ -505,9 +590,7 @@ export class CourseController {
 
   @Post('discussions/:discussionId/view')
   @UseGuards(JwtAuthGuard)
-  async incrementViews(
-    @Param('discussionId') discussionId: string,
-  ) {
+  async incrementViews(@Param('discussionId') discussionId: string) {
     return this.courseService.incrementDiscussionViews(discussionId);
   }
 
@@ -535,7 +618,11 @@ export class CourseController {
     @Param('moduleIndex') moduleIndex: string,
     @Body('answers') answers: any[],
   ) {
-    return this.courseService.submitModuleAssessment(enrollmentId, parseInt(moduleIndex), answers);
+    return this.courseService.submitModuleAssessment(
+      enrollmentId,
+      parseInt(moduleIndex),
+      answers,
+    );
   }
 
   // Final Assessment Routes (with retry logic)
@@ -554,7 +641,11 @@ export class CourseController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.STUDENT)
   async restartCourse(@Param('enrollmentId') enrollmentId: string) {
-    return this.courseService.restartCourse(enrollmentId, 'manual_restart', false);
+    return this.courseService.restartCourse(
+      enrollmentId,
+      'manual_restart',
+      false,
+    );
   }
 
   // Soft Reset Course (only reset attempts, keep progress)
@@ -595,14 +686,11 @@ export class CourseController {
   @Get(':id/debug-submissions')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR)
-  async debugSubmissions(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async debugSubmissions(@Param('id') id: string, @CurrentUser() user: any) {
     console.log('\n🔍 DEBUG SUBMISSIONS ENDPOINT');
     console.log('Course ID:', id);
     console.log('Instructor ID:', user._id.toString());
-    
+
     try {
       // 1. Verify course exists
       const course = await this.courseService.getCourseById(id);
@@ -610,13 +698,20 @@ export class CourseController {
         return { error: 'Course not found' };
       }
       console.log('✅ Course found:', course?.title);
-      console.log('   Course instructorIds:', course?.instructorIds?.map((id: any) => id?.toString?.() ?? String(id)));
-      
+      console.log(
+        '   Course instructorIds:',
+        course?.instructorIds?.map((id: any) => id?.toString?.() ?? String(id)),
+      );
+
       // 2. Check all enrollments for this course (regardless of attempts)
-      const allEnrollments = await this.enrollmentModel.find({
-        courseId: course._id,
-      }).select('_id studentId finalAssessmentAttempts finalAssessmentScore courseId');
-      
+      const allEnrollments = await this.enrollmentModel
+        .find({
+          courseId: course._id,
+        })
+        .select(
+          '_id studentId finalAssessmentAttempts finalAssessmentScore courseId',
+        );
+
       console.log(`✅ Total enrollments for course: ${allEnrollments.length}`);
       allEnrollments.forEach((e: any, idx: number) => {
         console.log(`   ${idx + 1}. Enrollment: ${e._id}`);
@@ -625,25 +720,36 @@ export class CourseController {
         console.log(`      - Attempts: ${e.finalAssessmentAttempts}`);
         console.log(`      - Score: ${e.finalAssessmentScore}`);
       });
-      
+
       // 3. Check enrollments with attempts > 0
-      const submissionEnrollments = await this.enrollmentModel.find({
-        courseId: course._id,
-        finalAssessmentAttempts: { $gt: 0 },
-      }).select('_id studentId finalAssessmentAttempts finalAssessmentScore courseId');
-      
-      console.log(`✅ Enrollments with attempts > 0: ${submissionEnrollments.length}`);
+      const submissionEnrollments = await this.enrollmentModel
+        .find({
+          courseId: course._id,
+          finalAssessmentAttempts: { $gt: 0 },
+        })
+        .select(
+          '_id studentId finalAssessmentAttempts finalAssessmentScore courseId',
+        );
+
+      console.log(
+        `✅ Enrollments with attempts > 0: ${submissionEnrollments.length}`,
+      );
       submissionEnrollments.forEach((e: any, idx: number) => {
         console.log(`   ${idx + 1}. Enrollment: ${e._id}`);
         console.log(`      - Attempts: ${e.finalAssessmentAttempts}`);
         console.log(`      - Score: ${e.finalAssessmentScore}`);
       });
-      
+
       return {
         courseId: id,
         instructorId: user._id.toString(),
         courseTitle: course?.title,
-        courseInstructor: Array.isArray(course?.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0]?.toString?.() ?? String(course.instructorIds[0]) : undefined,
+        courseInstructor:
+          Array.isArray(course?.instructorIds) &&
+          course.instructorIds.length > 0
+            ? (course.instructorIds[0]?.toString?.() ??
+              String(course.instructorIds[0]))
+            : undefined,
         totalEnrollments: allEnrollments.length,
         enrollmentsWithSubmissions: submissionEnrollments.length,
         allEnrollments: allEnrollments.map((e: any) => ({
@@ -679,56 +785,69 @@ export class CourseController {
   @Get('instructor/course/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR)
-  async getInstructorCourse(
-    @Param('id') id: string,
-    @CurrentUser() user: any,
-  ) {
+  async getInstructorCourse(@Param('id') id: string, @CurrentUser() user: any) {
     console.log('📌 GET /instructor/course/:id route hit');
     console.log('Course ID:', id);
     console.log('User ID:', user._id);
-    
+
     const course = await this.courseService.getCourseById(id);
-    
+
     if (!course) {
       console.log('❌ Course not found in database');
       throw new NotFoundException('Course not found');
     }
-    
+
     console.log('✅ Course found:', course.title);
     console.log('Course instructorIds:', course.instructorIds);
     console.log('User ID:', user._id);
-    
-    if (!course.instructorIds || !Array.isArray(course.instructorIds) || course.instructorIds.length === 0) {
+
+    if (
+      !course.instructorIds ||
+      !Array.isArray(course.instructorIds) ||
+      course.instructorIds.length === 0
+    ) {
       console.log('⚠️ Course has no instructorIds, assigning to current user');
       course.instructorIds = [user._id];
       // Don't await, just attempt to update
-      this.courseService.updateCourse(id, { instructorIds: [user._id] }).catch(err => 
-        console.log('Could not update instructorIds:', err.message)
-      );
+      this.courseService
+        .updateCourse(id, { instructorIds: [user._id] })
+        .catch((err) =>
+          console.log('Could not update instructorIds:', err.message),
+        );
     }
 
     const instructorIds = normalizeInstructorIds(course.instructorIds);
-    const userIdString = user._id && user._id.toString ? user._id.toString() : String(user._id);
+    const userIdString =
+      user._id && user._id.toString ? user._id.toString() : String(user._id);
     console.log('Comparing IDs:');
     console.log('Course instructorIds:', instructorIds);
     console.log('User ID (stringified):', userIdString);
     if (!instructorIds.includes(userIdString)) {
       console.log('❌ Unauthorized: course instructor mismatch');
-      throw new UnauthorizedException('You are not authorized to view this course');
+      throw new UnauthorizedException(
+        'You are not authorized to view this course',
+      );
     }
-    
+
     console.log('✅ Returning course');
     return course;
   }
 
   // ====== GENERIC ROUTES (must come LAST) ======
 
-
   // Public: Get all published courses with filters
   @Get()
   @ApiOperation({ summary: 'Get all published courses (public)' })
-  @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
-  @ApiQuery({ name: 'category', required: false, description: 'Filter by category' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'Filter by status',
+  })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description: 'Filter by category',
+  })
   @ApiQuery({ name: 'level', required: false, description: 'Filter by level' })
   @ApiQuery({ name: 'page', required: false, description: 'Page number' })
   @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
@@ -768,7 +887,12 @@ export class CourseController {
     if (!course) {
       throw new NotFoundException('Course not found');
     }
-    if (!course.instructorIds || !normalizeInstructorIds(course.instructorIds).includes(user._id.toString())) {
+    if (
+      !course.instructorIds ||
+      !normalizeInstructorIds(course.instructorIds).includes(
+        user._id.toString(),
+      )
+    ) {
       throw new UnauthorizedException('Unauthorized');
     }
     return this.courseService.updateCourse(id, updateCourseDto);
@@ -808,7 +932,12 @@ export class CourseController {
     @Param('lessonIndex') lessonIndex: number,
     @CurrentUser() user: any,
   ) {
-    return this.courseService.lockLesson(courseId, moduleIndex, lessonIndex, user._id);
+    return this.courseService.lockLesson(
+      courseId,
+      moduleIndex,
+      lessonIndex,
+      user._id,
+    );
   }
 
   // Unlock a lesson after editing
@@ -821,7 +950,12 @@ export class CourseController {
     @Param('lessonIndex') lessonIndex: number,
     @CurrentUser() user: any,
   ) {
-    return this.courseService.unlockLesson(courseId, moduleIndex, lessonIndex, user._id);
+    return this.courseService.unlockLesson(
+      courseId,
+      moduleIndex,
+      lessonIndex,
+      user._id,
+    );
   }
 
   // Admin: Add instructor to course

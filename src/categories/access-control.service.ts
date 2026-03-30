@@ -7,7 +7,14 @@ import { Course } from '../schemas/course.schema';
 
 export interface CategoryAccessResult {
   allowed: boolean;
-  reason?: 'payment_required' | 'not_assigned' | 'restricted' | 'admin_bypass' | 'free_category' | 'fellow_access' | 'purchased';
+  reason?:
+    | 'payment_required'
+    | 'not_assigned'
+    | 'restricted'
+    | 'admin_bypass'
+    | 'free_category'
+    | 'fellow_access'
+    | 'purchased';
   price?: number;
   categoryId?: string;
 }
@@ -117,7 +124,10 @@ export class CategoryAccessControlService {
     }
 
     // Check if payment is required for non-eligible users
-    if (category.paymentRequiredForNonEligible && category.accessType === 'paid') {
+    if (
+      category.paymentRequiredForNonEligible &&
+      category.accessType === 'paid'
+    ) {
       return {
         allowed: false,
         reason: 'payment_required',
@@ -219,7 +229,8 @@ export class CategoryAccessControlService {
 
     // Check if category is paid
     // If isPaid is explicitly true, OR if accessType is 'paid', require payment
-    const isPaidCategory = category.isPaid === true || category.accessType === 'paid';
+    const isPaidCategory =
+      category.isPaid === true || category.accessType === 'paid';
 
     if (isPaidCategory) {
       // User doesn't have access via fellow assignment or purchase

@@ -65,7 +65,8 @@ export class QuestionAnswerService {
         questionContent: questionData.content,
         moduleIndex: questionData.moduleIndex,
         lessonId: questionData.lessonId,
-        priority: questionData.priority || this.calculatePriority(questionData.content),
+        priority:
+          questionData.priority || this.calculatePriority(questionData.content),
         tags: questionData.tags || [],
         questionCategory: category,
         aiSuggestedAnswer: aiSuggestion.answer,
@@ -138,12 +139,16 @@ export class QuestionAnswerService {
   ): Promise<{ answer: string; confidence: number; relevance: number }> {
     // This would integrate with OpenAI or similar
     // For now, providing template-based answers
-    
+
     const commonAnswers = {
-      technical: 'Please try clearing your browser cache and reloading the page. If the issue persists, check your internet connection or try a different browser.',
-      conceptual: 'I recommend reviewing the lesson materials and related resources. Pay special attention to the key concepts highlighted in the module.',
-      assessment: 'For questions about grades or assignments, please check the rubric and grading criteria provided with the assignment.',
-      general: 'Thank you for your question. Our instructor will review this and provide a detailed response soon.',
+      technical:
+        'Please try clearing your browser cache and reloading the page. If the issue persists, check your internet connection or try a different browser.',
+      conceptual:
+        'I recommend reviewing the lesson materials and related resources. Pay special attention to the key concepts highlighted in the module.',
+      assessment:
+        'For questions about grades or assignments, please check the rubric and grading criteria provided with the assignment.',
+      general:
+        'Thank you for your question. Our instructor will review this and provide a detailed response soon.',
     };
 
     return {
@@ -162,7 +167,10 @@ export class QuestionAnswerService {
       .populate('instructorIds');
 
     // Return the first instructor if available
-    return Array.isArray(course?.instructorIds) && course.instructorIds.length > 0 ? course.instructorIds[0] : null;
+    return Array.isArray(course?.instructorIds) &&
+      course.instructorIds.length > 0
+      ? course.instructorIds[0]
+      : null;
   }
 
   /**
@@ -170,7 +178,7 @@ export class QuestionAnswerService {
    */
   private calculatePriority(content: string): string {
     const lowerContent = content.toLowerCase();
-    
+
     if (
       lowerContent.includes('urgent') ||
       lowerContent.includes('asap') ||
@@ -212,8 +220,14 @@ export class QuestionAnswerService {
 
       // Verify instructor owns this course or is assigned
       const course = await this.courseModel.findById(question.courseId);
-      const instructorIds = Array.isArray(course?.instructorIds) ? course.instructorIds.map((id: any) => id.toString()) : [];
-      if (course && !instructorIds.includes(instructorId) && question.instructorId?.toString() !== instructorId) {
+      const instructorIds = Array.isArray(course?.instructorIds)
+        ? course.instructorIds.map((id: any) => id.toString())
+        : [];
+      if (
+        course &&
+        !instructorIds.includes(instructorId) &&
+        question.instructorId?.toString() !== instructorId
+      ) {
         throw new Error('Not authorized to respond to this question');
       }
 
@@ -414,18 +428,9 @@ export class QuestionAnswerService {
             { $match: { status: 'unanswered' } },
             { $count: 'count' },
           ],
-          pending: [
-            { $match: { status: 'pending' } },
-            { $count: 'count' },
-          ],
-          answered: [
-            { $match: { status: 'answered' } },
-            { $count: 'count' },
-          ],
-          resolved: [
-            { $match: { status: 'resolved' } },
-            { $count: 'count' },
-          ],
+          pending: [{ $match: { status: 'pending' } }, { $count: 'count' }],
+          answered: [{ $match: { status: 'answered' } }, { $count: 'count' }],
+          resolved: [{ $match: { status: 'resolved' } }, { $count: 'count' }],
           avgResponseTime: [
             { $match: { respondedAt: { $exists: true } } },
             { $group: { _id: null, avg: { $avg: '$responseTime' } } },
@@ -451,26 +456,31 @@ export class QuestionAnswerService {
   /**
    * Get admin dashboard data
    */
-  async getAdminDashboardData(courseId?: string, page: number = 1, limit: number = 10) {
+  async getAdminDashboardData(
+    courseId?: string,
+    page: number = 1,
+    limit: number = 10,
+  ) {
     try {
       const query: any = {};
       if (courseId) query.courseId = courseId;
 
       const skip = (page - 1) * limit;
 
-      const [allQuestions, totalQuestions, stats, recentActivity] = await Promise.all([
-        this.qaModel
-          .find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit)
-          .populate('studentId', 'firstName lastName email')
-          .populate('instructorId', 'firstName lastName email')
-          .populate('courseId', 'title'),
-        this.qaModel.countDocuments(query),
-        this.getSystemStats(courseId),
-        this.getRecentActivity(courseId, 50),
-      ]);
+      const [allQuestions, totalQuestions, stats, recentActivity] =
+        await Promise.all([
+          this.qaModel
+            .find(query)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .populate('studentId', 'firstName lastName email')
+            .populate('instructorId', 'firstName lastName email')
+            .populate('courseId', 'title'),
+          this.qaModel.countDocuments(query),
+          this.getSystemStats(courseId),
+          this.getRecentActivity(courseId, 50),
+        ]);
 
       return {
         questions: allQuestions,
@@ -500,15 +510,11 @@ export class QuestionAnswerService {
       {
         $facet: {
           total: [{ $count: 'count' }],
-          byStatus: [
-            { $group: { _id: '$status', count: { $sum: 1 } } },
-          ],
+          byStatus: [{ $group: { _id: '$status', count: { $sum: 1 } } }],
           byCategory: [
             { $group: { _id: '$questionCategory', count: { $sum: 1 } } },
           ],
-          byPriority: [
-            { $group: { _id: '$priority', count: { $sum: 1 } } },
-          ],
+          byPriority: [{ $group: { _id: '$priority', count: { $sum: 1 } } }],
           avgResponseTime: [
             { $match: { respondedAt: { $exists: true } } },
             { $group: { _id: null, avg: { $avg: '$responseTime' } } },
@@ -640,7 +646,8 @@ export class QuestionAnswerService {
       if (filters?.status) query.status = filters.status;
       if (filters?.category) query.questionCategory = filters.category;
       if (filters?.priority) query.priority = filters.priority;
-      if (filters?.isResolved !== undefined) query.isResolved = filters.isResolved;
+      if (filters?.isResolved !== undefined)
+        query.isResolved = filters.isResolved;
 
       const skip = (page - 1) * limit;
 

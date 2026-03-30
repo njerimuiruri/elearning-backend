@@ -84,7 +84,10 @@ export class BulkMessagingService {
   /**
    * Send a bulk reminder from an instructor to filtered students in a module.
    */
-  async sendInstructorBulkMessage(instructorId: string, dto: SendInstructorReminderDto) {
+  async sendInstructorBulkMessage(
+    instructorId: string,
+    dto: SendInstructorReminderDto,
+  ) {
     const module = await this.moduleModel.findById(dto.moduleId).lean();
     if (!module) throw new NotFoundException('Module not found');
     this.assertInstructorAssigned(module, instructorId);
@@ -102,7 +105,9 @@ export class BulkMessagingService {
       enrollments = await this.enrollmentModel
         .find({
           moduleId: new Types.ObjectId(dto.moduleId),
-          studentId: { $in: dto.studentIds.map((id) => new Types.ObjectId(id)) },
+          studentId: {
+            $in: dto.studentIds.map((id) => new Types.ObjectId(id)),
+          },
         })
         .populate('studentId', 'firstName lastName email')
         .lean();
@@ -116,7 +121,11 @@ export class BulkMessagingService {
     }
 
     if (enrollments.length === 0) {
-      return { sent: 0, total: 0, message: 'No students matched the filter criteria.' };
+      return {
+        sent: 0,
+        total: 0,
+        message: 'No students matched the filter criteria.',
+      };
     }
 
     const senderName = `${(instructor as any).firstName} ${(instructor as any).lastName}`;
@@ -126,7 +135,7 @@ export class BulkMessagingService {
     let sent = 0;
     await Promise.allSettled(
       enrollments.map(async (enrollment) => {
-        const student = enrollment.studentId as any;
+        const student = enrollment.studentId;
         if (!student?.email) return;
 
         const studentName = `${student.firstName} ${student.lastName}`;
@@ -145,7 +154,10 @@ export class BulkMessagingService {
             dashboardUrl,
           });
         } catch (err) {
-          console.error(`Failed to send bulk reminder email to ${student.email}:`, err);
+          console.error(
+            `Failed to send bulk reminder email to ${student.email}:`,
+            err,
+          );
         }
 
         try {
@@ -159,7 +171,10 @@ export class BulkMessagingService {
             module.categoryId?.toString(),
           );
         } catch (err) {
-          console.error(`Failed to create notification for student ${studentId}:`, err);
+          console.error(
+            `Failed to create notification for student ${studentId}:`,
+            err,
+          );
         }
 
         sent++;
@@ -192,7 +207,10 @@ export class BulkMessagingService {
   /** Get this instructor's sent reminder history. */
   async getInstructorReminderHistory(instructorId: string) {
     return this.bulkReminderModel
-      .find({ senderId: new Types.ObjectId(instructorId), senderRole: 'instructor' })
+      .find({
+        senderId: new Types.ObjectId(instructorId),
+        senderRole: 'instructor',
+      })
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();
@@ -225,7 +243,11 @@ export class BulkMessagingService {
     }
 
     const instructors = await this.userModel
-      .find({ _id: { $in: Array.from(instructorIdSet).map((id) => new Types.ObjectId(id)) } })
+      .find({
+        _id: {
+          $in: Array.from(instructorIdSet).map((id) => new Types.ObjectId(id)),
+        },
+      })
       .select('_id firstName lastName email')
       .lean();
 
@@ -236,7 +258,9 @@ export class BulkMessagingService {
     const result = await Promise.all(
       Array.from(instructorIdSet).map(async (iId) => {
         const instructorModules = modules.filter((m) =>
-          ((m as any).instructorIds || []).some((id: any) => id.toString() === iId),
+          ((m as any).instructorIds || []).some(
+            (id: any) => id.toString() === iId,
+          ),
         );
         const moduleIds = instructorModules.map((m) => m._id);
 
@@ -306,7 +330,9 @@ export class BulkMessagingService {
         enrollmentId: e._id,
         student: {
           id: student?._id,
-          name: student ? `${student.firstName} ${student.lastName}` : 'Unknown',
+          name: student
+            ? `${student.firstName} ${student.lastName}`
+            : 'Unknown',
           email: student?.email,
           profilePicture: student?.profilePicture,
         },
@@ -332,7 +358,7 @@ export class BulkMessagingService {
    * Send a bulk reminder from admin to students or instructors.
    */
   async sendAdminBulkMessage(adminId: string, dto: SendAdminReminderDto) {
-    const admin = await this.userModel.findById(adminId).lean() as any;
+    const admin = (await this.userModel.findById(adminId).lean()) as any;
     if (!admin) throw new NotFoundException('Admin not found');
     const adminName = `${admin.firstName} ${admin.lastName}`;
 
@@ -343,11 +369,13 @@ export class BulkMessagingService {
     let categoryName: string | undefined;
 
     if (dto.moduleId) {
-      const mod = await this.moduleModel.findById(dto.moduleId).lean() as any;
+      const mod = (await this.moduleModel.findById(dto.moduleId).lean()) as any;
       moduleName = mod?.title;
     }
     if (dto.categoryId) {
-      const cat = await this.categoryModel.findById(dto.categoryId).lean() as any;
+      const cat = (await this.categoryModel
+        .findById(dto.categoryId)
+        .lean()) as any;
       categoryName = cat?.name;
     }
 
@@ -355,11 +383,19 @@ export class BulkMessagingService {
 
     if (dto.recipientType === 'students') {
       sent = await this.sendAdminMessageToStudents(
-        dto, adminName, dashboardUrl, moduleName, categoryName,
+        dto,
+        adminName,
+        dashboardUrl,
+        moduleName,
+        categoryName,
       );
     } else {
       sent = await this.sendAdminMessageToInstructors(
-        dto, adminName, dashboardUrl, moduleName, categoryName,
+        dto,
+        adminName,
+        dashboardUrl,
+        moduleName,
+        categoryName,
       );
     }
 
@@ -369,7 +405,9 @@ export class BulkMessagingService {
       senderName: adminName,
       moduleId: dto.moduleId ? new Types.ObjectId(dto.moduleId) : undefined,
       moduleName,
-      categoryId: dto.categoryId ? new Types.ObjectId(dto.categoryId) : undefined,
+      categoryId: dto.categoryId
+        ? new Types.ObjectId(dto.categoryId)
+        : undefined,
       categoryName,
       subject: dto.subject,
       message: dto.message,
@@ -454,7 +492,9 @@ export class BulkMessagingService {
 
     if (dto.specificIds && dto.specificIds.length > 0) {
       const students = await this.userModel
-        .find({ _id: { $in: dto.specificIds.map((id) => new Types.ObjectId(id)) } })
+        .find({
+          _id: { $in: dto.specificIds.map((id) => new Types.ObjectId(id)) },
+        })
         .select('_id firstName lastName email')
         .lean();
       // Wrap students to match enrollment shape
@@ -482,7 +522,7 @@ export class BulkMessagingService {
     let sent = 0;
     await Promise.allSettled(
       enrollments.map(async (enrollment) => {
-        const student = enrollment.studentId as any;
+        const student = enrollment.studentId;
         if (!student?.email) return;
 
         const studentName = `${student.firstName} ${student.lastName}`;
@@ -501,7 +541,10 @@ export class BulkMessagingService {
             dashboardUrl,
           });
         } catch (err) {
-          console.error(`Failed to send admin reminder email to ${student.email}:`, err);
+          console.error(
+            `Failed to send admin reminder email to ${student.email}:`,
+            err,
+          );
         }
 
         try {
@@ -515,7 +558,10 @@ export class BulkMessagingService {
             dto.categoryId,
           );
         } catch (err) {
-          console.error(`Failed to create admin notification for student ${studentId}:`, err);
+          console.error(
+            `Failed to create admin notification for student ${studentId}:`,
+            err,
+          );
         }
 
         sent++;
@@ -536,13 +582,16 @@ export class BulkMessagingService {
 
     if (dto.specificIds && dto.specificIds.length > 0) {
       instructors = await this.userModel
-        .find({ _id: { $in: dto.specificIds.map((id) => new Types.ObjectId(id)) } })
+        .find({
+          _id: { $in: dto.specificIds.map((id) => new Types.ObjectId(id)) },
+        })
         .select('_id firstName lastName email')
         .lean();
     } else {
       const moduleQuery: any = { isActive: true };
       if (dto.moduleId) moduleQuery._id = new Types.ObjectId(dto.moduleId);
-      else if (dto.categoryId) moduleQuery.categoryId = new Types.ObjectId(dto.categoryId);
+      else if (dto.categoryId)
+        moduleQuery.categoryId = new Types.ObjectId(dto.categoryId);
 
       const modules = await this.moduleModel
         .find(moduleQuery)
@@ -559,7 +608,13 @@ export class BulkMessagingService {
       if (instructorIdSet.size === 0) return 0;
 
       instructors = await this.userModel
-        .find({ _id: { $in: Array.from(instructorIdSet).map((id) => new Types.ObjectId(id)) } })
+        .find({
+          _id: {
+            $in: Array.from(instructorIdSet).map(
+              (id) => new Types.ObjectId(id),
+            ),
+          },
+        })
         .select('_id firstName lastName email')
         .lean();
     }

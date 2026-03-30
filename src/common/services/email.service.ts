@@ -20,7 +20,12 @@ export class EmailService {
     });
   }
 
-  async sendMessageNotification(toEmail: string, subject: string, htmlContent: string, plainTextContent: string) {
+  async sendMessageNotification(
+    toEmail: string,
+    subject: string,
+    htmlContent: string,
+    plainTextContent: string,
+  ) {
     if (!toEmail) {
       return { success: false, message: 'No recipient email provided' };
     }
@@ -31,7 +36,9 @@ export class EmailService {
     for (let i = 1; i <= attempts; i++) {
       try {
         await this.transporter.sendMail({
-          from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+          from:
+            this.configService.get('SMTP_FROM_EMAIL') ||
+            'noreply@elearning.com',
           to: toEmail,
           subject,
           html: htmlContent,
@@ -41,20 +48,33 @@ export class EmailService {
         return { success: true, message: `Message email sent to ${toEmail}` };
       } catch (error) {
         lastError = error;
-        console.error(`Attempt ${i} failed sending message notification email:`, error);
+        console.error(
+          `Attempt ${i} failed sending message notification email:`,
+          error,
+        );
         if (i < attempts) {
           await new Promise((resolve) => setTimeout(resolve, 800));
         }
       }
     }
 
-    return { success: false, message: lastError?.message || 'Failed to send message email' };
+    return {
+      success: false,
+      message: lastError?.message || 'Failed to send message email',
+    };
   }
 
-  async sendInstructorApprovalEmail(email: string, firstName: string, isApproved: boolean) {
-    const subject = isApproved ? 'Your Instructor Application Approved' : 'Your Instructor Application Rejected';
+  async sendInstructorApprovalEmail(
+    email: string,
+    firstName: string,
+    isApproved: boolean,
+  ) {
+    const subject = isApproved
+      ? 'Your Instructor Application Approved'
+      : 'Your Instructor Application Rejected';
 
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const loginUrl = `${frontendUrl}/login`;
 
     const htmlContent = isApproved
@@ -90,7 +110,8 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -148,7 +169,8 @@ E-Learning Platform System
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: adminEmail,
         subject,
         html: htmlContent,
@@ -161,11 +183,17 @@ E-Learning Platform System
     }
   }
 
-  async sendStudentRegistrationEmail(email: string, firstName: string, temporaryPassword: string, categoryNames: string[] = []) {
+  async sendStudentRegistrationEmail(
+    email: string,
+    firstName: string,
+    temporaryPassword: string,
+    categoryNames: string[] = [],
+  ) {
     const subject = 'Welcome to the ARIN eLearning Platform!';
-    const categoryLine = categoryNames.length > 0
-      ? `<strong>${categoryNames.join(', ')}</strong>`
-      : 'the ARIN eLearning Platform';
+    const categoryLine =
+      categoryNames.length > 0
+        ? `<strong>${categoryNames.join(', ')}</strong>`
+        : 'the ARIN eLearning Platform';
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -198,13 +226,17 @@ E-Learning Platform System
                 We are pleased to inform you that you have been successfully enrolled in the <strong>ARIN eLearning Platform</strong>. Your learning journey with us starts now!
               </p>
 
-              ${categoryNames.length > 0 ? `
+              ${
+                categoryNames.length > 0
+                  ? `
               <!-- Category highlight -->
               <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
                 <p style="color:#15803d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;">You have been enrolled in</p>
                 <p style="color:#111827;font-size:18px;font-weight:700;margin:0;">${categoryLine}</p>
               </div>
-              ` : ''}
+              `
+                  : ''
+              }
 
               <!-- Credentials box -->
               <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px;margin-bottom:28px;">
@@ -260,9 +292,10 @@ E-Learning Platform System
 </html>
     `;
 
-    const categoryText = categoryNames.length > 0
-      ? `You have been enrolled in: ${categoryNames.join(', ')}\n\n`
-      : '';
+    const categoryText =
+      categoryNames.length > 0
+        ? `You have been enrolled in: ${categoryNames.join(', ')}\n\n`
+        : '';
 
     const plainTextContent = `
 Welcome to ARIN eLearning!
@@ -287,7 +320,8 @@ The ARIN eLearning Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -300,9 +334,15 @@ The ARIN eLearning Team
     }
   }
 
-  async sendInstructorRegistrationEmail(email: string, firstName: string, temporaryPassword: string) {
-    const subject = 'Welcome to Arin Publishing Academy - Your Instructor Account Has Been Created';
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+  async sendInstructorRegistrationEmail(
+    email: string,
+    firstName: string,
+    temporaryPassword: string,
+  ) {
+    const subject =
+      'Welcome to Arin Publishing Academy - Your Instructor Account Has Been Created';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const loginUrl = `${frontendUrl}/login`;
 
     const htmlContent = `
@@ -370,7 +410,8 @@ Arin Publishing Academy Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -385,7 +426,8 @@ Arin Publishing Academy Team
 
   async sendWelcomeEmail(email: string, firstName: string) {
     const subject = 'Welcome to Arin Publishing Academy!';
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const coursesUrl = `${frontendUrl}/student/courses`;
 
     const htmlContent = `
@@ -449,7 +491,8 @@ Arin Publishing Academy Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -462,7 +505,11 @@ Arin Publishing Academy Team
     }
   }
 
-  async sendPasswordResetEmail(email: string, firstName: string, resetUrl: string) {
+  async sendPasswordResetEmail(
+    email: string,
+    firstName: string,
+    resetUrl: string,
+  ) {
     const subject = 'Reset Your E-Learning Platform Password';
 
     const htmlContent = `
@@ -496,7 +543,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -509,7 +557,11 @@ E-Learning Platform Team
     }
   }
 
-  async sendCourseEnrollmentEmail(email: string, studentName: string, courseName: string) {
+  async sendCourseEnrollmentEmail(
+    email: string,
+    studentName: string,
+    courseName: string,
+  ) {
     const subject = `Successfully Enrolled in ${courseName}`;
 
     const htmlContent = `
@@ -543,7 +595,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -556,7 +609,12 @@ E-Learning Platform Team
     }
   }
 
-  async sendCertificateEmail(email: string, studentName: string, courseName: string, certificateUrl: string) {
+  async sendCertificateEmail(
+    email: string,
+    studentName: string,
+    courseName: string,
+    certificateUrl: string,
+  ) {
     const subject = `Certificate Earned: ${courseName}`;
 
     const htmlContent = `
@@ -587,7 +645,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -600,7 +659,12 @@ E-Learning Platform Team
     }
   }
 
-  async sendCourseReminderEmail(email: string, studentName: string, courseName: string, progress: number) {
+  async sendCourseReminderEmail(
+    email: string,
+    studentName: string,
+    courseName: string,
+    progress: number,
+  ) {
     const subject = `Reminder: Continue Learning ${courseName}`;
 
     const htmlContent = `
@@ -632,7 +696,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -645,7 +710,11 @@ E-Learning Platform Team
     }
   }
 
-  async sendCourseApprovedEmail(email: string, instructorName: string, courseName: string) {
+  async sendCourseApprovedEmail(
+    email: string,
+    instructorName: string,
+    courseName: string,
+  ) {
     const subject = `Your Course Has Been Approved: ${courseName}`;
 
     const htmlContent = `
@@ -674,7 +743,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -687,7 +757,12 @@ E-Learning Platform Team
     }
   }
 
-  async sendCourseRejectedEmail(email: string, instructorName: string, courseName: string, reason: string) {
+  async sendCourseRejectedEmail(
+    email: string,
+    instructorName: string,
+    courseName: string,
+    reason: string,
+  ) {
     const subject = `Course Revision Required: ${courseName}`;
 
     const htmlContent = `
@@ -721,7 +796,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -746,7 +822,8 @@ E-Learning Platform Team
     courseId: string,
   ) {
     const subject = `New Course Submission - ${courseTitle}`;
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const adminDashboardUrl = `${frontendUrl}/admin/courses`;
 
     const htmlContent = `
@@ -796,13 +873,17 @@ E-Learning Platform System
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: adminEmail,
         subject,
         html: htmlContent,
         text: plainTextContent,
       });
-      return { success: true, message: `Course submission notification sent to admin` };
+      return {
+        success: true,
+        message: `Course submission notification sent to admin`,
+      };
     } catch (error) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
@@ -815,7 +896,8 @@ E-Learning Platform System
     courseTitle: string,
   ) {
     const subject = `Your Course Has Been Approved! 🎉`;
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const coursePageUrl = `${frontendUrl}/courses`;
 
     const htmlContent = `
@@ -867,13 +949,17 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
         text: plainTextContent,
       });
-      return { success: true, message: `Course approval email sent to ${email}` };
+      return {
+        success: true,
+        message: `Course approval email sent to ${email}`,
+      };
     } catch (error) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
@@ -887,7 +973,8 @@ E-Learning Platform Team
     rejectionReason: string,
   ) {
     const subject = `Course Submission - Feedback Required`;
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const courseEditorUrl = `${frontendUrl}/instructor/courses`;
 
     const htmlContent = `
@@ -945,13 +1032,17 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
         text: plainTextContent,
       });
-      return { success: true, message: `Course rejection email sent to ${email}` };
+      return {
+        success: true,
+        message: `Course rejection email sent to ${email}`,
+      };
     } catch (error) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
@@ -961,7 +1052,8 @@ E-Learning Platform Team
   async sendSimpleEmail(email: string, subject: string, htmlContent: string) {
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -977,7 +1069,8 @@ E-Learning Platform Team
    * Send notification to instructor when student asks a question
    */
   async sendQuestionNotificationToInstructor(emailData: any, courseId: string) {
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const dashboardUrl = `${frontendUrl}/instructor/dashboard`;
     const questionUrl = `${frontendUrl}/instructor/questions/${courseId}`;
 
@@ -1042,7 +1135,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: emailData.instructorEmail,
         subject: `New Question: ${emailData.questionTitle}`,
         html: htmlContent,
@@ -1058,8 +1152,12 @@ E-Learning Platform Team
   /**
    * Send notification to student when instructor responds
    */
-  async sendResponseNotificationToStudent(emailData: any, instructorId: string) {
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+  async sendResponseNotificationToStudent(
+    emailData: any,
+    instructorId: string,
+  ) {
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const dashboardUrl = `${frontendUrl}/student/dashboard`;
     const questionUrl = `${frontendUrl}/student/questions/${emailData.questionId}`;
 
@@ -1126,7 +1224,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: emailData.studentEmail,
         subject: `Answer: ${emailData.questionTitle}`,
         html: htmlContent,
@@ -1142,8 +1241,12 @@ E-Learning Platform Team
   /**
    * Send admin notification about flagged questions
    */
-  async sendFlaggedQuestionNotificationToAdmin(adminEmail: string, flagData: any) {
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+  async sendFlaggedQuestionNotificationToAdmin(
+    adminEmail: string,
+    flagData: any,
+  ) {
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const adminDashboardUrl = `${frontendUrl}/admin/questions/${flagData.questionId}`;
 
     const htmlContent = `
@@ -1170,7 +1273,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: adminEmail,
         subject: `[ALERT] Question Flagged for Review: ${flagData.title}`,
         html: htmlContent,
@@ -1188,7 +1292,8 @@ E-Learning Platform Team
     moduleTitle: string,
   ) {
     const subject = `Your Module Has Been Approved! 🎉`;
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const dashboardUrl = `${frontendUrl}/instructor/modules`;
 
     const htmlContent = `
@@ -1214,13 +1319,17 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
         text: plainTextContent,
       });
-      return { success: true, message: `Module approval email sent to ${email}` };
+      return {
+        success: true,
+        message: `Module approval email sent to ${email}`,
+      };
     } catch (error) {
       console.error('Error sending module approval email:', error);
     }
@@ -1233,7 +1342,8 @@ E-Learning Platform Team
     rejectionReason: string,
   ) {
     const subject = `Module Submission — Feedback Required`;
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const dashboardUrl = `${frontendUrl}/instructor/modules`;
 
     const htmlContent = `
@@ -1255,13 +1365,17 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
         text: plainTextContent,
       });
-      return { success: true, message: `Module rejection email sent to ${email}` };
+      return {
+        success: true,
+        message: `Module rejection email sent to ${email}`,
+      };
     } catch (error) {
       console.error('Error sending module rejection email:', error);
     }
@@ -1276,7 +1390,8 @@ E-Learning Platform Team
     moduleId: string,
   ) {
     const subject = `New Module Submission — ${moduleTitle}`;
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const adminDashboardUrl = `${frontendUrl}/admin/modules`;
 
     const htmlContent = `
@@ -1299,13 +1414,17 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: adminEmail,
         subject,
         html: htmlContent,
         text: plainTextContent,
       });
-      return { success: true, message: `Module submission notification sent to admin` };
+      return {
+        success: true,
+        message: `Module submission notification sent to admin`,
+      };
     } catch (error) {
       console.error('Error sending module submission notification:', error);
     }
@@ -1322,7 +1441,8 @@ E-Learning Platform Team
     enrollmentId: string,
   ) {
     const subject = `Essay Submitted for Review: ${moduleName}`;
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const reviewUrl = `${frontendUrl}/instructor/enrollments/${enrollmentId}/grade-essay`;
 
     const htmlContent = `
@@ -1347,7 +1467,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: instructorEmail,
         subject,
         html: htmlContent,
@@ -1374,7 +1495,8 @@ E-Learning Platform Team
       ? `Essay Passed: ${moduleName} — Certificate Earned!`
       : `Essay Reviewed: ${moduleName} — Feedback Available`;
 
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
 
     const htmlContent = passed
       ? `
@@ -1386,11 +1508,15 @@ E-Learning Platform Team
           <h3 style="color: #16a34a; margin-top: 0;">Instructor Feedback</h3>
           <p>${feedback}</p>
         </div>
-        ${certificateUrl ? `
+        ${
+          certificateUrl
+            ? `
         <div style="text-align: center; margin: 30px 0;">
           <a href="${certificateUrl}" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Your Certificate</a>
         </div>
-        ` : ''}
+        `
+            : ''
+        }
         <p>Keep up the excellent work!</p>
         <p>Best regards,<br/><strong>Arin Publishing Academy</strong></p>
       </div>
@@ -1417,7 +1543,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: studentEmail,
         subject,
         html: htmlContent,
@@ -1466,7 +1593,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: studentEmail,
         subject,
         html: htmlContent,
@@ -1512,7 +1640,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: instructorEmail,
         subject,
         html: htmlContent,
@@ -1520,7 +1649,10 @@ E-Learning Platform Team
       });
       return { success: true };
     } catch (error) {
-      console.error('Error sending discussion notification to instructor:', error);
+      console.error(
+        'Error sending discussion notification to instructor:',
+        error,
+      );
     }
   }
 
@@ -1535,7 +1667,8 @@ E-Learning Platform Team
     moduleId: string,
   ) {
     const subject = `Don't Stop Now — Continue "${moduleName}"`;
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const moduleUrl = `${frontendUrl}/student/modules/${moduleId}`;
 
     const htmlContent = `
@@ -1564,7 +1697,8 @@ E-Learning Platform Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -1587,7 +1721,8 @@ E-Learning Platform Team
     courseId: string,
   ) {
     const subject = `⏰ Complete Your Course: ${courseTitle}`;
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const courseUrl = `${frontendUrl}/courses/${courseId}`;
     const dashboardUrl = `${frontendUrl}/student`;
 
@@ -1671,7 +1806,8 @@ This is an automated reminder. You can manage your email preferences in your acc
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: email,
         subject,
         html: htmlContent,
@@ -1710,12 +1846,13 @@ This is an automated reminder. You can manage your email preferences in your acc
       dashboardUrl,
     } = options;
 
-    const senderLabel = senderRole === 'admin' ? 'Platform Admin' : 'Instructor';
+    const senderLabel =
+      senderRole === 'admin' ? 'Platform Admin' : 'Instructor';
     const contextLine = moduleName
       ? `<p style="margin:0 0 6px 0;"><strong>Module:</strong> ${moduleName}${categoryName ? ` &nbsp;|&nbsp; <strong>Category:</strong> ${categoryName}` : ''}</p>`
       : categoryName
-      ? `<p style="margin:0 0 6px 0;"><strong>Category:</strong> ${categoryName}</p>`
-      : '';
+        ? `<p style="margin:0 0 6px 0;"><strong>Category:</strong> ${categoryName}</p>`
+        : '';
 
     const htmlContent = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f9fafb;padding:24px;">
@@ -1760,13 +1897,17 @@ Go to Dashboard: ${dashboardUrl}
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: studentEmail,
         subject,
         html: htmlContent,
         text: plainText,
       });
-      return { success: true, message: `Bulk reminder sent to ${studentEmail}` };
+      return {
+        success: true,
+        message: `Bulk reminder sent to ${studentEmail}`,
+      };
     } catch (error) {
       console.error('Error sending bulk reminder to student:', error);
       return { success: false, message: error.message };
@@ -1800,8 +1941,8 @@ Go to Dashboard: ${dashboardUrl}
     const contextLine = moduleName
       ? `<p style="margin:0 0 6px 0;"><strong>Module:</strong> ${moduleName}${categoryName ? ` &nbsp;|&nbsp; <strong>Category:</strong> ${categoryName}` : ''}</p>`
       : categoryName
-      ? `<p style="margin:0 0 6px 0;"><strong>Category:</strong> ${categoryName}</p>`
-      : '';
+        ? `<p style="margin:0 0 6px 0;"><strong>Category:</strong> ${categoryName}</p>`
+        : '';
 
     const htmlContent = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f9fafb;padding:24px;">
@@ -1846,13 +1987,17 @@ Go to Dashboard: ${dashboardUrl}
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
         to: instructorEmail,
         subject,
         html: htmlContent,
         text: plainText,
       });
-      return { success: true, message: `Admin reminder sent to instructor ${instructorEmail}` };
+      return {
+        success: true,
+        message: `Admin reminder sent to instructor ${instructorEmail}`,
+      };
     } catch (error) {
       console.error('Error sending admin reminder to instructor:', error);
       return { success: false, message: error.message };
@@ -1868,10 +2013,13 @@ Go to Dashboard: ${dashboardUrl}
     temporaryPassword: string,
     options?: { track?: string; cohort?: string },
   ) {
-    const subject = 'Welcome to the Arin Fellowship Programme — Complete Your Profile';
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const subject =
+      'Welcome to the Arin Fellowship Programme — Complete Your Profile';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
     const loginUrl = `${frontendUrl}/login`;
-    const supportEmail = this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
+    const supportEmail =
+      this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
     const name = firstName || 'Fellow';
     const track = options?.track || '';
     const cohort = options?.cohort || new Date().getFullYear().toString();
@@ -1944,8 +2092,13 @@ Go to Dashboard: ${dashboardUrl}
                   ['2', 'Enter your email and temporary password'],
                   ['3', 'Create a new secure password when prompted'],
                   ['4', 'Complete your profile to personalise your experience'],
-                  ['5', 'Start learning and engaging with your fellowship community'],
-                ].map(([n, text]) => `
+                  [
+                    '5',
+                    'Start learning and engaging with your fellowship community',
+                  ],
+                ]
+                  .map(
+                    ([n, text]) => `
                 <tr>
                   <td style="padding:6px 0;">
                     <table cellpadding="0" cellspacing="0">
@@ -1957,7 +2110,9 @@ Go to Dashboard: ${dashboardUrl}
                       </tr>
                     </table>
                   </td>
-                </tr>`).join('')}
+                </tr>`,
+                  )
+                  .join('')}
               </table>
 
               <!-- CTA -->
@@ -2024,7 +2179,9 @@ Arin Publishing Academy Team
 
     try {
       await this.transporter.sendMail({
-        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@arin-africa.org',
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') ||
+          'noreply@arin-africa.org',
         to: email,
         subject,
         html: htmlContent,
@@ -2046,9 +2203,12 @@ Arin Publishing Academy Team
     message: string,
     options?: { cc?: string[]; bcc?: string[]; fromName?: string },
   ) {
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
-    const supportEmail = this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
-    const fromEmail = this.configService.get('SMTP_FROM_EMAIL') || 'noreply@arin-africa.org';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const supportEmail =
+      this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
+    const fromEmail =
+      this.configService.get('SMTP_FROM_EMAIL') || 'noreply@arin-africa.org';
 
     const htmlContent = `
 <!DOCTYPE html>

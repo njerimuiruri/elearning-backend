@@ -46,7 +46,8 @@ export class ModuleCertificate extends Document {
   updatedAt: Date;
 }
 
-export const ModuleCertificateSchema = SchemaFactory.createForClass(ModuleCertificate);
+export const ModuleCertificateSchema =
+  SchemaFactory.createForClass(ModuleCertificate);
 
 // Indexes
 ModuleCertificateSchema.index({ studentId: 1 });

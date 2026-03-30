@@ -22,7 +22,11 @@ export class InstructorReview extends Document {
   updatedAt: Date;
 }
 
-export const InstructorReviewSchema = SchemaFactory.createForClass(InstructorReview);
+export const InstructorReviewSchema =
+  SchemaFactory.createForClass(InstructorReview);
 
 InstructorReviewSchema.index({ instructorId: 1 });
-InstructorReviewSchema.index({ studentId: 1, courseId: 1, instructorId: 1 }, { unique: true });
+InstructorReviewSchema.index(
+  { studentId: 1, courseId: 1, instructorId: 1 },
+  { unique: true },
+);

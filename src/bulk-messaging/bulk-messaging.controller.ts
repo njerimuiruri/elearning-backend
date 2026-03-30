@@ -9,7 +9,10 @@ import {
   Request,
 } from '@nestjs/common';
 import { BulkMessagingService } from './bulk-messaging.service';
-import { SendInstructorReminderDto, SendAdminReminderDto } from './dto/bulk-message.dto';
+import {
+  SendInstructorReminderDto,
+  SendAdminReminderDto,
+} from './dto/bulk-message.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
@@ -38,12 +41,13 @@ export class BulkMessagingController {
     @Query('filter') filter?: string,
     @Query('inactiveDays') inactiveDays?: string,
   ) {
-    const students = await this.bulkMessagingService.getEnrolledStudentsWithStatus(
-      req.user.id,
-      moduleId,
-      filter,
-      inactiveDays ? parseInt(inactiveDays, 10) : undefined,
-    );
+    const students =
+      await this.bulkMessagingService.getEnrolledStudentsWithStatus(
+        req.user.id,
+        moduleId,
+        filter,
+        inactiveDays ? parseInt(inactiveDays, 10) : undefined,
+      );
     return { success: true, data: students, count: students.length };
   }
 
@@ -73,9 +77,8 @@ export class BulkMessagingController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.INSTRUCTOR)
   async getInstructorHistory(@Request() req) {
-    const history = await this.bulkMessagingService.getInstructorReminderHistory(
-      req.user.id,
-    );
+    const history =
+      await this.bulkMessagingService.getInstructorReminderHistory(req.user.id);
     return { success: true, data: history };
   }
 
@@ -132,10 +135,7 @@ export class BulkMessagingController {
   @Post('admin/send')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
-  async sendAdminReminder(
-    @Body() dto: SendAdminReminderDto,
-    @Request() req,
-  ) {
+  async sendAdminReminder(@Body() dto: SendAdminReminderDto, @Request() req) {
     const result = await this.bulkMessagingService.sendAdminBulkMessage(
       req.user.id,
       dto,

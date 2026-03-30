@@ -31,7 +31,10 @@ export class QuestionAnswer {
   tags: string[];
 
   // AI Features
-  @Prop({ enum: ['general', 'technical', 'conceptual', 'assessment'], default: 'general' })
+  @Prop({
+    enum: ['general', 'technical', 'conceptual', 'assessment'],
+    default: 'general',
+  })
   questionCategory: string;
 
   @Prop({ default: 0 })
@@ -145,7 +148,8 @@ export class QuestionAnswer {
   helpfulCount: number;
 }
 
-export const QuestionAnswerSchema = SchemaFactory.createForClass(QuestionAnswer);
+export const QuestionAnswerSchema =
+  SchemaFactory.createForClass(QuestionAnswer);
 
 // Create indices for optimization
 QuestionAnswerSchema.index({ courseId: 1, status: 1 });

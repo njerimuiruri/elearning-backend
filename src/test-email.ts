@@ -13,7 +13,7 @@ async function testEmail() {
     await emailService.sendInstructorApprovalEmail(
       'faith.muiruri@strathmore.edu',
       'Faith',
-      true
+      true,
     );
 
     console.log('✅ SUCCESS! Email sent successfully!');

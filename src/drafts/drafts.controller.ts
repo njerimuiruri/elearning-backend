@@ -1,5 +1,11 @@
 import {
-  Controller, Get, Put, Delete, Body, Param, UseGuards,
+  Controller,
+  Get,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
 } from '@nestjs/common';
 import { DraftsService } from './drafts.service';
 import { UpsertDraftDto } from './dto/upsert-draft.dto';
@@ -30,20 +36,14 @@ export class DraftsController {
   }
 
   @Get(':draftKey')
-  async get(
-    @CurrentUser() user: any,
-    @Param('draftKey') draftKey: string,
-  ) {
+  async get(@CurrentUser() user: any, @Param('draftKey') draftKey: string) {
     const userId = user._id?.toString() ?? user.id?.toString();
     const draft = await this.draftsService.get(userId, draftKey);
     return { success: true, data: draft ?? null };
   }
 
   @Delete(':draftKey')
-  async discard(
-    @CurrentUser() user: any,
-    @Param('draftKey') draftKey: string,
-  ) {
+  async discard(@CurrentUser() user: any, @Param('draftKey') draftKey: string) {
     const userId = user._id?.toString() ?? user.id?.toString();
     await this.draftsService.discard(userId, draftKey);
     return { success: true, message: 'Draft discarded' };

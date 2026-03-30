@@ -63,14 +63,19 @@ export class NotesService {
 
       return await note.save();
     } catch (error) {
-      throw new BadRequestException(`Failed to create module note: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to create module note: ${error.message}`,
+      );
     }
   }
 
   /**
    * Get notes for a specific module
    */
-  async getModuleNotes(studentId: string, moduleId: string): Promise<NoteDocument[]> {
+  async getModuleNotes(
+    studentId: string,
+    moduleId: string,
+  ): Promise<NoteDocument[]> {
     try {
       return (await this.noteModel
         .find({
@@ -81,7 +86,9 @@ export class NotesService {
         .lean()
         .exec()) as any;
     } catch (error) {
-      throw new BadRequestException(`Failed to fetch module notes: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to fetch module notes: ${error.message}`,
+      );
     }
   }
 
@@ -103,7 +110,10 @@ export class NotesService {
   /**
    * Get all notes for a specific course
    */
-  async getCourseNotes(studentId: string, courseId: string): Promise<NoteDocument[]> {
+  async getCourseNotes(
+    studentId: string,
+    courseId: string,
+  ): Promise<NoteDocument[]> {
     try {
       return (await this.noteModel
         .find({
@@ -114,7 +124,9 @@ export class NotesService {
         .lean()
         .exec()) as any;
     } catch (error) {
-      throw new BadRequestException(`Failed to fetch course notes: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to fetch course notes: ${error.message}`,
+      );
     }
   }
 
@@ -132,7 +144,8 @@ export class NotesService {
       // Group by course
       const grouped = new Map();
       notes.forEach((note) => {
-        const courseKey = note.courseId?.toString() || note.moduleId?.toString() || 'unknown';
+        const courseKey =
+          note.courseId?.toString() || note.moduleId?.toString() || 'unknown';
         if (!grouped.has(courseKey)) {
           grouped.set(courseKey, {
             courseId: note.courseId,
@@ -145,12 +158,17 @@ export class NotesService {
         const courseGroup = grouped.get(courseKey);
         courseGroup.notes.push(note);
         courseGroup.noteCount += 1;
-        courseGroup.lastUpdated = note.updatedAt > courseGroup.lastUpdated ? note.updatedAt : courseGroup.lastUpdated;
+        courseGroup.lastUpdated =
+          note.updatedAt > courseGroup.lastUpdated
+            ? note.updatedAt
+            : courseGroup.lastUpdated;
       });
 
       return Array.from(grouped.values());
     } catch (error) {
-      throw new BadRequestException(`Failed to fetch grouped notes: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to fetch grouped notes: ${error.message}`,
+      );
     }
   }
 
@@ -177,7 +195,12 @@ export class NotesService {
   /**
    * Update a note
    */
-  async updateNote(noteId: string, content: string, category?: string, tags?: string[]): Promise<NoteDocument> {
+  async updateNote(
+    noteId: string,
+    content: string,
+    category?: string,
+    tags?: string[],
+  ): Promise<NoteDocument> {
     try {
       const note = await this.noteModel.findByIdAndUpdate(
         new Types.ObjectId(noteId),
@@ -203,9 +226,13 @@ export class NotesService {
   /**
    * Delete a note
    */
-  async deleteNote(noteId: string): Promise<{ success: boolean; message: string }> {
+  async deleteNote(
+    noteId: string,
+  ): Promise<{ success: boolean; message: string }> {
     try {
-      const result = await this.noteModel.findByIdAndDelete(new Types.ObjectId(noteId));
+      const result = await this.noteModel.findByIdAndDelete(
+        new Types.ObjectId(noteId),
+      );
 
       if (!result) {
         throw new BadRequestException('Note not found');
@@ -231,14 +258,19 @@ export class NotesService {
       note.isBookmarked = !note.isBookmarked;
       return await note.save();
     } catch (error) {
-      throw new BadRequestException(`Failed to toggle bookmark: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to toggle bookmark: ${error.message}`,
+      );
     }
   }
 
   /**
    * Search notes by keyword
    */
-  async searchNotes(studentId: string, keyword: string): Promise<NoteDocument[]> {
+  async searchNotes(
+    studentId: string,
+    keyword: string,
+  ): Promise<NoteDocument[]> {
     try {
       return (await this.noteModel
         .find({
@@ -271,7 +303,9 @@ export class NotesService {
         .lean()
         .exec()) as any;
     } catch (error) {
-      throw new BadRequestException(`Failed to fetch bookmarked notes: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to fetch bookmarked notes: ${error.message}`,
+      );
     }
   }
 }

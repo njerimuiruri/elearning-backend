@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Message } from '../schemas/message.schema';
@@ -22,7 +26,14 @@ export class MessagesService {
     return new Types.ObjectId(id);
   }
 
-  async sendMessage(senderId: string, receiverId: string, content: string, courseId?: string, moduleIndex?: number, attachments?: string[]) {
+  async sendMessage(
+    senderId: string,
+    receiverId: string,
+    content: string,
+    courseId?: string,
+    moduleIndex?: number,
+    attachments?: string[],
+  ) {
     const message = new this.messageModel({
       senderId: this.toObjectId(senderId, 'senderId'),
       receiverId: this.toObjectId(receiverId, 'receiverId'),
@@ -43,16 +54,26 @@ export class MessagesService {
     ]);
 
     this.sendEmailNotification(sender, receiver, content).catch((err) => {
-      console.warn('Failed to send message notification email:', err?.message || err);
+      console.warn(
+        'Failed to send message notification email:',
+        err?.message || err,
+      );
     });
 
     return message.populate([
       { path: 'senderId', select: 'firstName lastName email profilePhotoUrl' },
-      { path: 'receiverId', select: 'firstName lastName email profilePhotoUrl' },
+      {
+        path: 'receiverId',
+        select: 'firstName lastName email profilePhotoUrl',
+      },
     ]);
   }
 
-  async getConversation(userId: string, otherUserId: string, limit: number = 50) {
+  async getConversation(
+    userId: string,
+    otherUserId: string,
+    limit: number = 50,
+  ) {
     const userObjectId = this.toObjectId(userId, 'userId');
     const otherUserObjectId = this.toObjectId(otherUserId, 'otherUserId');
 
@@ -80,10 +101,7 @@ export class MessagesService {
     const messages = await this.messageModel.aggregate([
       {
         $match: {
-          $or: [
-            { senderId: userObjectId },
-            { receiverId: userObjectId },
-          ],
+          $or: [{ senderId: userObjectId }, { receiverId: userObjectId }],
           isDeleted: false,
         },
       },
@@ -207,13 +225,24 @@ export class MessagesService {
     return { count };
   }
 
-  private async sendEmailNotification(sender: any, receiver: any, content: string) {
+  private async sendEmailNotification(
+    sender: any,
+    receiver: any,
+    content: string,
+  ) {
     if (!receiver?.email || !sender) return;
 
-    const senderName = `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Someone';
-    const receiverName = `${receiver.firstName || ''} ${receiver.lastName || ''}`.trim() || 'Hello';
-    const frontendUrl = this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
-    const inboxPath = receiver.role === 'instructor' ? '/instructor/messages' : '/student/messages';
+    const senderName =
+      `${sender.firstName || ''} ${sender.lastName || ''}`.trim() || 'Someone';
+    const receiverName =
+      `${receiver.firstName || ''} ${receiver.lastName || ''}`.trim() ||
+      'Hello';
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+    const inboxPath =
+      receiver.role === 'instructor'
+        ? '/instructor/messages'
+        : '/student/messages';
     const inboxUrl = `${frontendUrl}${inboxPath}`;
     const subject = `New message from ${senderName}`;
     const preview = (content || '').slice(0, 240);
@@ -232,7 +261,12 @@ ${preview}
 
 Open inbox: ${inboxUrl}`;
 
-    await this.emailService.sendMessageNotification(receiver.email, subject, html, text);
+    await this.emailService.sendMessageNotification(
+      receiver.email,
+      subject,
+      html,
+      text,
+    );
   }
 
   async getAllConversationsForAdmin() {
@@ -271,8 +305,14 @@ Open inbox: ${inboxUrl}`;
     const populatedConversations = await Promise.all(
       conversations.map(async (conv) => {
         const [user1, user2] = await Promise.all([
-          this.userModel.findById(conv._id.user1).select('firstName lastName email role profilePhotoUrl').lean(),
-          this.userModel.findById(conv._id.user2).select('firstName lastName email role profilePhotoUrl').lean(),
+          this.userModel
+            .findById(conv._id.user1)
+            .select('firstName lastName email role profilePhotoUrl')
+            .lean(),
+          this.userModel
+            .findById(conv._id.user2)
+            .select('firstName lastName email role profilePhotoUrl')
+            .lean(),
         ]);
 
         return {

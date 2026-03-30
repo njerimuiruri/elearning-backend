@@ -6,9 +6,7 @@ import { Enrollment } from '../schemas/enrollment.schema';
 import { User } from '../schemas/user.schema';
 import { Course } from '../schemas/course.schema';
 import { EmailReminder } from '../schemas/email-reminder.schema';
-import {
-  Module as ModuleSchema,
-} from '../schemas/module.schema';
+import { Module as ModuleSchema } from '../schemas/module.schema';
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
 import { EmailService } from '../common/services/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -26,9 +24,11 @@ export class ReminderService {
     @InjectModel(Enrollment.name) private enrollmentModel: Model<Enrollment>,
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Course.name) private courseModel: Model<Course>,
-    @InjectModel(EmailReminder.name) private emailReminderModel: Model<EmailReminder>,
+    @InjectModel(EmailReminder.name)
+    private emailReminderModel: Model<EmailReminder>,
     @InjectModel(ModuleSchema.name) private moduleModel: Model<ModuleSchema>,
-    @InjectModel(ModuleEnrollment.name) private moduleEnrollmentModel: Model<ModuleEnrollment>,
+    @InjectModel(ModuleEnrollment.name)
+    private moduleEnrollmentModel: Model<ModuleEnrollment>,
     private emailService: EmailService,
     private notificationsService: NotificationsService,
   ) {}
@@ -48,15 +48,20 @@ export class ReminderService {
     try {
       // Course enrollments (7-day threshold)
       const inactiveEnrollments = await this.findInactiveEnrollments();
-      this.logger.log(`Found ${inactiveEnrollments.length} inactive course enrollments`);
+      this.logger.log(
+        `Found ${inactiveEnrollments.length} inactive course enrollments`,
+      );
 
       for (const enrollment of inactiveEnrollments) {
         await this.sendCourseReminder(enrollment._id.toString(), 'automatic');
       }
 
       // Module enrollments (4-day threshold)
-      const inactiveModuleEnrollments = await this.findInactiveModuleEnrollments();
-      this.logger.log(`Found ${inactiveModuleEnrollments.length} inactive module enrollments`);
+      const inactiveModuleEnrollments =
+        await this.findInactiveModuleEnrollments();
+      this.logger.log(
+        `Found ${inactiveModuleEnrollments.length} inactive module enrollments`,
+      );
 
       for (const enrollment of inactiveModuleEnrollments) {
         await this.sendModuleReminder(enrollment._id.toString(), 'automatic');
@@ -76,13 +81,14 @@ export class ReminderService {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - this.reminderDelayDays);
 
-    const enrollments = await this.enrollmentModel.find({
-      isCompleted: false,
-      $or: [
-        { lastAccessedAt: { $lte: cutoffDate } },
-        { lastAccessedAt: null, createdAt: { $lte: cutoffDate } },
-      ],
-    })
+    const enrollments = await this.enrollmentModel
+      .find({
+        isCompleted: false,
+        $or: [
+          { lastAccessedAt: { $lte: cutoffDate } },
+          { lastAccessedAt: null, createdAt: { $lte: cutoffDate } },
+        ],
+      })
       .populate('studentId', 'firstName lastName email')
       .populate('courseId', 'title')
       .lean();
@@ -110,13 +116,14 @@ export class ReminderService {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - this.moduleReminderDelayDays);
 
-    const enrollments = await this.moduleEnrollmentModel.find({
-      isCompleted: false,
-      $or: [
-        { lastAccessedAt: { $lte: cutoffDate } },
-        { lastAccessedAt: null, createdAt: { $lte: cutoffDate } },
-      ],
-    })
+    const enrollments = await this.moduleEnrollmentModel
+      .find({
+        isCompleted: false,
+        $or: [
+          { lastAccessedAt: { $lte: cutoffDate } },
+          { lastAccessedAt: null, createdAt: { $lte: cutoffDate } },
+        ],
+      })
       .populate('studentId', 'firstName lastName email')
       .populate('moduleId', 'title')
       .lean();
@@ -140,15 +147,21 @@ export class ReminderService {
   /**
    * Send reminder email for a specific course enrollment
    */
-  async sendCourseReminder(enrollmentId: string, triggerType: 'manual' | 'automatic' = 'manual') {
+  async sendCourseReminder(
+    enrollmentId: string,
+    triggerType: 'manual' | 'automatic' = 'manual',
+  ) {
     try {
-      const enrollment = await this.enrollmentModel.findById(enrollmentId)
+      const enrollment = await this.enrollmentModel
+        .findById(enrollmentId)
         .populate('studentId', 'firstName lastName email')
         .populate('courseId', 'title description');
 
       if (!enrollment) {
         // Fall back: check if this is a module enrollment ID
-        const moduleExists = await this.moduleEnrollmentModel.exists({ _id: enrollmentId });
+        const moduleExists = await this.moduleEnrollmentModel.exists({
+          _id: enrollmentId,
+        });
         if (moduleExists) {
           return this.sendModuleReminder(enrollmentId, triggerType);
         }
@@ -180,12 +193,14 @@ export class ReminderService {
       });
 
       // Dashboard notification
-      await this.notificationsService.createNotification(
-        student._id.toString(),
-        NotificationType.INACTIVITY_REMINDER,
-        'Continue Your Learning',
-        `You haven't visited "${course.title}" in a while. You're ${Math.round(enrollment.progress)}% through — keep going!`,
-      ).catch(() => {});
+      await this.notificationsService
+        .createNotification(
+          student._id.toString(),
+          NotificationType.INACTIVITY_REMINDER,
+          'Continue Your Learning',
+          `You haven't visited "${course.title}" in a while. You're ${Math.round(enrollment.progress)}% through — keep going!`,
+        )
+        .catch(() => {});
 
       this.logger.log(
         `Course reminder sent (${triggerType}) to ${student.email} for course ${course.title}`,
@@ -196,7 +211,10 @@ export class ReminderService {
         message: `Reminder sent to ${student.firstName} ${student.lastName}`,
       };
     } catch (error) {
-      this.logger.error(`Error sending course reminder for enrollment ${enrollmentId}:`, error);
+      this.logger.error(
+        `Error sending course reminder for enrollment ${enrollmentId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -204,9 +222,13 @@ export class ReminderService {
   /**
    * Send reminder email for a specific module enrollment
    */
-  async sendModuleReminder(enrollmentId: string, triggerType: 'manual' | 'automatic' = 'manual') {
+  async sendModuleReminder(
+    enrollmentId: string,
+    triggerType: 'manual' | 'automatic' = 'manual',
+  ) {
     try {
-      const enrollment = await this.moduleEnrollmentModel.findById(enrollmentId)
+      const enrollment = await this.moduleEnrollmentModel
+        .findById(enrollmentId)
         .populate('studentId', 'firstName lastName email')
         .populate('moduleId', 'title');
 
@@ -238,12 +260,14 @@ export class ReminderService {
       });
 
       // Dashboard notification
-      await this.notificationsService.createNotification(
-        student._id.toString(),
-        NotificationType.INACTIVITY_REMINDER,
-        'Continue Your Learning',
-        `You haven't visited "${module.title}" in a while. You're ${Math.round(enrollment.progress)}% through — keep going!`,
-      ).catch(() => {});
+      await this.notificationsService
+        .createNotification(
+          student._id.toString(),
+          NotificationType.INACTIVITY_REMINDER,
+          'Continue Your Learning',
+          `You haven't visited "${module.title}" in a while. You're ${Math.round(enrollment.progress)}% through — keep going!`,
+        )
+        .catch(() => {});
 
       this.logger.log(
         `Module reminder sent (${triggerType}) to ${student.email} for module ${module.title}`,
@@ -254,7 +278,10 @@ export class ReminderService {
         message: `Module reminder sent to ${student.firstName} ${student.lastName}`,
       };
     } catch (error) {
-      this.logger.error(`Error sending module reminder for enrollment ${enrollmentId}:`, error);
+      this.logger.error(
+        `Error sending module reminder for enrollment ${enrollmentId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -267,13 +294,15 @@ export class ReminderService {
 
     const studentsData = await Promise.all(
       inactiveEnrollments.slice(0, limit).map(async (enrollment: any) => {
-        const student = enrollment.studentId as any;
-        const course = enrollment.courseId as any;
+        const student = enrollment.studentId;
+        const course = enrollment.courseId;
 
-        const lastReminder = await this.emailReminderModel.findOne({
-          enrollmentId: enrollment._id,
-          reminderType: 'incomplete',
-        }).sort({ sentAt: -1 });
+        const lastReminder = await this.emailReminderModel
+          .findOne({
+            enrollmentId: enrollment._id,
+            reminderType: 'incomplete',
+          })
+          .sort({ sentAt: -1 });
 
         return {
           type: 'course',
@@ -290,7 +319,8 @@ export class ReminderService {
           progress: enrollment.progress,
           lastAccessedAt: enrollment.lastAccessedAt || enrollment.createdAt,
           daysSinceLastAccess: Math.floor(
-            (Date.now() - (enrollment.lastAccessedAt || enrollment.createdAt).getTime()) /
+            (Date.now() -
+              (enrollment.lastAccessedAt || enrollment.createdAt).getTime()) /
               (1000 * 60 * 60 * 24),
           ),
           lastReminderSent: lastReminder?.sentAt || null,
@@ -303,17 +333,20 @@ export class ReminderService {
     );
 
     // Also include module enrollments
-    const inactiveModuleEnrollments = await this.findInactiveModuleEnrollments();
+    const inactiveModuleEnrollments =
+      await this.findInactiveModuleEnrollments();
 
     const moduleStudentsData = await Promise.all(
       inactiveModuleEnrollments.slice(0, limit).map(async (enrollment: any) => {
-        const student = enrollment.studentId as any;
-        const module = enrollment.moduleId as any;
+        const student = enrollment.studentId;
+        const module = enrollment.moduleId;
 
-        const lastReminder = await this.emailReminderModel.findOne({
-          enrollmentId: enrollment._id,
-          reminderType: 'module_incomplete',
-        }).sort({ sentAt: -1 });
+        const lastReminder = await this.emailReminderModel
+          .findOne({
+            enrollmentId: enrollment._id,
+            reminderType: 'module_incomplete',
+          })
+          .sort({ sentAt: -1 });
 
         return {
           type: 'module',
@@ -330,7 +363,8 @@ export class ReminderService {
           progress: enrollment.progress,
           lastAccessedAt: enrollment.lastAccessedAt || enrollment.createdAt,
           daysSinceLastAccess: Math.floor(
-            (Date.now() - (enrollment.lastAccessedAt || enrollment.createdAt).getTime()) /
+            (Date.now() -
+              (enrollment.lastAccessedAt || enrollment.createdAt).getTime()) /
               (1000 * 60 * 60 * 24),
           ),
           lastReminderSent: lastReminder?.sentAt || null,
@@ -414,17 +448,29 @@ export class ReminderService {
   }) {
     if (settings.autoRemindersEnabled !== undefined) {
       this.autoRemindersEnabled = settings.autoRemindersEnabled;
-      this.logger.log(`Auto reminders ${this.autoRemindersEnabled ? 'enabled' : 'disabled'}`);
+      this.logger.log(
+        `Auto reminders ${this.autoRemindersEnabled ? 'enabled' : 'disabled'}`,
+      );
     }
 
-    if (settings.reminderDelayDays !== undefined && settings.reminderDelayDays > 0) {
+    if (
+      settings.reminderDelayDays !== undefined &&
+      settings.reminderDelayDays > 0
+    ) {
       this.reminderDelayDays = settings.reminderDelayDays;
-      this.logger.log(`Course reminder delay set to ${this.reminderDelayDays} days`);
+      this.logger.log(
+        `Course reminder delay set to ${this.reminderDelayDays} days`,
+      );
     }
 
-    if (settings.moduleReminderDelayDays !== undefined && settings.moduleReminderDelayDays > 0) {
+    if (
+      settings.moduleReminderDelayDays !== undefined &&
+      settings.moduleReminderDelayDays > 0
+    ) {
       this.moduleReminderDelayDays = settings.moduleReminderDelayDays;
-      this.logger.log(`Module reminder delay set to ${this.moduleReminderDelayDays} days`);
+      this.logger.log(
+        `Module reminder delay set to ${this.moduleReminderDelayDays} days`,
+      );
     }
 
     return this.getReminderSettings();
@@ -446,11 +492,14 @@ export class ReminderService {
       inactiveModuleCount,
     ] = await Promise.all([
       this.emailReminderModel.countDocuments({ sent: true }),
-      this.emailReminderModel.countDocuments({ sent: true, sentAt: { $gte: thirtyDaysAgo } }),
+      this.emailReminderModel.countDocuments({
+        sent: true,
+        sentAt: { $gte: thirtyDaysAgo },
+      }),
       this.enrollmentModel.countDocuments({ isCompleted: false }),
       this.moduleEnrollmentModel.countDocuments({ isCompleted: false }),
-      this.findInactiveEnrollments().then(e => e.length),
-      this.findInactiveModuleEnrollments().then(e => e.length),
+      this.findInactiveEnrollments().then((e) => e.length),
+      this.findInactiveModuleEnrollments().then((e) => e.length),
     ]);
 
     return {

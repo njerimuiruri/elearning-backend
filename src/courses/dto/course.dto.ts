@@ -1,4 +1,11 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, IsNumber, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsArray,
+  IsNumber,
+  IsEnum,
+} from 'class-validator';
 import { CourseLevel } from '../../schemas/course.schema';
 
 class QuestionDto {
@@ -77,57 +84,57 @@ class ModuleDto {
 }
 
 export class CreateCourseDto {
-    @IsString()
-    @IsOptional()
-    welcomeMessage?: string;
+  @IsString()
+  @IsOptional()
+  welcomeMessage?: string;
 
-    @IsString()
-    @IsOptional()
-    audienceDescription?: string;
+  @IsString()
+  @IsOptional()
+  audienceDescription?: string;
 
-    @IsString()
-    @IsOptional()
-    deliveryMode?: string;
+  @IsString()
+  @IsOptional()
+  deliveryMode?: string;
 
-    @IsString()
-    @IsOptional()
-    courseAim?: string;
+  @IsString()
+  @IsOptional()
+  courseAim?: string;
 
-    @IsString()
-    @IsOptional()
-    courseObjective?: string;
+  @IsString()
+  @IsOptional()
+  courseObjective?: string;
 
-    @IsString()
-    @IsOptional()
-    expectedLearningOutcomes?: string;
+  @IsString()
+  @IsOptional()
+  expectedLearningOutcomes?: string;
 
-    @IsString()
-    @IsOptional()
-    briefContent?: string;
+  @IsString()
+  @IsOptional()
+  briefContent?: string;
 
-    @IsString()
-    @IsOptional()
-    teachingLearningMethods?: string;
+  @IsString()
+  @IsOptional()
+  teachingLearningMethods?: string;
 
-    @IsString()
-    @IsOptional()
-    resourcesMaterials?: string;
+  @IsString()
+  @IsOptional()
+  resourcesMaterials?: string;
 
-    @IsString()
-    @IsOptional()
-    assessmentPlan?: string;
+  @IsString()
+  @IsOptional()
+  assessmentPlan?: string;
 
-    @IsString()
-    @IsOptional()
-    supportingTechnologies?: string;
+  @IsString()
+  @IsOptional()
+  supportingTechnologies?: string;
 
-    @IsString()
-    @IsOptional()
-    coreTexts?: string;
+  @IsString()
+  @IsOptional()
+  coreTexts?: string;
 
-    @IsString()
-    @IsOptional()
-    additionalReadings?: string;
+  @IsString()
+  @IsOptional()
+  additionalReadings?: string;
   @IsString()
   @IsNotEmpty()
   title: string;
@@ -173,57 +180,57 @@ export class CreateCourseDto {
 }
 
 export class UpdateCourseDto {
-    @IsString()
-    @IsOptional()
-    welcomeMessage?: string;
+  @IsString()
+  @IsOptional()
+  welcomeMessage?: string;
 
-    @IsString()
-    @IsOptional()
-    audienceDescription?: string;
+  @IsString()
+  @IsOptional()
+  audienceDescription?: string;
 
-    @IsString()
-    @IsOptional()
-    deliveryMode?: string;
+  @IsString()
+  @IsOptional()
+  deliveryMode?: string;
 
-    @IsString()
-    @IsOptional()
-    courseAim?: string;
+  @IsString()
+  @IsOptional()
+  courseAim?: string;
 
-    @IsString()
-    @IsOptional()
-    courseObjective?: string;
+  @IsString()
+  @IsOptional()
+  courseObjective?: string;
 
-    @IsString()
-    @IsOptional()
-    expectedLearningOutcomes?: string;
+  @IsString()
+  @IsOptional()
+  expectedLearningOutcomes?: string;
 
-    @IsString()
-    @IsOptional()
-    briefContent?: string;
+  @IsString()
+  @IsOptional()
+  briefContent?: string;
 
-    @IsString()
-    @IsOptional()
-    teachingLearningMethods?: string;
+  @IsString()
+  @IsOptional()
+  teachingLearningMethods?: string;
 
-    @IsString()
-    @IsOptional()
-    resourcesMaterials?: string;
+  @IsString()
+  @IsOptional()
+  resourcesMaterials?: string;
 
-    @IsString()
-    @IsOptional()
-    assessmentPlan?: string;
+  @IsString()
+  @IsOptional()
+  assessmentPlan?: string;
 
-    @IsString()
-    @IsOptional()
-    supportingTechnologies?: string;
+  @IsString()
+  @IsOptional()
+  supportingTechnologies?: string;
 
-    @IsString()
-    @IsOptional()
-    coreTexts?: string;
+  @IsString()
+  @IsOptional()
+  coreTexts?: string;
 
-    @IsString()
-    @IsOptional()
-    additionalReadings?: string;
+  @IsString()
+  @IsOptional()
+  additionalReadings?: string;
   @IsString()
   @IsOptional()
   title?: string;

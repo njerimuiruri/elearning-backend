@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, InstructorStatus } from '../schemas/user.schema';
@@ -29,11 +33,9 @@ export class UsersService {
   }
 
   async updateUser(id: string, updateData: Partial<User>) {
-    const user = await this.userModel.findByIdAndUpdate(
-      id,
-      { $set: updateData },
-      { new: true },
-    ).select('-password');
+    const user = await this.userModel
+      .findByIdAndUpdate(id, { $set: updateData }, { new: true })
+      .select('-password');
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -52,7 +54,9 @@ export class UsersService {
   async getUserStats() {
     const totalUsers = await this.userModel.countDocuments();
     const students = await this.userModel.countDocuments({ role: 'student' });
-    const instructors = await this.userModel.countDocuments({ role: 'instructor' });
+    const instructors = await this.userModel.countDocuments({
+      role: 'instructor',
+    });
     const fellows = await this.userModel.countDocuments({ userType: 'fellow' });
 
     return {
@@ -74,7 +78,7 @@ export class UsersService {
 
   async approveInstructor(instructorId: string) {
     const instructor = await this.userModel.findById(instructorId);
-    
+
     if (!instructor) {
       throw new NotFoundException('Instructor not found');
     }
@@ -111,7 +115,7 @@ export class UsersService {
 
   async rejectInstructor(instructorId: string) {
     const instructor = await this.userModel.findById(instructorId);
-    
+
     if (!instructor) {
       throw new NotFoundException('Instructor not found');
     }
@@ -165,11 +169,13 @@ export class UsersService {
     // In production, integrate with cloud storage
 
     try {
-      const updatedUser = await this.userModel.findByIdAndUpdate(
-        userId,
-        { $set: { profilePhotoUrl: relativePath } },
-        { new: true },
-      ).select('-password');
+      const updatedUser = await this.userModel
+        .findByIdAndUpdate(
+          userId,
+          { $set: { profilePhotoUrl: relativePath } },
+          { new: true },
+        )
+        .select('-password');
 
       if (!updatedUser) {
         throw new NotFoundException('User not found');

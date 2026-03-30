@@ -17,10 +17,7 @@ export class ProgressionService {
   ) {}
 
   // Initialize progression for student in category
-  async initializeProgression(
-    studentId: string,
-    categoryId: string,
-  ) {
+  async initializeProgression(studentId: string, categoryId: string) {
     // Check if already exists
     const existing = await this.progressionModel.findOne({
       studentId: new Types.ObjectId(studentId),
@@ -32,8 +29,8 @@ export class ProgressionService {
     }
 
     // Count modules per level in this category
-    const [beginnerCount, intermediateCount, advancedCount] =
-      await Promise.all([
+    const [beginnerCount, intermediateCount, advancedCount] = await Promise.all(
+      [
         this.moduleModel.countDocuments({
           categoryId: new Types.ObjectId(categoryId),
           level: ModuleLevel.BEGINNER,
@@ -52,7 +49,8 @@ export class ProgressionService {
           status: ModuleStatus.PUBLISHED,
           isActive: true,
         }),
-      ]);
+      ],
+    );
 
     const progression = new this.progressionModel({
       studentId: new Types.ObjectId(studentId),
@@ -79,8 +77,7 @@ export class ProgressionService {
           isUnlocked: false,
         },
       ],
-      totalModulesInCategory:
-        beginnerCount + intermediateCount + advancedCount,
+      totalModulesInCategory: beginnerCount + intermediateCount + advancedCount,
     });
 
     return await progression.save();
@@ -117,8 +114,18 @@ export class ProgressionService {
     categoryId: string,
   ): Promise<{
     beginner: { unlocked: boolean; completed: boolean; completedAt?: Date };
-    intermediate: { unlocked: boolean; completed: boolean; completedAt?: Date; reason?: string };
-    advanced: { unlocked: boolean; completed: boolean; completedAt?: Date; reason?: string };
+    intermediate: {
+      unlocked: boolean;
+      completed: boolean;
+      completedAt?: Date;
+      reason?: string;
+    };
+    advanced: {
+      unlocked: boolean;
+      completed: boolean;
+      completedAt?: Date;
+      reason?: string;
+    };
   }> {
     const progression = await this.progressionModel.findOne({
       studentId: new Types.ObjectId(studentId),
@@ -183,9 +190,7 @@ export class ProgressionService {
 
     // Add to completed modules if not already there
     if (
-      !progression.completedModuleIds.some(
-        (id) => id.toString() === moduleId,
-      )
+      !progression.completedModuleIds.some((id) => id.toString() === moduleId)
     ) {
       progression.completedModuleIds.push(new Types.ObjectId(moduleId));
       progression.totalModulesCompleted++;
@@ -211,13 +216,14 @@ export class ProgressionService {
       }
     }
 
-    progression.overallProgress = progression.totalModulesInCategory > 0
-      ? Math.round(
-          (progression.totalModulesCompleted /
-            progression.totalModulesInCategory) *
-            100,
-        )
-      : 0;
+    progression.overallProgress =
+      progression.totalModulesInCategory > 0
+        ? Math.round(
+            (progression.totalModulesCompleted /
+              progression.totalModulesInCategory) *
+              100,
+          )
+        : 0;
 
     await progression.save();
 
@@ -253,10 +259,7 @@ export class ProgressionService {
   }
 
   // Get student's progression status for a category
-  async getProgressionStatus(
-    studentId: string,
-    categoryId: string,
-  ) {
+  async getProgressionStatus(studentId: string, categoryId: string) {
     let progression = await this.progressionModel
       .findOne({
         studentId: new Types.ObjectId(studentId),

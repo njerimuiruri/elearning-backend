@@ -36,7 +36,7 @@ export class StudentProgression extends Document {
   // Current level (beginner, intermediate, advanced)
   @Prop({
     enum: ['beginner', 'intermediate', 'advanced'],
-    default: 'beginner'
+    default: 'beginner',
   })
   currentLevel: string;
 
@@ -62,9 +62,13 @@ export class StudentProgression extends Document {
   updatedAt: Date;
 }
 
-export const StudentProgressionSchema = SchemaFactory.createForClass(StudentProgression);
+export const StudentProgressionSchema =
+  SchemaFactory.createForClass(StudentProgression);
 
 // Indexes
-StudentProgressionSchema.index({ studentId: 1, categoryId: 1 }, { unique: true });
+StudentProgressionSchema.index(
+  { studentId: 1, categoryId: 1 },
+  { unique: true },
+);
 StudentProgressionSchema.index({ studentId: 1 });
 StudentProgressionSchema.index({ categoryId: 1 });

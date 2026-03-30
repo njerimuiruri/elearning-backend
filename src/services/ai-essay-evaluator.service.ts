@@ -32,7 +32,9 @@ export class AiEssayEvaluatorService {
 
   constructor() {
     if (!this.openaiApiKey && !this.huggingFaceToken) {
-      console.warn('No AI API credentials found. Essay evaluation will be limited.');
+      console.warn(
+        'No AI API credentials found. Essay evaluation will be limited.',
+      );
     }
   }
 
@@ -49,11 +51,17 @@ export class AiEssayEvaluatorService {
     try {
       // Input validation and sanitization
       if (!studentEssay || studentEssay.trim().length < 10) {
-        return this.createLowConfidenceResult('Essay too short to evaluate', 20);
+        return this.createLowConfidenceResult(
+          'Essay too short to evaluate',
+          20,
+        );
       }
 
       if (studentEssay.length > 10000) {
-        return this.createLowConfidenceResult('Essay exceeds maximum length', 25);
+        return this.createLowConfidenceResult(
+          'Essay exceeds maximum length',
+          25,
+        );
       }
 
       // Sanitize input to prevent injection attacks
@@ -231,15 +239,12 @@ export class AiEssayEvaluatorService {
     const s2 = str2.toLowerCase();
 
     // Extract key terms (words > 4 chars)
-    const getKeyTerms = (s: string) =>
-      s.match(/\b\w{4,}\b/g) || [];
+    const getKeyTerms = (s: string) => s.match(/\b\w{4,}\b/g) || [];
     const terms1 = new Set(getKeyTerms(s1));
     const terms2 = new Set(getKeyTerms(s2));
 
     // Calculate Jaccard similarity
-    const intersection = new Set(
-      [...terms1].filter(x => terms2.has(x)),
-    );
+    const intersection = new Set([...terms1].filter((x) => terms2.has(x)));
     const union = new Set([...terms1, ...terms2]);
 
     if (union.size === 0) return 50;
@@ -260,11 +265,12 @@ export class AiEssayEvaluatorService {
     for (const criterion of rubric) {
       totalWeight += criterion.weight;
 
-      const keywordsFound = criterion.expectedKeywords.filter(keyword =>
+      const keywordsFound = criterion.expectedKeywords.filter((keyword) =>
         essayLower.includes(keyword.toLowerCase()),
       );
 
-      const matchRatio = keywordsFound.length / criterion.expectedKeywords.length;
+      const matchRatio =
+        keywordsFound.length / criterion.expectedKeywords.length;
       matchedWeight += matchRatio * criterion.weight;
     }
 
@@ -278,7 +284,8 @@ export class AiEssayEvaluatorService {
     // Check for common plagiarism patterns
     const patterns = {
       quotesWithoutAttribution: /["'][^"']{50,}["']/g,
-      suspiciousPhrasing: /\b(according to wikipedia|as stated in|the following text)\b/gi,
+      suspiciousPhrasing:
+        /\b(according to wikipedia|as stated in|the following text)\b/gi,
       aiGeneratedPatterns:
         /\b(therefore|furthermore|in conclusion|in summary)\b/gi,
     };
@@ -290,8 +297,7 @@ export class AiEssayEvaluatorService {
     riskScore += Math.min(30, quotes.length * 5);
 
     // Check suspicious phrasing
-    const suspicious =
-      essay.match(patterns.suspiciousPhrasing) || [];
+    const suspicious = essay.match(patterns.suspiciousPhrasing) || [];
     riskScore += Math.min(20, suspicious.length * 3);
 
     // Check for AI-like patterns (but not too strict)
@@ -318,9 +324,8 @@ export class AiEssayEvaluatorService {
     if (essayLength > 2000) return 80; // Very long essays lose some points
 
     // Check for meaningful content (not just filler)
-    const sentences = essay.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    const avgSentenceLength =
-      essay.length / Math.max(1, sentences.length);
+    const sentences = essay.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+    const avgSentenceLength = essay.length / Math.max(1, sentences.length);
 
     // Good essays have varied sentence length
     let relevanceScore = 70;
@@ -332,11 +337,10 @@ export class AiEssayEvaluatorService {
     // Bonus for course-specific keywords
     if (courseTitle) {
       const courseKeywords = courseTitle.toLowerCase().split(/\s+/);
-      const matchedKeywords = courseKeywords.filter(kw =>
+      const matchedKeywords = courseKeywords.filter((kw) =>
         essay.toLowerCase().includes(kw),
       );
-      relevanceScore +=
-        Math.min(15, matchedKeywords.length * 5);
+      relevanceScore += Math.min(15, matchedKeywords.length * 5);
     }
 
     return Math.min(100, relevanceScore);
@@ -416,9 +420,7 @@ export class AiEssayEvaluatorService {
     const strengths: string[] = [];
 
     if (semantic >= 75) {
-      strengths.push(
-        'Strong semantic alignment with expected concepts',
-      );
+      strengths.push('Strong semantic alignment with expected concepts');
     }
     if (keywords >= 80) {
       strengths.push('Covered most required concepts and keywords');
@@ -457,9 +459,7 @@ export class AiEssayEvaluatorService {
       improvements.push('Focus more directly on the question asked');
     }
     if (semantic < 60 || keywords < 60) {
-      improvements.push(
-        'Review course materials and provided examples',
-      );
+      improvements.push('Review course materials and provided examples');
     }
 
     return improvements;
@@ -521,9 +521,7 @@ export class AiEssayEvaluatorService {
       confidence,
       feedback: message,
       strengths: [],
-      areasForImprovement: [
-        'Awaiting instructor evaluation',
-      ],
+      areasForImprovement: ['Awaiting instructor evaluation'],
       keyConceptsFound: [],
       semanticMatch: 0,
       contentRelevance: 0,

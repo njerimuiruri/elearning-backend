@@ -8,7 +8,11 @@ class Reply {
   @Prop({ required: true })
   authorName!: string;
 
-  @Prop({ required: true, enum: ['student', 'instructor', 'admin'], default: 'student' })
+  @Prop({
+    required: true,
+    enum: ['student', 'instructor', 'admin'],
+    default: 'student',
+  })
   authorRole!: 'student' | 'instructor' | 'admin';
 
   @Prop({ required: true })

@@ -59,5 +59,8 @@ export class Leaderboard extends Document {
 export const LeaderboardSchema = SchemaFactory.createForClass(Leaderboard);
 
 // Indexes
-LeaderboardSchema.index({ categoryId: 1, level: 1, period: 1 }, { unique: true });
+LeaderboardSchema.index(
+  { categoryId: 1, level: 1, period: 1 },
+  { unique: true },
+);
 LeaderboardSchema.index({ updatedAt: -1 });

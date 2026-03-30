@@ -1,17 +1,17 @@
-import 'dotenv/config';  
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import connectDB from '../database/connect';  
+import connectDB from '../database/connect';
 import * as express from 'express';
 import * as path from 'path';
 
 async function bootstrap() {
   await connectDB();
-  
+
   const app = await NestFactory.create(AppModule);
-  
+
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
@@ -30,7 +30,9 @@ async function bootstrap() {
       if (allowedOrigins.includes(normalizedOrigin)) {
         callback(null, true);
       } else {
-        console.warn(`⚠️ CORS blocked origin: ${origin} (allowed: ${allowedOrigins.join(', ')})`);
+        console.warn(
+          `⚠️ CORS blocked origin: ${origin} (allowed: ${allowedOrigins.join(', ')})`,
+        );
         callback(null, false);
       }
     },
@@ -39,16 +41,16 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     exposedHeaders: ['Content-Disposition'],
   });
-  
+
   // Increase payload size limit for course creation with large module data
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
-  
+
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-  
+
   app.useGlobalPipes(new ValidationPipe({ transform: true }));
-  
+
   // Swagger Configuration
   const config = new DocumentBuilder()
     .setTitle('E-Learning API')
@@ -81,11 +83,13 @@ async function bootstrap() {
     },
   });
 
-  console.log(`📚 Swagger UI available at http://localhost:${process.env.PORT || 5000}/docs`);
-  
+  console.log(
+    `📚 Swagger UI available at http://localhost:${process.env.PORT || 5000}/docs`,
+  );
+
   const port = process.env.PORT || 5000;
   await app.listen(port);
-  
+
   console.log(`Server running on http://localhost:${port}`);
   console.log(`E-Learning Backend is ready!`);
 }

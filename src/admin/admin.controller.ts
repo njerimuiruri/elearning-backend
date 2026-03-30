@@ -1,5 +1,24 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query, UseInterceptors, UploadedFile } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Query,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiParam,
+} from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AdminService } from './admin.service';
 import { ReminderService } from '../services/reminder.service';
@@ -10,7 +29,11 @@ import { CurrentUser } from '../decorators/current-user.decorator';
 import { UserRole } from '../schemas/user.schema';
 import { CreateStudentDto, BulkCreateStudentsDto } from './dto/student.dto';
 import { CreateInstructorDto } from './dto/instructor.dto';
-import { CreateFellowDto, BulkCreateFellowsDto, BulkSendEmailDto } from './dto/fellow.dto';
+import {
+  CreateFellowDto,
+  BulkCreateFellowsDto,
+  BulkSendEmailDto,
+} from './dto/fellow.dto';
 import { CreateModuleDto } from '../modules/dto/create-module.dto';
 import { UpdateModuleDto } from '../modules/dto/update-module.dto';
 
@@ -37,7 +60,10 @@ export class AdminController {
   // Dashboard Statistics
   @Get('stats')
   @ApiOperation({ summary: 'Get dashboard statistics (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Dashboard stats including user counts, course stats, etc.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Dashboard stats including user counts, course stats, etc.',
+  })
   async getDashboardStats() {
     return this.adminService.getDashboardStats();
   }
@@ -46,9 +72,23 @@ export class AdminController {
   @Get('users')
   @ApiOperation({ summary: 'Get all users with filters (Admin only)' })
   @ApiQuery({ name: 'role', required: false, description: 'Filter by role' })
-  @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
-  @ApiQuery({ name: 'page', required: false, type: 'number', description: 'Page number' })
-  @ApiQuery({ name: 'limit', required: false, type: 'number', description: 'Results per page' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'Filter by status',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: 'number',
+    description: 'Page number',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: 'number',
+    description: 'Results per page',
+  })
   @ApiResponse({ status: 200, description: 'List of users' })
   async getAllUsers(
     @Query('role') role?: string,
@@ -65,18 +105,12 @@ export class AdminController {
   }
 
   @Put('users/:id/activate')
-  async activateUser(
-    @Param('id') id: string,
-    @CurrentUser() admin: any,
-  ) {
+  async activateUser(@Param('id') id: string, @CurrentUser() admin: any) {
     return this.adminService.updateUserStatus(id, true, admin._id?.toString());
   }
 
   @Put('users/:id/deactivate')
-  async deactivateUser(
-    @Param('id') id: string,
-    @CurrentUser() admin: any,
-  ) {
+  async deactivateUser(@Param('id') id: string, @CurrentUser() admin: any) {
     return this.adminService.updateUserStatus(id, false, admin._id?.toString());
   }
 
@@ -86,10 +120,7 @@ export class AdminController {
   }
 
   @Delete('users/:id')
-  async deleteUser(
-    @Param('id') id: string,
-    @CurrentUser() admin: any,
-  ) {
+  async deleteUser(@Param('id') id: string, @CurrentUser() admin: any) {
     return this.adminService.deleteUser(id, admin._id?.toString());
   }
 
@@ -123,10 +154,7 @@ export class AdminController {
   }
 
   @Put('students/:id')
-  async updateStudent(
-    @Param('id') id: string,
-    @Body() updateData: any,
-  ) {
+  async updateStudent(@Param('id') id: string, @Body() updateData: any) {
     return this.adminService.updateStudent(id, updateData);
   }
 
@@ -138,7 +166,10 @@ export class AdminController {
   // Instructor Management
   @Post('instructors')
   @ApiOperation({ summary: 'Create a new instructor manually (Admin only)' })
-  @ApiResponse({ status: 201, description: 'Instructor created successfully. Registration email sent.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Instructor created successfully. Registration email sent.',
+  })
   async createInstructor(@Body() createInstructorDto: CreateInstructorDto) {
     return this.adminService.createInstructor(createInstructorDto);
   }
@@ -154,10 +185,7 @@ export class AdminController {
   }
 
   @Put('instructors/:id/approve')
-  async approveInstructor(
-    @Param('id') id: string,
-    @CurrentUser() admin: any,
-  ) {
+  async approveInstructor(@Param('id') id: string, @CurrentUser() admin: any) {
     return this.adminService.approveInstructor(id, admin._id?.toString());
   }
 
@@ -167,7 +195,11 @@ export class AdminController {
     @Body('reason') reason: string,
     @CurrentUser() admin: any,
   ) {
-    return this.adminService.rejectInstructor(id, reason, admin._id?.toString());
+    return this.adminService.rejectInstructor(
+      id,
+      reason,
+      admin._id?.toString(),
+    );
   }
 
   @Get('instructors')
@@ -193,7 +225,10 @@ export class AdminController {
   @Delete('instructors/:id')
   @ApiOperation({ summary: 'Delete instructor and their associated courses' })
   @ApiParam({ name: 'id', description: 'Instructor user ID' })
-  @ApiResponse({ status: 200, description: 'Instructor and their courses deleted successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Instructor and their courses deleted successfully',
+  })
   async deleteInstructor(@Param('id') id: string) {
     return this.adminService.deleteInstructor(id);
   }
@@ -228,12 +263,21 @@ export class AdminController {
 
   @Post('fellows/bulk')
   async bulkCreateFellows(@Body() dto: BulkCreateFellowsDto) {
-    return this.adminService.bulkCreateFellows(dto.fellows, dto.sendEmails ?? false);
+    return this.adminService.bulkCreateFellows(
+      dto.fellows,
+      dto.sendEmails ?? false,
+    );
   }
 
   @Post('fellows/bulk-email')
   async sendBulkEmail(@Body() dto: BulkSendEmailDto) {
-    return this.adminService.sendBulkEmailToFellows(dto.fellowIds, dto.subject, dto.message, dto.cc, dto.bcc);
+    return this.adminService.sendBulkEmailToFellows(
+      dto.fellowIds,
+      dto.subject,
+      dto.message,
+      dto.cc,
+      dto.bcc,
+    );
   }
 
   @Post('fellows/send-invitations')
@@ -269,7 +313,12 @@ export class AdminController {
   @Get('analytics/student-progress')
   @ApiOperation({ summary: 'Get detailed student progress analytics' })
   @ApiQuery({ name: 'limit', required: false, type: 'number' })
-  @ApiQuery({ name: 'status', required: false, type: 'string', description: 'Filter by in-progress or completed' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    type: 'string',
+    description: 'Filter by in-progress or completed',
+  })
   async getStudentProgressAnalytics(
     @Query('limit') limit?: number,
     @Query('status') status?: 'in-progress' | 'completed' | 'all',
@@ -343,7 +392,11 @@ export class AdminController {
     @Body('reason') reason: string,
     @CurrentUser() admin: any,
   ) {
-    return this.adminService.rejectPendingCourse(id, reason, admin._id?.toString());
+    return this.adminService.rejectPendingCourse(
+      id,
+      reason,
+      admin._id?.toString(),
+    );
   }
 
   @Delete('courses/:id')
@@ -353,7 +406,9 @@ export class AdminController {
 
   // Reminder System
   @Get('reminders/students-needing-reminders')
-  @ApiOperation({ summary: 'Get students who need course completion reminders' })
+  @ApiOperation({
+    summary: 'Get students who need course completion reminders',
+  })
   @ApiQuery({ name: 'limit', required: false, type: 'number' })
   async getStudentsNeedingReminders(@Query('limit') limit?: number) {
     return this.reminderService.getStudentsNeedingReminders(limit);
@@ -374,7 +429,11 @@ export class AdminController {
   @Put('reminders/settings')
   @ApiOperation({ summary: 'Update reminder system settings' })
   async updateReminderSettings(
-    @Body() settings: { autoRemindersEnabled?: boolean; reminderDelayDays?: number },
+    @Body()
+    settings: {
+      autoRemindersEnabled?: boolean;
+      reminderDelayDays?: number;
+    },
   ) {
     return this.reminderService.updateReminderSettings(settings);
   }
@@ -393,7 +452,9 @@ export class AdminController {
   }
 
   @Post('reminders/trigger-automatic')
-  @ApiOperation({ summary: 'Manually trigger automatic reminder check (for testing)' })
+  @ApiOperation({
+    summary: 'Manually trigger automatic reminder check (for testing)',
+  })
   async triggerAutomaticReminders() {
     await this.reminderService.handleAutomaticReminders();
     return { success: true, message: 'Automatic reminder check triggered' };
@@ -419,13 +480,14 @@ export class AdminController {
   async sendRemindersToMultiple(
     @Body() body: { enrollmentIds: string[]; message?: string },
   ) {
-    return this.adminService.sendRemindersToMultipleStudents(body.enrollmentIds, body.message);
+    return this.adminService.sendRemindersToMultipleStudents(
+      body.enrollmentIds,
+      body.message,
+    );
   }
 
   @Post('reminders/send-all')
-  async sendRemindersToAll(
-    @Body() body: { message?: string },
-  ) {
+  async sendRemindersToAll(@Body() body: { message?: string }) {
     return this.adminService.sendRemindersToAllNotFinished(body.message);
   }
 
@@ -433,14 +495,22 @@ export class AdminController {
   @Post('course-format/upload')
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Upload course format document (Admin only)' })
-  @ApiResponse({ status: 201, description: 'Course format uploaded successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Course format uploaded successfully',
+  })
   async uploadCourseFormat(
     @UploadedFile() file: Express.Multer.File,
     @Body('description') description?: string,
     @Body('version') version?: string,
     @CurrentUser() admin?: any,
   ) {
-    return this.adminService.uploadCourseFormat(file, description, version, admin?._id?.toString());
+    return this.adminService.uploadCourseFormat(
+      file,
+      description,
+      version,
+      admin?._id?.toString(),
+    );
   }
 
   @Get('course-format')
@@ -452,7 +522,10 @@ export class AdminController {
 
   @Delete('course-format/:id')
   @ApiOperation({ summary: 'Delete course format document (Admin only)' })
-  @ApiResponse({ status: 200, description: 'Course format deleted successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Course format deleted successfully',
+  })
   async deleteCourseFormat(@Param('id') id: string) {
     return this.adminService.deleteCourseFormat(id);
   }
@@ -460,12 +533,17 @@ export class AdminController {
   // ===================== MODULE MANAGEMENT =====================
 
   @Post('modules')
-  @ApiOperation({ summary: 'Admin creates a module on behalf of an instructor' })
+  @ApiOperation({
+    summary: 'Admin creates a module on behalf of an instructor',
+  })
   async createModuleAsAdmin(
     @Body() createModuleDto: CreateModuleDto,
     @CurrentUser() admin: any,
   ) {
-    return this.adminService.createModuleAsAdmin(admin._id?.toString(), createModuleDto);
+    return this.adminService.createModuleAsAdmin(
+      admin._id?.toString(),
+      createModuleDto,
+    );
   }
 
   @Get('modules')
@@ -477,7 +555,13 @@ export class AdminController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
-    return this.adminService.getAllModules({ status, level, category, page, limit });
+    return this.adminService.getAllModules({
+      status,
+      level,
+      category,
+      page,
+      limit,
+    });
   }
 
   @Get('modules/pending')
@@ -503,19 +587,13 @@ export class AdminController {
 
   @Put('modules/:id/approve')
   @ApiOperation({ summary: 'Approve a submitted module' })
-  async approveModule(
-    @Param('id') id: string,
-    @CurrentUser() admin: any,
-  ) {
+  async approveModule(@Param('id') id: string, @CurrentUser() admin: any) {
     return this.adminService.approveModule(id, admin._id?.toString());
   }
 
   @Put('modules/:id/publish')
   @ApiOperation({ summary: 'Publish an approved module' })
-  async publishModule(
-    @Param('id') id: string,
-    @CurrentUser() admin: any,
-  ) {
+  async publishModule(@Param('id') id: string, @CurrentUser() admin: any) {
     return this.adminService.publishModule(id, admin._id?.toString());
   }
 
@@ -530,50 +608,68 @@ export class AdminController {
   }
 
   @Put('modules/:id')
-  @ApiOperation({ summary: 'Update any module — admin can edit regardless of status or ownership' })
+  @ApiOperation({
+    summary:
+      'Update any module — admin can edit regardless of status or ownership',
+  })
   async updateModuleAsAdmin(
     @Param('id') id: string,
     @Body() dto: UpdateModuleDto,
     @CurrentUser() admin: any,
   ) {
-    return this.adminService.updateModuleAsAdmin(id, admin._id?.toString(), dto);
+    return this.adminService.updateModuleAsAdmin(
+      id,
+      admin._id?.toString(),
+      dto,
+    );
   }
 
   @Post('modules/:id/lessons')
-  @ApiOperation({ summary: 'Add a lesson to any module — admin can add lessons regardless of status or ownership' })
+  @ApiOperation({
+    summary:
+      'Add a lesson to any module — admin can add lessons regardless of status or ownership',
+  })
   async addModuleLessonAsAdmin(
     @Param('id') id: string,
     @Body() lessonData: any,
     @CurrentUser() admin: any,
   ) {
-    return this.adminService.addModuleLessonAsAdmin(id, admin._id?.toString(), lessonData);
+    return this.adminService.addModuleLessonAsAdmin(
+      id,
+      admin._id?.toString(),
+      lessonData,
+    );
   }
 
   @Delete('modules/:id/lessons/:lessonIndex')
-  @ApiOperation({ summary: 'Delete a lesson from any module — admin can remove lessons regardless of status or ownership' })
+  @ApiOperation({
+    summary:
+      'Delete a lesson from any module — admin can remove lessons regardless of status or ownership',
+  })
   async deleteModuleLessonAsAdmin(
     @Param('id') id: string,
     @Param('lessonIndex') lessonIndex: string,
     @CurrentUser() admin: any,
   ) {
-    return this.adminService.deleteModuleLessonAsAdmin(id, parseInt(lessonIndex), admin._id?.toString());
+    return this.adminService.deleteModuleLessonAsAdmin(
+      id,
+      parseInt(lessonIndex),
+      admin._id?.toString(),
+    );
   }
 
   @Delete('modules/:id')
-  @ApiOperation({ summary: 'Delete (deactivate) a module — admin can remove any module regardless of status' })
-  async deleteModule(
-    @Param('id') id: string,
-    @CurrentUser() admin: any,
-  ) {
+  @ApiOperation({
+    summary:
+      'Delete (deactivate) a module — admin can remove any module regardless of status',
+  })
+  async deleteModule(@Param('id') id: string, @CurrentUser() admin: any) {
     return this.adminService.deleteModuleAsAdmin(id, admin._id?.toString());
   }
 
   @Put('modules/:id/approve-assessment')
   @ApiOperation({ summary: 'Approve a pending assessment update' })
-  async approveAssessment(
-    @Param('id') id: string,
-    @CurrentUser() admin: any,
-  ) {
+  async approveAssessment(@Param('id') id: string, @CurrentUser() admin: any) {
     return this.adminService.approveAssessment(id, admin._id?.toString());
   }
 
@@ -584,6 +680,10 @@ export class AdminController {
     @Body('reason') reason: string,
     @CurrentUser() admin: any,
   ) {
-    return this.adminService.rejectAssessment(id, reason, admin._id?.toString());
+    return this.adminService.rejectAssessment(
+      id,
+      reason,
+      admin._id?.toString(),
+    );
   }
 }

@@ -1,5 +1,11 @@
 import { Controller, Get, Param, Res, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CertificateService } from './certificate.service';
@@ -18,7 +24,9 @@ export class CertificateController {
   @Get('module/student/my-certificates')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('jwt-auth')
-  @ApiOperation({ summary: 'Get all module certificates for authenticated student' })
+  @ApiOperation({
+    summary: 'Get all module certificates for authenticated student',
+  })
   async getMyModuleCertificates(@Req() req: any) {
     const userId = req.user?.userId || req.user?.id;
     return this.moduleCertificateService.getStudentCertificates(userId);
@@ -37,7 +45,10 @@ export class CertificateController {
     @Res() res: Response,
   ) {
     try {
-      const pdfBuffer = await this.moduleCertificateService.generateCertificatePDFByPublicId(publicId);
+      const pdfBuffer =
+        await this.moduleCertificateService.generateCertificatePDFByPublicId(
+          publicId,
+        );
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename=module-certificate-${publicId}.pdf`,
@@ -57,7 +68,10 @@ export class CertificateController {
     @Res() res: Response,
   ) {
     try {
-      const pdfBuffer = await this.moduleCertificateService.generateCertificatePDFByPublicId(publicId);
+      const pdfBuffer =
+        await this.moduleCertificateService.generateCertificatePDFByPublicId(
+          publicId,
+        );
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename=module-certificate-${publicId}.pdf`,
@@ -90,7 +104,11 @@ export class CertificateController {
   ) {
     try {
       const userId = req.user?.userId || req.user?.id;
-      const pdfBuffer = await this.moduleCertificateService.generateCertificatePDFWithAuth(id, userId);
+      const pdfBuffer =
+        await this.moduleCertificateService.generateCertificatePDFWithAuth(
+          id,
+          userId,
+        );
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename=module-certificate-${id}.pdf`,
@@ -115,10 +133,15 @@ export class CertificateController {
 
   @Get('public/:publicId/view')
   @ApiOperation({ summary: 'View certificate PDF (no auth required)' })
-  async viewPublicCertificate(@Param('publicId') publicId: string, @Res() res: Response) {
+  async viewPublicCertificate(
+    @Param('publicId') publicId: string,
+    @Res() res: Response,
+  ) {
     try {
-      const certificate = await this.certificateService.getCertificateByPublicId(publicId);
-      const pdfBuffer = await this.certificateService.createPDFBuffer(certificate);
+      const certificate =
+        await this.certificateService.getCertificateByPublicId(publicId);
+      const pdfBuffer =
+        await this.certificateService.createPDFBuffer(certificate);
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `inline; filename=certificate-${certificate.certificateNumber}.pdf`,
@@ -133,10 +156,15 @@ export class CertificateController {
 
   @Get('public/:publicId/download')
   @ApiOperation({ summary: 'Download certificate PDF (no auth required)' })
-  async downloadPublicCertificate(@Param('publicId') publicId: string, @Res() res: Response) {
+  async downloadPublicCertificate(
+    @Param('publicId') publicId: string,
+    @Res() res: Response,
+  ) {
     try {
-      const certificate = await this.certificateService.getCertificateByPublicId(publicId);
-      const pdfBuffer = await this.certificateService.createPDFBuffer(certificate);
+      const certificate =
+        await this.certificateService.getCertificateByPublicId(publicId);
+      const pdfBuffer =
+        await this.certificateService.createPDFBuffer(certificate);
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename=certificate-${certificate.certificateNumber}.pdf`,
@@ -161,10 +189,18 @@ export class CertificateController {
 
   @Get(':id/download')
   @UseGuards(JwtAuthGuard)
-  async downloadCertificate(@Param('id') id: string, @Res() res: Response, @Req() req: any) {
+  async downloadCertificate(
+    @Param('id') id: string,
+    @Res() res: Response,
+    @Req() req: any,
+  ) {
     try {
       const userId = req.user?.userId || req.user?.id;
-      const pdfBuffer = await this.certificateService.generateCertificatePDFWithAuth(id, userId);
+      const pdfBuffer =
+        await this.certificateService.generateCertificatePDFWithAuth(
+          id,
+          userId,
+        );
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename=certificate-${id}.pdf`,

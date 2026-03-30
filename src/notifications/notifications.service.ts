@@ -70,7 +70,10 @@ export class NotificationsService {
     const query: any = {
       userId: new Types.ObjectId(userId),
       type: {
-        $in: [NotificationType.INSTRUCTOR_REMINDER, NotificationType.ADMIN_REMINDER],
+        $in: [
+          NotificationType.INSTRUCTOR_REMINDER,
+          NotificationType.ADMIN_REMINDER,
+        ],
       },
     };
 

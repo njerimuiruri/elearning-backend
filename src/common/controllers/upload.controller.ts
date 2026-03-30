@@ -1,4 +1,11 @@
-import { Controller, Post, UseInterceptors, UploadedFile, BadRequestException, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+  UseGuards,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CloudinaryService } from '../services/cloudinary.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -18,7 +25,9 @@ export class UploadController {
     // Validate image file
     const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedMimes.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid image format. Allowed: JPEG, PNG, GIF, WebP');
+      throw new BadRequestException(
+        'Invalid image format. Allowed: JPEG, PNG, GIF, WebP',
+      );
     }
 
     if (file.size > 5 * 1024 * 1024) {
@@ -51,11 +60,14 @@ export class UploadController {
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'application/vnd.ms-excel',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv',
       'text/plain',
       'application/zip',
     ];
     if (!allowedMimes.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid document format. Allowed: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, TXT, ZIP');
+      throw new BadRequestException(
+        'Invalid document format. Allowed: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, TXT, ZIP',
+      );
     }
 
     if (file.size > 20 * 1024 * 1024) {
@@ -83,7 +95,9 @@ export class UploadController {
     // Validate video file
     const allowedMimes = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
     if (!allowedMimes.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid video format. Allowed: MP4, MOV, AVI');
+      throw new BadRequestException(
+        'Invalid video format. Allowed: MP4, MOV, AVI',
+      );
     }
 
     if (file.size > 100 * 1024 * 1024) {

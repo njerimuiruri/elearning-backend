@@ -34,7 +34,11 @@ export class QuestionAnswer extends Document {
   tags: string[];
 
   // AI Features
-  @Prop({ type: String, enum: ['general', 'technical', 'conceptual', 'assessment'], default: 'general' })
+  @Prop({
+    type: String,
+    enum: ['general', 'technical', 'conceptual', 'assessment'],
+    default: 'general',
+  })
   questionCategory: string;
 
   @Prop({ type: Number, min: 0, max: 1, default: 0 })
@@ -57,13 +61,18 @@ export class QuestionAnswer extends Document {
   status: string; // unanswered, pending, answered, resolved
 
   // Follow-up Conversation
-  @Prop({ type: [{ 
-    senderId: Types.ObjectId,
-    senderType: String, // 'student' or 'instructor'
-    message: String,
-    createdAt: Date,
-    aiSuggested: Boolean
-  }], default: [] })
+  @Prop({
+    type: [
+      {
+        senderId: Types.ObjectId,
+        senderType: String, // 'student' or 'instructor'
+        message: String,
+        createdAt: Date,
+        aiSuggested: Boolean,
+      },
+    ],
+    default: [],
+  })
   conversationThread: any[];
 
   // Ratings & Feedback
@@ -96,7 +105,11 @@ export class QuestionAnswer extends Document {
   views: number;
 
   // Priority & Urgency
-  @Prop({ type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' })
+  @Prop({
+    type: String,
+    enum: ['low', 'medium', 'high', 'urgent'],
+    default: 'medium',
+  })
   priority: string;
 
   @Prop({ type: Number, default: 0 })
@@ -138,7 +151,8 @@ export class QuestionAnswer extends Document {
   helpfulCount: number;
 }
 
-export const QuestionAnswerSchema = SchemaFactory.createForClass(QuestionAnswer);
+export const QuestionAnswerSchema =
+  SchemaFactory.createForClass(QuestionAnswer);
 
 // Indexes for better query performance
 QuestionAnswerSchema.index({ courseId: 1, status: 1 });

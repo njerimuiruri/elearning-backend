@@ -6,7 +6,10 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { User, UserSchema } from '../schemas/user.schema';
-import { PasswordReset, PasswordResetSchema } from '../schemas/password-reset.schema';
+import {
+  PasswordReset,
+  PasswordResetSchema,
+} from '../schemas/password-reset.schema';
 import { ActivityLog, ActivityLogSchema } from '../schemas/activity-log.schema';
 import { JwtStrategy } from './jwt.strategy';
 import { UsersModule } from '../users/users.module';

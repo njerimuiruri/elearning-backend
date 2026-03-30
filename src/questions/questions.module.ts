@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { QuestionAnswerController } from './questions.controller';
 import { QuestionAnswerService } from './question-answer.service';
-import { QuestionAnswer, QuestionAnswerSchema } from './schemas/question-answer.schema';
+import {
+  QuestionAnswer,
+  QuestionAnswerSchema,
+} from './schemas/question-answer.schema';
 import { Enrollment, EnrollmentSchema } from '../schemas/enrollment.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Course, CourseSchema } from '../schemas/course.schema';

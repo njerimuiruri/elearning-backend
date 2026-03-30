@@ -1,7 +1,14 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { QuestionAnswer, QuestionAnswerDocument } from './schemas/question-answer.schema';
+import {
+  QuestionAnswer,
+  QuestionAnswerDocument,
+} from './schemas/question-answer.schema';
 import { EmailService } from '../common/services/email.service';
 
 @Injectable()
@@ -18,7 +25,10 @@ export class QuestionAnswerService {
   async createQuestion(studentId: string, courseId: string, questionData: any) {
     try {
       const category = this.categorizeQuestion(questionData.questionContent);
-      const suggestion = this.generateAISuggestedAnswer(category, questionData.questionContent);
+      const suggestion = this.generateAISuggestedAnswer(
+        category,
+        questionData.questionContent,
+      );
 
       const question = new this.questionModel({
         studentId: new Types.ObjectId(studentId),
@@ -27,7 +37,9 @@ export class QuestionAnswerService {
         questionContent: questionData.questionContent,
         tags: questionData.tags || [],
         moduleIndex: questionData.moduleIndex,
-        lessonId: questionData.lessonId ? new Types.ObjectId(questionData.lessonId) : null,
+        lessonId: questionData.lessonId
+          ? new Types.ObjectId(questionData.lessonId)
+          : null,
         priority: questionData.priority || 'medium',
         questionCategory: category,
         aiSuggestedAnswer: suggestion,
@@ -37,21 +49,30 @@ export class QuestionAnswerService {
 
       return await question.save();
     } catch (error) {
-      throw new BadRequestException(`Failed to create question: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to create question: ${error.message}`,
+      );
     }
   }
 
   /**
    * Respond to a question (instructor only)
    */
-  async respondToQuestion(questionId: string, instructorId: string, response: string, isPublic: boolean = false) {
+  async respondToQuestion(
+    questionId: string,
+    instructorId: string,
+    response: string,
+    isPublic: boolean = false,
+  ) {
     try {
       const question = await this.questionModel.findById(questionId);
       if (!question) throw new NotFoundException('Question not found');
 
       const respondedAt = new Date();
       const createdDate = question.readAt || new Date(); // Fallback to current date
-      const responseTime = Math.round((respondedAt.getTime() - createdDate.getTime()) / (1000 * 60 * 60)); // hours
+      const responseTime = Math.round(
+        (respondedAt.getTime() - createdDate.getTime()) / (1000 * 60 * 60),
+      ); // hours
 
       question.instructorResponse = response;
       question.respondedAt = respondedAt;
@@ -70,14 +91,21 @@ export class QuestionAnswerService {
 
       return await question.save();
     } catch (error) {
-      throw new BadRequestException(`Failed to respond to question: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to respond to question: ${error.message}`,
+      );
     }
   }
 
   /**
    * Add a follow-up message to the conversation
    */
-  async addFollowUpMessage(questionId: string, userId: string, message: string, userType: 'student' | 'instructor' = 'student') {
+  async addFollowUpMessage(
+    questionId: string,
+    userId: string,
+    message: string,
+    userType: 'student' | 'instructor' = 'student',
+  ) {
     try {
       const question = await this.questionModel.findById(questionId);
       if (!question) throw new NotFoundException('Question not found');
@@ -95,14 +123,22 @@ export class QuestionAnswerService {
 
       return await question.save();
     } catch (error) {
-      throw new BadRequestException(`Failed to add follow-up: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to add follow-up: ${error.message}`,
+      );
     }
   }
 
   /**
    * Get all questions asked by a student
    */
-  async getStudentQuestions(studentId: string, courseId?: string, status?: string, page: number = 1, limit: number = 10) {
+  async getStudentQuestions(
+    studentId: string,
+    courseId?: string,
+    status?: string,
+    page: number = 1,
+    limit: number = 10,
+  ) {
     try {
       const filter: any = { studentId: new Types.ObjectId(studentId) };
       if (courseId) filter.courseId = new Types.ObjectId(courseId);
@@ -125,14 +161,22 @@ export class QuestionAnswerService {
         pagination: { page, limit, total, pages: Math.ceil(total / limit) },
       };
     } catch (error) {
-      throw new BadRequestException(`Failed to retrieve questions: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to retrieve questions: ${error.message}`,
+      );
     }
   }
 
   /**
    * Get all questions assigned to an instructor
    */
-  async getInstructorQuestions(instructorId: string, courseId?: string, status?: string, page: number = 1, limit: number = 10) {
+  async getInstructorQuestions(
+    instructorId: string,
+    courseId?: string,
+    status?: string,
+    page: number = 1,
+    limit: number = 10,
+  ) {
     try {
       const filter: any = {};
       if (courseId) filter.courseId = new Types.ObjectId(courseId);
@@ -162,7 +206,9 @@ export class QuestionAnswerService {
         pagination: { page, limit, total, pages: Math.ceil(total / limit) },
       };
     } catch (error) {
-      throw new BadRequestException(`Failed to retrieve instructor questions: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to retrieve instructor questions: ${error.message}`,
+      );
     }
   }
 
@@ -182,7 +228,12 @@ export class QuestionAnswerService {
       ]);
 
       const avgRating = await this.questionModel.aggregate([
-        { $match: { instructorId: new Types.ObjectId(instructorId), studentRating: { $exists: true } } },
+        {
+          $match: {
+            instructorId: new Types.ObjectId(instructorId),
+            studentRating: { $exists: true },
+          },
+        },
         {
           $group: {
             _id: null,
@@ -198,14 +249,20 @@ export class QuestionAnswerService {
         avgResponseTime: avgRating[0]?.avgResponseTime || 0,
       };
     } catch (error) {
-      throw new BadRequestException(`Failed to calculate stats: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to calculate stats: ${error.message}`,
+      );
     }
   }
 
   /**
    * Get admin dashboard data (system-wide overview)
    */
-  async getAdminDashboardData(courseId?: string, page: number = 1, limit: number = 20) {
+  async getAdminDashboardData(
+    courseId?: string,
+    page: number = 1,
+    limit: number = 20,
+  ) {
     try {
       const filter: any = {};
       if (courseId) filter.courseId = new Types.ObjectId(courseId);
@@ -222,7 +279,9 @@ export class QuestionAnswerService {
 
       const systemStats = await this.getSystemStats(courseId);
       const recentActivity = await this.getRecentActivity(courseId, 10);
-      const flaggedQuestions = await this.questionModel.find({ flaggedByAdmin: true }).limit(5);
+      const flaggedQuestions = await this.questionModel
+        .find({ flaggedByAdmin: true })
+        .limit(5);
 
       return {
         questions,
@@ -232,7 +291,9 @@ export class QuestionAnswerService {
         pagination: { page, limit },
       };
     } catch (error) {
-      throw new BadRequestException(`Failed to fetch admin dashboard: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to fetch admin dashboard: ${error.message}`,
+      );
     }
   }
 
@@ -279,7 +340,9 @@ export class QuestionAnswerService {
         avgRating: avgRating[0]?.avg || 0,
       };
     } catch (error) {
-      throw new BadRequestException(`Failed to calculate system stats: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to calculate system stats: ${error.message}`,
+      );
     }
   }
 
@@ -295,13 +358,17 @@ export class QuestionAnswerService {
         .find(filter)
         .sort({ updatedAt: -1 })
         .limit(limit)
-        .select('studentId instructorId courseId questionTitle status respondedAt createdAt')
+        .select(
+          'studentId instructorId courseId questionTitle status respondedAt createdAt',
+        )
         .populate('studentId', 'name')
         .populate('instructorId', 'name');
 
       return activity;
     } catch (error) {
-      throw new BadRequestException(`Failed to fetch activity: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to fetch activity: ${error.message}`,
+      );
     }
   }
 
@@ -323,16 +390,24 @@ export class QuestionAnswerService {
       if (!question) throw new NotFoundException('Question not found');
       return question;
     } catch (error) {
-      throw new BadRequestException(`Failed to resolve question: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to resolve question: ${error.message}`,
+      );
     }
   }
 
   /**
    * Rate an instructor's response
    */
-  async rateResponse(questionId: string, studentId: string, rating: number, feedback?: string) {
+  async rateResponse(
+    questionId: string,
+    studentId: string,
+    rating: number,
+    feedback?: string,
+  ) {
     try {
-      if (rating < 1 || rating > 5) throw new BadRequestException('Rating must be between 1 and 5');
+      if (rating < 1 || rating > 5)
+        throw new BadRequestException('Rating must be between 1 and 5');
 
       const question = await this.questionModel.findByIdAndUpdate(
         questionId,
@@ -347,7 +422,9 @@ export class QuestionAnswerService {
       if (!question) throw new NotFoundException('Question not found');
       return question;
     } catch (error) {
-      throw new BadRequestException(`Failed to rate response: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to rate response: ${error.message}`,
+      );
     }
   }
 
@@ -357,7 +434,12 @@ export class QuestionAnswerService {
   async searchQuestions(
     courseId: string,
     searchTerm?: string,
-    filters?: { status?: string; category?: string; priority?: string; resolved?: boolean },
+    filters?: {
+      status?: string;
+      category?: string;
+      priority?: string;
+      resolved?: boolean;
+    },
     page: number = 1,
     limit: number = 10,
   ) {
@@ -414,14 +496,19 @@ export class QuestionAnswerService {
         .find({
           _id: { $ne: questionId },
           courseId: question.courseId,
-          $or: [{ tags: { $in: keywords } }, { questionTitle: { $regex: keywords.join('|'), $options: 'i' } }],
+          $or: [
+            { tags: { $in: keywords } },
+            { questionTitle: { $regex: keywords.join('|'), $options: 'i' } },
+          ],
         })
         .limit(5)
         .select('questionTitle questionCategory status studentRating');
 
       return similar;
     } catch (error) {
-      throw new BadRequestException(`Failed to find similar questions: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to find similar questions: ${error.message}`,
+      );
     }
   }
 
@@ -442,14 +529,20 @@ export class QuestionAnswerService {
       if (!question) throw new NotFoundException('Question not found');
       return question;
     } catch (error) {
-      throw new BadRequestException(`Failed to flag question: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to flag question: ${error.message}`,
+      );
     }
   }
 
   /**
    * Mark answer as helpful
    */
-  async markHelpful(questionId: string, userId: string, isHelpful: boolean = true) {
+  async markHelpful(
+    questionId: string,
+    userId: string,
+    isHelpful: boolean = true,
+  ) {
     try {
       const question = await this.questionModel.findById(questionId);
       if (!question) throw new NotFoundException('Question not found');
@@ -461,7 +554,9 @@ export class QuestionAnswerService {
         question.helpfulVotes.push(userObjectId);
         question.helpfulCount += 1;
       } else if (!isHelpful && alreadyVoted) {
-        question.helpfulVotes = question.helpfulVotes.filter((id) => !id.equals(userObjectId));
+        question.helpfulVotes = question.helpfulVotes.filter(
+          (id) => !id.equals(userObjectId),
+        );
         question.helpfulCount = Math.max(0, question.helpfulCount - 1);
       }
 
@@ -477,9 +572,12 @@ export class QuestionAnswerService {
   private categorizeQuestion(content: string): string {
     const lowerContent = content.toLowerCase();
 
-    if (lowerContent.match(/bug|error|not working|issue|crash|fail/)) return 'technical';
-    if (lowerContent.match(/explain|understand|how does|why|concept|theory/)) return 'conceptual';
-    if (lowerContent.match(/assignment|quiz|exam|grade|test|assessment/)) return 'assessment';
+    if (lowerContent.match(/bug|error|not working|issue|crash|fail/))
+      return 'technical';
+    if (lowerContent.match(/explain|understand|how does|why|concept|theory/))
+      return 'conceptual';
+    if (lowerContent.match(/assignment|quiz|exam|grade|test|assessment/))
+      return 'assessment';
 
     return 'general';
   }
@@ -489,9 +587,12 @@ export class QuestionAnswerService {
    */
   private generateAISuggestedAnswer(category: string, content: string): string {
     const templates = {
-      technical: 'Based on your technical question, please check the documentation or try the following approach...',
-      conceptual: 'This is an important concept. Here are the key points to understand...',
-      assessment: 'For assessment-related questions, I recommend reviewing the course materials and consulting your instructor directly.',
+      technical:
+        'Based on your technical question, please check the documentation or try the following approach...',
+      conceptual:
+        'This is an important concept. Here are the key points to understand...',
+      assessment:
+        'For assessment-related questions, I recommend reviewing the course materials and consulting your instructor directly.',
       general: 'Great question! Here is some helpful information...',
     };
 
@@ -537,7 +638,9 @@ export class QuestionAnswerService {
   /**
    * Delete a question permanently
    */
-  async deleteQuestion(questionId: string): Promise<{ success: boolean; message: string }> {
+  async deleteQuestion(
+    questionId: string,
+  ): Promise<{ success: boolean; message: string }> {
     try {
       const result = await this.questionModel.findByIdAndDelete(questionId);
 

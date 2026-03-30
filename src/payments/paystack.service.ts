@@ -104,7 +104,10 @@ export class PaystackService {
       if (channels && channels.length > 0) {
         body.channels = channels;
       }
-      const response = await this.paystackApi.post('/transaction/initialize', body);
+      const response = await this.paystackApi.post(
+        '/transaction/initialize',
+        body,
+      );
 
       this.logger.log(`Initialized transaction ${reference} for ${email}`);
       return response.data;
@@ -123,12 +126,18 @@ export class PaystackService {
    */
   async verifyTransaction(reference: string): Promise<PaystackVerifyResponse> {
     try {
-      const response = await this.paystackApi.get(`/transaction/verify/${reference}`);
+      const response = await this.paystackApi.get(
+        `/transaction/verify/${reference}`,
+      );
 
-      this.logger.log(`Verified transaction ${reference}: ${response.data.data.status}`);
+      this.logger.log(
+        `Verified transaction ${reference}: ${response.data.data.status}`,
+      );
       return response.data;
     } catch (error: any) {
-      this.logger.error(`Failed to verify transaction ${reference}: ${error.message}`);
+      this.logger.error(
+        `Failed to verify transaction ${reference}: ${error.message}`,
+      );
       throw new BadRequestException(
         `Failed to verify payment: ${error.response?.data?.message || error.message}`,
       );
@@ -141,7 +150,9 @@ export class PaystackService {
    */
   async fetchTransaction(transactionId: number): Promise<any> {
     try {
-      const response = await this.paystackApi.get(`/transaction/${transactionId}`);
+      const response = await this.paystackApi.get(
+        `/transaction/${transactionId}`,
+      );
       return response.data;
     } catch (error: any) {
       throw new BadRequestException(
@@ -198,7 +209,10 @@ export class PaystackService {
    * Initiate refund (Paystack doesn't have direct refund API, requires manual process)
    * This method documents the refund request
    */
-  async requestRefund(transactionReference: string, reason: string): Promise<any> {
+  async requestRefund(
+    transactionReference: string,
+    reason: string,
+  ): Promise<any> {
     // Paystack requires manual refund requests through their dashboard or support
     // This method should log the refund request and notify admins
     this.logger.warn(
@@ -211,7 +225,8 @@ export class PaystackService {
     // 3. Admin processes refund through Paystack dashboard
 
     return {
-      message: 'Refund request logged. Admin will process through Paystack dashboard.',
+      message:
+        'Refund request logged. Admin will process through Paystack dashboard.',
       reference: transactionReference,
       reason,
     };
