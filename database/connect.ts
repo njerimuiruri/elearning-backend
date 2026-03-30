@@ -21,7 +21,6 @@ const connectDB = async (): Promise<void> => {
   }
 };
 
-// Connection event listeners
 mongoose.connection.on('connected', () => {
   console.log('🔗 Mongoose connected to MongoDB');
 });
