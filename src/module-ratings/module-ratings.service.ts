@@ -99,8 +99,7 @@ export class ModuleRatingsService {
       ]),
     ]);
 
-    const avgRating =
-      stats.length > 0 ? Math.round(stats[0].avg * 10) / 10 : 0;
+    const avgRating = stats.length > 0 ? Math.round(stats[0].avg * 10) / 10 : 0;
     const totalRatings = stats.length > 0 ? stats[0].count : 0;
 
     // Build 5-1 star distribution object
@@ -113,11 +112,7 @@ export class ModuleRatingsService {
   }
 
   // ── Instructor / Admin: get paginated reviews for a module ──────────────────
-  async getModuleReviews(
-    moduleId: string,
-    page = 1,
-    limit = 20,
-  ) {
+  async getModuleReviews(moduleId: string, page = 1, limit = 20) {
     if (!Types.ObjectId.isValid(moduleId)) {
       throw new NotFoundException('Module not found');
     }
@@ -228,8 +223,7 @@ export class ModuleRatingsService {
       },
     ]);
 
-    const avgRating =
-      stats.length > 0 ? Math.round(stats[0].avg * 10) / 10 : 0;
+    const avgRating = stats.length > 0 ? Math.round(stats[0].avg * 10) / 10 : 0;
     const totalRatings = stats.length > 0 ? stats[0].count : 0;
 
     await this.moduleModel.findByIdAndUpdate(moduleId, {

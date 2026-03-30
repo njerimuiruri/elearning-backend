@@ -8,7 +8,7 @@ import { User, UserRole } from '../schemas/user.schema';
 async function seedAdmin() {
   const app = await NestFactory.create(AppModule);
   const userModel = app.get('UserModel') || app.get('UserModelToken');
-  
+
   // If model not found via injection token, get it from module
   let model: Model<User>;
   try {
@@ -66,4 +66,3 @@ async function seedAdmin() {
 
 // Run the seed function
 seedAdmin().catch(console.error);
-

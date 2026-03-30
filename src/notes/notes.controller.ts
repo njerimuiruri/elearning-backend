@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { NotesService } from './notes.service';
 
@@ -13,7 +23,15 @@ export class NotesController {
    */
   @Post()
   async createNote(@Request() req, @Body() body: any) {
-    const { courseId, courseName, lessonName, content, moduleIndex, moduleName, lessonIndex } = body;
+    const {
+      courseId,
+      courseName,
+      lessonName,
+      content,
+      moduleIndex,
+      moduleName,
+      lessonIndex,
+    } = body;
 
     const note = await this.notesService.createNote(
       req.user.id,
@@ -59,7 +77,9 @@ export class NotesController {
    */
   @Get('grouped')
   async getNotesGroupedByCourse(@Request() req) {
-    const grouped = await this.notesService.getNotesGroupedByCourse(req.user.id);
+    const grouped = await this.notesService.getNotesGroupedByCourse(
+      req.user.id,
+    );
 
     return {
       success: true,
@@ -170,7 +190,12 @@ export class NotesController {
   async updateNote(@Param('noteId') noteId: string, @Body() body: any) {
     const { content, category, tags } = body;
 
-    const note = await this.notesService.updateNote(noteId, content, category, tags);
+    const note = await this.notesService.updateNote(
+      noteId,
+      content,
+      category,
+      tags,
+    );
 
     return {
       success: true,

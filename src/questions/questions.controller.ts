@@ -12,7 +12,14 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiParam,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { QuestionAnswerService } from './question-answer.service';
 import { EmailService } from '../common/services/email.service';
@@ -36,7 +43,8 @@ export class QuestionAnswerController {
   @ApiResponse({ status: 400, description: 'Invalid question data' })
   @HttpCode(HttpStatus.CREATED)
   async askQuestion(
-    @Body() body: {
+    @Body()
+    body: {
       courseId: string;
       title: string;
       content: string;

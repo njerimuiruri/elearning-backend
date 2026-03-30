@@ -30,7 +30,12 @@ export class Payment extends Document {
   @Prop({ required: true })
   amount: number;
 
-  @Prop({ type: String, enum: PaymentStatus, default: PaymentStatus.PENDING, index: true })
+  @Prop({
+    type: String,
+    enum: PaymentStatus,
+    default: PaymentStatus.PENDING,
+    index: true,
+  })
   status: string;
 
   @Prop({ required: true, unique: true })

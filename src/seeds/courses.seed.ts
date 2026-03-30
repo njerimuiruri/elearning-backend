@@ -11,26 +11,30 @@ async function seedCourses() {
   const categoryModel = app.get(getModelToken('Category'));
   let arinCategory: any;
   try {
-    arinCategory = await categoryModel.findOne({ name: 'ARIN Publishing Academy' });
+    arinCategory = await categoryModel.findOne({
+      name: 'ARIN Publishing Academy',
+    });
     if (!arinCategory) {
       arinCategory = await categoryModel.create({
         name: 'ARIN Publishing Academy',
         description: 'ARIN Publishing Academy',
-        isActive: true
+        isActive: true,
       });
       console.log('✓ Seeded ARIN Publishing Academy category');
     } else {
       console.log('✓ ARIN Publishing Academy category already exists');
     }
   } catch (err) {
-    console.error('✗ Error seeding ARIN Publishing Academy category:', err.message);
+    console.error(
+      '✗ Error seeding ARIN Publishing Academy category:',
+      err.message,
+    );
     return;
   }
 
   try {
     const courseModel = app.get(getModelToken(Course.name));
     const userModel = app.get(getModelToken(User.name));
-
 
     // Ensure default instructors exist (for demo: one or two)
     const instructorEmails = [
@@ -71,26 +75,32 @@ async function seedCourses() {
         status: CourseStatus.PUBLISHED,
         instructorIds: [instructors[0]._id], // Only Arin instructor
         thumbnailUrl:
-'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1200&q=80&auto=format&fit=crop',
+          'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1200&q=80&auto=format&fit=crop',
         modules: [
           {
             title: 'Foundations of Scholarly Writing',
-            description: 'Strengthen clarity, coherence, and academic tone with practical frameworks.',
-            content: 'Audience, research questions, contribution statements, and thesis clarity.',
+            description:
+              'Strengthen clarity, coherence, and academic tone with practical frameworks.',
+            content:
+              'Audience, research questions, contribution statements, and thesis clarity.',
             duration: 55,
             order: 0,
           },
           {
             title: 'Structuring Journal-Ready Manuscripts',
-            description: 'IMRaD structure, flow, and argumentation that meets reviewer expectations.',
-            content: 'Abstracts, introductions, methods rigor, results storytelling, and impactful discussions.',
+            description:
+              'IMRaD structure, flow, and argumentation that meets reviewer expectations.',
+            content:
+              'Abstracts, introductions, methods rigor, results storytelling, and impactful discussions.',
             duration: 60,
             order: 1,
           },
           {
             title: 'Revision, Style, and Reviewer Response',
-            description: 'Polish drafts, manage edits, and respond effectively to peer review.',
-            content: 'Style guides, tightening prose, checklist-driven revisions, and response letters.',
+            description:
+              'Polish drafts, manage edits, and respond effectively to peer review.',
+            content:
+              'Style guides, tightening prose, checklist-driven revisions, and response letters.',
             duration: 50,
             order: 2,
           },
@@ -115,22 +125,27 @@ async function seedCourses() {
         modules: [
           {
             title: 'Journal Strategy and Fit',
-            description: 'Align scope, audience, and impact factors with your manuscript goals.',
-            content: 'Aims and scope checks, desk-reject avoidance, and targeting special issues.',
+            description:
+              'Align scope, audience, and impact factors with your manuscript goals.',
+            content:
+              'Aims and scope checks, desk-reject avoidance, and targeting special issues.',
             duration: 45,
             order: 0,
           },
           {
             title: 'Submission to Decision Workflow',
-            description: 'Smooth submissions, cover letters, and managing revisions efficiently.',
-                  category: arinCategory._id,
+            description:
+              'Smooth submissions, cover letters, and managing revisions efficiently.',
+            category: arinCategory._id,
             duration: 50,
             order: 1,
           },
           {
             title: 'Post-Publication Visibility',
-            description: 'Boost reach through indexing, sharing, and researcher profiles.',
-            content: 'ORCID, Google Scholar, repository deposits, and altmetrics fundamentals.',
+            description:
+              'Boost reach through indexing, sharing, and researcher profiles.',
+            content:
+              'ORCID, Google Scholar, repository deposits, and altmetrics fundamentals.',
             duration: 40,
             order: 2,
           },
@@ -151,33 +166,42 @@ async function seedCourses() {
         status: CourseStatus.PUBLISHED,
         instructorIds: [instructors[0]._id], // Only Arin instructor
         thumbnailUrl:
-        'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1200&q=80&auto=format&fit=crop',
+          'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1200&q=80&auto=format&fit=crop',
 
         modules: [
           {
             title: 'Designing for Impact',
-            description: 'Plan pathways to academic and societal impact from project inception.',
-            content: 'Impact narratives, stakeholder mapping, and impact indicators.',
+            description:
+              'Plan pathways to academic and societal impact from project inception.',
+            content:
+              'Impact narratives, stakeholder mapping, and impact indicators.',
             duration: 45,
             order: 0,
           },
           {
             title: 'Open Science Foundations',
-            description: 'Adopt transparency, data sharing, and reproducibility best practices.',
-                  category: arinCategory._id,
+            description:
+              'Adopt transparency, data sharing, and reproducibility best practices.',
+            category: arinCategory._id,
             duration: 50,
             order: 1,
           },
           {
             title: 'Measuring and Communicating Impact',
-            description: 'Use metrics responsibly and communicate outcomes clearly.',
-            content: 'Citation metrics, altmetrics, impact case studies, and reporting.',
+            description:
+              'Use metrics responsibly and communicate outcomes clearly.',
+            content:
+              'Citation metrics, altmetrics, impact case studies, and reporting.',
             duration: 40,
             order: 2,
           },
         ],
         requirements: ['Willingness to share data/code when possible'],
-        targetAudience: ['Research teams', 'Policy-facing projects', 'Open science practitioners'],
+        targetAudience: [
+          'Research teams',
+          'Policy-facing projects',
+          'Open science practitioners',
+        ],
         publishedAt: now,
         approvedAt: now,
         submittedAt: now,
@@ -196,22 +220,27 @@ async function seedCourses() {
         modules: [
           {
             title: 'Audience-Centric Messaging',
-            description: 'Craft policy-relevant narratives that align with stakeholder priorities.',
-            content: 'Problem framing, evidence hierarchy, and clarity for non-specialists.',
+            description:
+              'Craft policy-relevant narratives that align with stakeholder priorities.',
+            content:
+              'Problem framing, evidence hierarchy, and clarity for non-specialists.',
             duration: 45,
             order: 0,
           },
           {
             title: 'Policy Briefs and Presentations',
-            description: 'Structure briefs and slide decks that drive decisions.',
-                  category: arinCategory._id,
+            description:
+              'Structure briefs and slide decks that drive decisions.',
+            category: arinCategory._id,
             duration: 50,
             order: 1,
           },
           {
             title: 'Engagement and Media Strategy',
-            description: 'Plan outreach, events, and media interactions responsibly.',
-            content: 'Stakeholder maps, op-eds, interviews, and risk mitigation.',
+            description:
+              'Plan outreach, events, and media interactions responsibly.',
+            content:
+              'Stakeholder maps, op-eds, interviews, and risk mitigation.',
             duration: 40,
             order: 2,
           },
@@ -232,26 +261,31 @@ async function seedCourses() {
         status: CourseStatus.PUBLISHED,
         instructorIds: [instructors[0]._id], // Only Arin instructor
         thumbnailUrl:
-'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1200&q=80&auto=format&fit=crop',
+          'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?w=1200&q=80&auto=format&fit=crop',
         modules: [
           {
             title: 'Core Ethics and Authorship',
-            description: 'Apply authorship criteria, conflict disclosures, and ethical approvals.',
-            content: 'COPE guidelines, contributor roles, and transparent declarations.',
+            description:
+              'Apply authorship criteria, conflict disclosures, and ethical approvals.',
+            content:
+              'COPE guidelines, contributor roles, and transparent declarations.',
             duration: 45,
             order: 0,
           },
           {
             title: 'Integrity in Data and Methods',
-            description: 'Prevent questionable research practices and ensure reproducibility.',
-                  category: arinCategory._id,
+            description:
+              'Prevent questionable research practices and ensure reproducibility.',
+            category: arinCategory._id,
             duration: 50,
             order: 1,
           },
           {
             title: 'Handling Misconduct and Corrections',
-            description: 'Respond to errors, retractions, and post-publication issues responsibly.',
-            content: 'Errata processes, plagiarism safeguards, and whistleblowing channels.',
+            description:
+              'Respond to errors, retractions, and post-publication issues responsibly.',
+            content:
+              'Errata processes, plagiarism safeguards, and whistleblowing channels.',
             duration: 40,
             order: 2,
           },
@@ -280,7 +314,9 @@ async function seedCourses() {
     }
 
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`Courses seeded: ${createdCount} new, ${defaultCourses.length - createdCount} skipped`);
+    console.log(
+      `Courses seeded: ${createdCount} new, ${defaultCourses.length - createdCount} skipped`,
+    );
     console.log('Category: Arin Publishing Academy');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   } catch (error) {

@@ -139,7 +139,7 @@ export class CreateModuleLessonDto {
   description?: string;
 
   @IsOptional()
-  @Transform(({ value }) => value == null ? undefined : value)
+  @Transform(({ value }) => (value == null ? undefined : value))
   @IsArray()
   @IsString({ each: true })
   learningOutcomes?: string[];
@@ -429,7 +429,7 @@ export class CreateModuleDto {
   duration?: string;
 
   @IsOptional()
-  @Transform(({ value }) => value == null ? undefined : value)
+  @Transform(({ value }) => (value == null ? undefined : value))
   @IsArray()
   @IsString({ each: true })
   prerequisites?: string[];
@@ -451,7 +451,7 @@ export class CreateModuleDto {
   coreReadingMaterials?: string;
 
   @IsOptional()
-  @Transform(({ value }) => value == null ? undefined : value)
+  @Transform(({ value }) => (value == null ? undefined : value))
   @IsArray()
   @IsString({ each: true })
   targetAudience?: string[];

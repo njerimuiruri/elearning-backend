@@ -18,14 +18,20 @@ export class CategoryService {
   }
 
   async findAll(): Promise<Category[]> {
-    return this.categoryModel.find({ isActive: true }).sort({ createdAt: -1 }).exec();
+    return this.categoryModel
+      .find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .exec();
   }
 
   async findById(id: string): Promise<Category | null> {
     return this.categoryModel.findById(id).exec();
   }
 
-  async update(id: string, updateCategoryDto: UpdateCategoryDto): Promise<Category | null> {
+  async update(
+    id: string,
+    updateCategoryDto: UpdateCategoryDto,
+  ): Promise<Category | null> {
     return this.categoryModel
       .findByIdAndUpdate(id, updateCategoryDto, { new: true })
       .exec();
@@ -44,8 +50,11 @@ export class CategoryService {
   /**
    * Validates if a user can access a specific category
    */
-  async checkAccess(categoryId: string, user: any): Promise<{ 
-    allowed: boolean; 
+  async checkAccess(
+    categoryId: string,
+    user: any,
+  ): Promise<{
+    allowed: boolean;
     reason?: 'payment_required' | 'restricted_role' | 'login_required';
     price?: number;
   }> {
@@ -65,22 +74,30 @@ export class CategoryService {
         if (category.allowedRoles.includes(user?.role)) {
           return { allowed: true };
         }
-        
+
         // Rule: Non-fellows must pay (if allowed)
         if (category.paymentRequiredForNonEligible) {
           const hasPaid = await this.checkPaymentStatus(user?._id, categoryId);
-          return hasPaid 
+          return hasPaid
             ? { allowed: true }
-            : { allowed: false, reason: 'payment_required', price: category.price };
+            : {
+                allowed: false,
+                reason: 'payment_required',
+                price: category.price,
+              };
         }
-        
+
         return { allowed: false, reason: 'restricted_role' };
 
       case 'paid':
         const hasPaid = await this.checkPaymentStatus(user?._id, categoryId);
-        return hasPaid 
-          ? { allowed: true } 
-          : { allowed: false, reason: 'payment_required', price: category.price };
+        return hasPaid
+          ? { allowed: true }
+          : {
+              allowed: false,
+              reason: 'payment_required',
+              price: category.price,
+            };
 
       default:
         return { allowed: false, reason: 'restricted_role' };
@@ -91,7 +108,10 @@ export class CategoryService {
    * Check if a user has paid for a category
    * Checks both the user's purchasedCategories field and fellow assignedCategories
    */
-  private async checkPaymentStatus(userId: string, categoryId: string): Promise<boolean> {
+  private async checkPaymentStatus(
+    userId: string,
+    categoryId: string,
+  ): Promise<boolean> {
     if (!userId) {
       return false;
     }

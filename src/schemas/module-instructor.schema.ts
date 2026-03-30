@@ -29,6 +29,5 @@ export class ModuleInstructor {
   permissions: ModuleInstructorPermissions;
 }
 
-export const ModuleInstructorSchema = SchemaFactory.createForClass(ModuleInstructor);
-
-
+export const ModuleInstructorSchema =
+  SchemaFactory.createForClass(ModuleInstructor);

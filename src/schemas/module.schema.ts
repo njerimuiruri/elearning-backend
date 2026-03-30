@@ -90,7 +90,10 @@ export class QuizQuestion {
   @Prop({ required: true })
   question!: string;
 
-  @Prop({ required: true, enum: ['multiple-choice', 'true-false', 'short-answer'] })
+  @Prop({
+    required: true,
+    enum: ['multiple-choice', 'true-false', 'short-answer'],
+  })
   type!: string;
 
   @Prop([String])
@@ -169,7 +172,10 @@ export class ModuleLesson {
     type: [
       {
         question: String,
-        type: { type: String, enum: ['multiple-choice', 'true-false', 'short-answer'] },
+        type: {
+          type: String,
+          enum: ['multiple-choice', 'true-false', 'short-answer'],
+        },
         options: [String],
         answer: String,
         explanation: String,
@@ -187,7 +193,14 @@ export class ModuleLesson {
   quizMaxAttempts!: number;
 
   @Prop({
-    type: [{ url: String, name: { type: String, default: 'Resource' }, description: String, fileType: String }],
+    type: [
+      {
+        url: String,
+        name: { type: String, default: 'Resource' },
+        description: String,
+        fileType: String,
+      },
+    ],
     default: [],
   })
   lessonResources!: LessonResource[];
@@ -226,7 +239,10 @@ export class Lesson {
     type: [
       {
         question: String,
-        type: { type: String, enum: ['multiple-choice', 'true-false', 'short-answer'] },
+        type: {
+          type: String,
+          enum: ['multiple-choice', 'true-false', 'short-answer'],
+        },
         options: [String],
         answer: String,
         explanation: String,
@@ -244,7 +260,14 @@ export class Lesson {
   quizMaxAttempts!: number;
 
   @Prop({
-    type: [{ url: String, name: { type: String, default: 'Resource' }, description: String, fileType: String }],
+    type: [
+      {
+        url: String,
+        name: { type: String, default: 'Resource' },
+        description: String,
+        fileType: String,
+      },
+    ],
     default: [],
   })
   lessonResources!: LessonResource[];
@@ -293,14 +316,24 @@ export class Topic {
 // Case Study Lesson (content-only, no quiz)
 // ─────────────────────────────────────────
 export class CaseStudyLesson {
-  @Prop({ required: true, enum: ['Introduction', 'Dataset', 'AI Task', 'Key Readings'] })
+  @Prop({
+    required: true,
+    enum: ['Introduction', 'Dataset', 'AI Task', 'Key Readings'],
+  })
   lessonType!: string;
 
   @Prop()
   content?: string;
 
   @Prop({
-    type: [{ url: String, name: { type: String, default: 'Resource' }, description: String, fileType: String }],
+    type: [
+      {
+        url: String,
+        name: { type: String, default: 'Resource' },
+        description: String,
+        fileType: String,
+      },
+    ],
     default: [],
   })
   resources!: LessonResource[];
@@ -316,7 +349,9 @@ export class CaseStudy {
   @Prop({ type: [CaseStudyLesson], default: [] })
   lessons!: CaseStudyLesson[];
 
-  @Prop({ default: 'Case studies do not have quizzes; they only provide content.' })
+  @Prop({
+    default: 'Case studies do not have quizzes; they only provide content.',
+  })
   note?: string;
 }
 
@@ -426,7 +461,11 @@ export class Module extends Document {
         slidesTitle: String,
         slides: [
           {
-            type: { type: String, enum: Object.values(SlideType), required: true },
+            type: {
+              type: String,
+              enum: Object.values(SlideType),
+              required: true,
+            },
             order: { type: Number, default: 0 },
             content: String,
             imageUrl: String,
@@ -445,7 +484,10 @@ export class Module extends Document {
         assessmentQuiz: [
           {
             question: String,
-            type: { type: String, enum: ['multiple-choice', 'true-false', 'short-answer'] },
+            type: {
+              type: String,
+              enum: ['multiple-choice', 'true-false', 'short-answer'],
+            },
             options: [String],
             answer: String,
             explanation: String,
@@ -455,7 +497,12 @@ export class Module extends Document {
         quizPassingScore: { type: Number, default: 70 },
         quizMaxAttempts: { type: Number, default: 3 },
         lessonResources: [
-          { url: String, name: { type: String, default: 'Resource' }, description: String, fileType: String },
+          {
+            url: String,
+            name: { type: String, default: 'Resource' },
+            description: String,
+            fileType: String,
+          },
         ],
         order: { type: Number, default: 0 },
         duration: String,
@@ -508,7 +555,9 @@ export class Module extends Document {
 
   // ── Module-level resources ─────────────────────────────────────────────
   @Prop({
-    type: [{ url: String, name: String, description: String, fileType: String }],
+    type: [
+      { url: String, name: String, description: String, fileType: String },
+    ],
     default: [],
   })
   declare moduleResources: ModuleResource[];

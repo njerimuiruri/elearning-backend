@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BulkMessagingController } from './bulk-messaging.controller';
 import { BulkMessagingService } from './bulk-messaging.service';
-import { BulkReminder, BulkReminderSchema } from '../schemas/bulk-reminder.schema';
+import {
+  BulkReminder,
+  BulkReminderSchema,
+} from '../schemas/bulk-reminder.schema';
 import {
   ModuleEnrollment,
   ModuleEnrollmentSchema,

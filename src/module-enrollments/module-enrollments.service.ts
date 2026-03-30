@@ -14,7 +14,10 @@ import { Module, ModuleStatus } from '../schemas/module.schema';
 import { ModuleCertificate } from '../schemas/module-certificate.schema';
 import { Category } from '../schemas/category.schema';
 import { User } from '../schemas/user.schema';
-import { SubmitFinalAssessmentDto, SubmitLessonAssessmentDto } from './dto/submit-assessment.dto';
+import {
+  SubmitFinalAssessmentDto,
+  SubmitLessonAssessmentDto,
+} from './dto/submit-assessment.dto';
 import { ProgressionService } from '../progression/progression.service';
 import { EmailService } from '../common/services/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -43,8 +46,18 @@ export class ModuleEnrollmentsService {
   async enrollInModule(
     studentId: string,
     moduleId: string,
-  ): Promise<ModuleEnrollment | { requiresPayment: boolean; categoryId: string; price: number; categoryName: string }> {
-    const module = await this.moduleModel.findById(moduleId).populate('categoryId');
+  ): Promise<
+    | ModuleEnrollment
+    | {
+        requiresPayment: boolean;
+        categoryId: string;
+        price: number;
+        categoryName: string;
+      }
+  > {
+    const module = await this.moduleModel
+      .findById(moduleId)
+      .populate('categoryId');
     if (!module) {
       throw new NotFoundException('Module not found');
     }
@@ -122,7 +135,8 @@ export class ModuleEnrollmentsService {
         module.level,
       );
       if (!canAccess) {
-        const levelLabel = module.level === 'intermediate' ? 'Beginner' : 'Intermediate';
+        const levelLabel =
+          module.level === 'intermediate' ? 'Beginner' : 'Intermediate';
         throw new ForbiddenException(
           `You must complete and pass all ${levelLabel} modules before accessing ${module.level} content.`,
         );
@@ -146,9 +160,12 @@ export class ModuleEnrollmentsService {
     );
 
     // Resolve lessons — prefer direct lessons[], fall back to topics
-    const allLessons = (module.lessons && module.lessons.length > 0)
-      ? [...module.lessons].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
-      : (module.topics || []).flatMap((t: any) => t.lessons || []);
+    const allLessons =
+      module.lessons && module.lessons.length > 0
+        ? [...module.lessons].sort(
+            (a: any, b: any) => (a.order ?? 0) - (b.order ?? 0),
+          )
+        : (module.topics || []).flatMap((t: any) => t.lessons || []);
 
     // Create enrollment
     enrollment = new this.enrollmentModel({
@@ -232,22 +249,32 @@ export class ModuleEnrollmentsService {
     slideIndex: number,
     timeSpent: number,
     scrolledToBottom: boolean,
-  ): Promise<{ enrollment: ModuleEnrollment; slideCompleted: boolean; lessonUnlocked: boolean }> {
+  ): Promise<{
+    enrollment: ModuleEnrollment;
+    slideCompleted: boolean;
+    lessonUnlocked: boolean;
+  }> {
     if (!Types.ObjectId.isValid(enrollmentId)) {
       throw new BadRequestException('Invalid enrollment ID');
     }
 
-    const enrollment = await this.enrollmentModel.findById(enrollmentId).populate('moduleId');
+    const enrollment = await this.enrollmentModel
+      .findById(enrollmentId)
+      .populate('moduleId');
     if (!enrollment) throw new NotFoundException('Enrollment not found');
 
     const module = enrollment.moduleId as any;
 
     // Resolve lessons
-    const allLessons: any[] = (module.lessons && module.lessons.length > 0)
-      ? [...module.lessons].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
-      : (module.topics || []).flatMap((t: any) => t.lessons || []);
+    const allLessons: any[] =
+      module.lessons && module.lessons.length > 0
+        ? [...module.lessons].sort(
+            (a: any, b: any) => (a.order ?? 0) - (b.order ?? 0),
+          )
+        : (module.topics || []).flatMap((t: any) => t.lessons || []);
 
-    if (lessonIndex >= allLessons.length) throw new NotFoundException('Lesson not found');
+    if (lessonIndex >= allLessons.length)
+      throw new NotFoundException('Lesson not found');
 
     const lesson = allLessons[lessonIndex];
     const slides = lesson.slides || [];
@@ -261,7 +288,9 @@ export class ModuleEnrollmentsService {
     const needsScroll = slide?.scrollTrackingEnabled ?? false;
 
     // Find or create lesson progress entry
-    let lessonProgress = enrollment.lessonProgress.find((lp) => lp.lessonIndex === lessonIndex);
+    let lessonProgress = enrollment.lessonProgress.find(
+      (lp) => lp.lessonIndex === lessonIndex,
+    );
     if (!lessonProgress) {
       // If missing, this is an older enrollment — add it
       (enrollment.lessonProgress as any).push({
@@ -273,7 +302,9 @@ export class ModuleEnrollmentsService {
         assessmentPassed: false,
         lastScore: 0,
       });
-      lessonProgress = enrollment.lessonProgress.find((lp) => lp.lessonIndex === lessonIndex)!;
+      lessonProgress = enrollment.lessonProgress.find(
+        (lp) => lp.lessonIndex === lessonIndex,
+      )!;
     }
 
     // Find or create slide progress entry
@@ -281,7 +312,9 @@ export class ModuleEnrollmentsService {
       (lessonProgress as any).slideProgress = [];
     }
 
-    let slideProgress = lessonProgress.slideProgress.find((sp) => sp.slideIndex === slideIndex);
+    let slideProgress = lessonProgress.slideProgress.find(
+      (sp) => sp.slideIndex === slideIndex,
+    );
     if (!slideProgress) {
       (lessonProgress.slideProgress as any).push({
         slideIndex,
@@ -289,7 +322,9 @@ export class ModuleEnrollmentsService {
         timeSpent: 0,
         scrolledToBottom: false,
       });
-      slideProgress = lessonProgress.slideProgress.find((sp) => sp.slideIndex === slideIndex)!;
+      slideProgress = lessonProgress.slideProgress.find(
+        (sp) => sp.slideIndex === slideIndex,
+      )!;
     }
 
     // Accumulate time
@@ -306,12 +341,15 @@ export class ModuleEnrollmentsService {
       slideProgress.completedAt = new Date();
 
       // Recount completed slides
-      (lessonProgress as any).completedSlides = lessonProgress.slideProgress.filter((sp) => sp.isCompleted).length;
+      (lessonProgress as any).completedSlides =
+        lessonProgress.slideProgress.filter((sp) => sp.isCompleted).length;
     }
 
     // Check if all slides in this lesson are done (lessonUnlocked = ready for assessment)
     const totalSlides = slides.length;
-    const completedSlides = lessonProgress.slideProgress.filter((sp) => sp.isCompleted).length;
+    const completedSlides = lessonProgress.slideProgress.filter(
+      (sp) => sp.isCompleted,
+    ).length;
     const lessonUnlocked = totalSlides === 0 || completedSlides >= totalSlides;
 
     enrollment.lastAccessedAt = new Date();
@@ -441,9 +479,12 @@ export class ModuleEnrollmentsService {
     const module = enrollment.moduleId as any;
 
     // Resolve lessons — prefer direct lessons[], fall back to topics
-    const allLessons: any[] = (module.lessons && module.lessons.length > 0)
-      ? [...module.lessons].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0))
-      : (module.topics || []).flatMap((t: any) => t.lessons || []);
+    const allLessons: any[] =
+      module.lessons && module.lessons.length > 0
+        ? [...module.lessons].sort(
+            (a: any, b: any) => (a.order ?? 0) - (b.order ?? 0),
+          )
+        : (module.topics || []).flatMap((t: any) => t.lessons || []);
 
     if (lessonIndex >= allLessons.length) {
       throw new NotFoundException('Lesson not found');
@@ -471,9 +512,7 @@ export class ModuleEnrollmentsService {
 
     // Guard: assessment already passed — no re-submission needed
     if (lessonProgress.assessmentPassed) {
-      throw new BadRequestException(
-        'You have already passed this assessment.',
-      );
+      throw new BadRequestException('You have already passed this assessment.');
     }
 
     const maxAttempts: number = lesson.quizMaxAttempts ?? 3;
@@ -659,21 +698,25 @@ export class ModuleEnrollmentsService {
 
     if (hasEssayQuestions) {
       // Store the answers for instructor review
-      const results = module.finalAssessment.questions.map((q: any, i: number) => {
-        const answer = submitDto.answers.find((a: any) => a.questionIndex === i);
-        return {
-          questionIndex: i,
-          questionText: q.text,
-          questionType: q.type,
-          studentAnswer: answer?.answer || '',
-          maxPoints: q.points,
-          pointsEarned: 0,
-          isCorrect: false,
-        };
-      });
+      const results = module.finalAssessment.questions.map(
+        (q: any, i: number) => {
+          const answer = submitDto.answers.find(
+            (a: any) => a.questionIndex === i,
+          );
+          return {
+            questionIndex: i,
+            questionText: q.text,
+            questionType: q.type,
+            studentAnswer: answer?.answer || '',
+            maxPoints: q.points,
+            pointsEarned: 0,
+            isCorrect: false,
+          };
+        },
+      );
 
       enrollment.finalAssessmentAttempts++;
-      enrollment.finalAssessmentResults = results as any;
+      enrollment.finalAssessmentResults = results;
       enrollment.pendingInstructorReview = true;
       enrollment.essaySubmittedAt = new Date();
 
@@ -691,14 +734,17 @@ export class ModuleEnrollmentsService {
 
       for (const instructor of instructors) {
         if (!instructor.email) continue;
-        const instructorName = `${instructor.firstName} ${instructor.lastName}`.trim();
-        await this.emailService.sendEssaySubmissionNotificationToInstructor(
-          instructor.email,
-          instructorName,
-          studentName,
-          module.title,
-          enrollment._id.toString(),
-        ).catch(() => {});
+        const instructorName =
+          `${instructor.firstName} ${instructor.lastName}`.trim();
+        await this.emailService
+          .sendEssaySubmissionNotificationToInstructor(
+            instructor.email,
+            instructorName,
+            studentName,
+            module.title,
+            enrollment._id.toString(),
+          )
+          .catch(() => {});
 
         // Dashboard notification for instructor
         await this.notificationsService.createNotification(
@@ -847,7 +893,9 @@ export class ModuleEnrollmentsService {
       studentId: enrollment.studentId,
       moduleId: module._id,
       enrollmentId: enrollment._id,
-      studentName: `${student?.firstName || ''} ${student?.lastName || ''}`.trim() || 'Student',
+      studentName:
+        `${student?.firstName || ''} ${student?.lastName || ''}`.trim() ||
+        'Student',
       moduleName: module.title,
       moduleLevel: module.level,
       categoryName: category?.name || 'General',
@@ -949,7 +997,11 @@ export class ModuleEnrollmentsService {
       levelUnlocked = progressionResult.levelUnlocked;
 
       // Generate certificate
-      certificate = await this.generateCertificate(enrollment, module, finalScore);
+      certificate = await this.generateCertificate(
+        enrollment,
+        module,
+        finalScore,
+      );
 
       const certUrl = certificate?.publicId
         ? `${frontendUrl}/certificates/${certificate.publicId}`
@@ -957,14 +1009,16 @@ export class ModuleEnrollmentsService {
 
       // Email student — passed
       if (student?.email) {
-        await this.emailService.sendEssayGradingResultToStudent(
-          student.email,
-          studentName,
-          module.title,
-          true,
-          feedback,
-          certUrl,
-        ).catch(() => {});
+        await this.emailService
+          .sendEssayGradingResultToStudent(
+            student.email,
+            studentName,
+            module.title,
+            true,
+            feedback,
+            certUrl,
+          )
+          .catch(() => {});
       }
 
       // Dashboard notifications for student
@@ -1001,7 +1055,10 @@ export class ModuleEnrollmentsService {
       const maxAttempts = module.finalAssessment?.maxAttempts ?? 3;
       let requiresModuleRepeat = false;
 
-      if (maxAttempts > 0 && enrollment.finalAssessmentAttempts >= maxAttempts) {
+      if (
+        maxAttempts > 0 &&
+        enrollment.finalAssessmentAttempts >= maxAttempts
+      ) {
         // Max attempts exhausted — force module repeat
         requiresModuleRepeat = true;
         enrollment.requiresModuleRepeat = true;
@@ -1022,13 +1079,15 @@ export class ModuleEnrollmentsService {
 
       // Email student — failed
       if (student?.email) {
-        await this.emailService.sendEssayGradingResultToStudent(
-          student.email,
-          studentName,
-          module.title,
-          false,
-          feedback,
-        ).catch(() => {});
+        await this.emailService
+          .sendEssayGradingResultToStudent(
+            student.email,
+            studentName,
+            module.title,
+            false,
+            feedback,
+          )
+          .catch(() => {});
       }
 
       const failMessage = requiresModuleRepeat
@@ -1039,7 +1098,9 @@ export class ModuleEnrollmentsService {
         await this.notificationsService.createNotification(
           student._id.toString(),
           NotificationType.ESSAY_GRADED,
-          requiresModuleRepeat ? 'Essay Assessment — Module Repeat Required' : 'Essay Assessment Reviewed',
+          requiresModuleRepeat
+            ? 'Essay Assessment — Module Repeat Required'
+            : 'Essay Assessment Reviewed',
           failMessage,
         );
       }
@@ -1071,14 +1132,14 @@ export class ModuleEnrollmentsService {
     const modules = await this.moduleModel
       .find(moduleQuery)
       .select('_id title level');
-    const moduleMap = new Map(
-      modules.map((m) => [m._id.toString(), m]),
-    );
+    const moduleMap = new Map(modules.map((m) => [m._id.toString(), m]));
     if (moduleMap.size === 0) return [];
 
     // 2. Build enrollment query — only enrollments that have been attempted
     const enrollmentQuery: any = {
-      moduleId: { $in: Array.from(moduleMap.keys()).map((id) => new Types.ObjectId(id)) },
+      moduleId: {
+        $in: Array.from(moduleMap.keys()).map((id) => new Types.ObjectId(id)),
+      },
       finalAssessmentAttempts: { $gt: 0 },
     };
     if (filters.status === 'pending') {

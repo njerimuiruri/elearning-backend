@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { MessagesService } from './messages.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -14,7 +24,14 @@ export class MessagesController {
   @Post()
   async sendMessage(
     @CurrentUser() user: any,
-    @Body() body: { receiverId: string; content: string; courseId?: string; moduleIndex?: number; attachments?: string[] },
+    @Body()
+    body: {
+      receiverId: string;
+      content: string;
+      courseId?: string;
+      moduleIndex?: number;
+      attachments?: string[];
+    },
   ) {
     const message = await this.messagesService.sendMessage(
       user._id,
@@ -61,7 +78,10 @@ export class MessagesController {
   }
 
   @Put(':messageId/read')
-  async markAsRead(@CurrentUser() user: any, @Param('messageId') messageId: string) {
+  async markAsRead(
+    @CurrentUser() user: any,
+    @Param('messageId') messageId: string,
+  ) {
     const message = await this.messagesService.markAsRead(messageId, user._id);
 
     return {
@@ -72,7 +92,10 @@ export class MessagesController {
   }
 
   @Put('conversation/:userId/read')
-  async markConversationAsRead(@CurrentUser() user: any, @Param('userId') otherUserId: string) {
+  async markConversationAsRead(
+    @CurrentUser() user: any,
+    @Param('userId') otherUserId: string,
+  ) {
     await this.messagesService.markConversationAsRead(user._id, otherUserId);
 
     return {
@@ -82,7 +105,10 @@ export class MessagesController {
   }
 
   @Delete(':messageId')
-  async deleteMessage(@CurrentUser() user: any, @Param('messageId') messageId: string) {
+  async deleteMessage(
+    @CurrentUser() user: any,
+    @Param('messageId') messageId: string,
+  ) {
     await this.messagesService.deleteMessage(messageId, user._id);
 
     return {
@@ -106,7 +132,8 @@ export class MessagesController {
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
   async getAllConversationsForAdmin() {
-    const conversations = await this.messagesService.getAllConversationsForAdmin();
+    const conversations =
+      await this.messagesService.getAllConversationsForAdmin();
 
     return {
       success: true,

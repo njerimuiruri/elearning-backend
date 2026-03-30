@@ -145,7 +145,9 @@ export class DiscussionsController {
     );
     return {
       success: true,
-      message: discussion.isPinned ? 'Discussion pinned' : 'Discussion unpinned',
+      message: discussion.isPinned
+        ? 'Discussion pinned'
+        : 'Discussion unpinned',
       data: discussion,
     };
   }

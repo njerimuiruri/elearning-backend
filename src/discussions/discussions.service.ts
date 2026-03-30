@@ -81,7 +81,7 @@ export class DiscussionsService {
             'New Discussion Posted',
             `${adminName} posted a new discussion in "${module.title}": ${dto.title}`,
             discussionLink,
-            (discussion._id as Types.ObjectId).toString(),
+            discussion._id.toString(),
           );
 
           await this.emailService
@@ -144,7 +144,7 @@ export class DiscussionsService {
             'New Discussion Posted',
             `${instructorName} posted a new discussion in "${module.title}": ${dto.title}`,
             discussionLink,
-            (discussion._id as Types.ObjectId).toString(),
+            discussion._id.toString(),
           );
 
           await this.emailService
@@ -203,7 +203,7 @@ export class DiscussionsService {
             'New Student Discussion Posted',
             `${studentName} posted a new discussion in "${module.title}": ${dto.title}`,
             instructorLink,
-            (discussion._id as Types.ObjectId).toString(),
+            discussion._id.toString(),
           );
 
           await this.emailService
@@ -239,7 +239,9 @@ export class DiscussionsService {
     }
 
     const sortField = sort === 'active' ? 'updatedAt' : 'createdAt';
-    const query: Record<string, any> = { moduleId: new Types.ObjectId(moduleId) };
+    const query: Record<string, any> = {
+      moduleId: new Types.ObjectId(moduleId),
+    };
     if (lessonIndex !== undefined) {
       query.moduleIndex = lessonIndex;
     }
@@ -362,7 +364,11 @@ export class DiscussionsService {
         const participantEnrollments = await this.enrollmentModel
           .find({
             moduleId: new Types.ObjectId(moduleId),
-            studentId: { $in: Array.from(threadParticipantIds).map((id) => new Types.ObjectId(id)) },
+            studentId: {
+              $in: Array.from(threadParticipantIds).map(
+                (id) => new Types.ObjectId(id),
+              ),
+            },
           })
           .populate('studentId', '_id firstName lastName email');
 
@@ -526,14 +532,14 @@ export class DiscussionsService {
         (id: any) => id.toString() === userId,
       );
       if (!isAssigned) {
-        throw new ForbiddenException(
-          'You are not assigned to this module',
-        );
+        throw new ForbiddenException('You are not assigned to this module');
       }
     } else {
       // Student can only delete their own discussion
       if (discussion.createdById.toString() !== userId) {
-        throw new ForbiddenException('Not authorized to delete this discussion');
+        throw new ForbiddenException(
+          'Not authorized to delete this discussion',
+        );
       }
     }
 

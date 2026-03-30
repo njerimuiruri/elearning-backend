@@ -132,14 +132,39 @@ export class ModuleCertificateService {
 
       // Corner decorations
       const cornerSize = 40;
-      doc.rect(40, 40, cornerSize, cornerSize).strokeColor(secondaryColor2).lineWidth(2).stroke();
-      doc.rect(pageWidth - 40 - cornerSize, 40, cornerSize, cornerSize).strokeColor(secondaryColor2).lineWidth(2).stroke();
-      doc.rect(40, pageHeight - 40 - cornerSize, cornerSize, cornerSize).strokeColor(secondaryColor2).lineWidth(2).stroke();
-      doc.rect(pageWidth - 40 - cornerSize, pageHeight - 40 - cornerSize, cornerSize, cornerSize).strokeColor(secondaryColor2).lineWidth(2).stroke();
+      doc
+        .rect(40, 40, cornerSize, cornerSize)
+        .strokeColor(secondaryColor2)
+        .lineWidth(2)
+        .stroke();
+      doc
+        .rect(pageWidth - 40 - cornerSize, 40, cornerSize, cornerSize)
+        .strokeColor(secondaryColor2)
+        .lineWidth(2)
+        .stroke();
+      doc
+        .rect(40, pageHeight - 40 - cornerSize, cornerSize, cornerSize)
+        .strokeColor(secondaryColor2)
+        .lineWidth(2)
+        .stroke();
+      doc
+        .rect(
+          pageWidth - 40 - cornerSize,
+          pageHeight - 40 - cornerSize,
+          cornerSize,
+          cornerSize,
+        )
+        .strokeColor(secondaryColor2)
+        .lineWidth(2)
+        .stroke();
 
       // Logo
       if (fs.existsSync(logoPath)) {
-        doc.image(logoPath, pageWidth / 2 - 60, 52, { width: 120, height: 60, fit: [120, 60] });
+        doc.image(logoPath, pageWidth / 2 - 60, 52, {
+          width: 120,
+          height: 60,
+          fit: [120, 60],
+        });
       }
 
       // Title
@@ -206,22 +231,31 @@ export class ModuleCertificateService {
         });
 
       // Level and category badges
-      const levelLabel = (certificate.moduleLevel || 'beginner').charAt(0).toUpperCase() + (certificate.moduleLevel || 'beginner').slice(1);
+      const levelLabel =
+        (certificate.moduleLevel || 'beginner').charAt(0).toUpperCase() +
+        (certificate.moduleLevel || 'beginner').slice(1);
       doc
         .fontSize(14)
         .font('Helvetica')
         .fillColor(secondaryColor2)
-        .text(`Level: ${levelLabel}  |  Category: ${certificate.categoryName}`, 0, courseBoxY + 70, {
-          align: 'center',
-          width: pageWidth,
-        });
+        .text(
+          `Level: ${levelLabel}  |  Category: ${certificate.categoryName}`,
+          0,
+          courseBoxY + 70,
+          {
+            align: 'center',
+            width: pageWidth,
+          },
+        );
 
       // Score badge
       if (certificate.scoreAchieved) {
         const badgeX = pageWidth / 2 - 60;
         const badgeY = 440;
 
-        doc.circle(badgeX + 60, badgeY + 20, 35).fillAndStroke(secondaryColor1, secondaryColor2);
+        doc
+          .circle(badgeX + 60, badgeY + 20, 35)
+          .fillAndStroke(secondaryColor1, secondaryColor2);
 
         doc
           .fontSize(20)
@@ -234,11 +268,14 @@ export class ModuleCertificateService {
       }
 
       // Date
-      const dateStr = new Date(certificate.issuedDate).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
+      const dateStr = new Date(certificate.issuedDate).toLocaleDateString(
+        'en-US',
+        {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        },
+      );
 
       doc
         .fontSize(14)
@@ -255,26 +292,97 @@ export class ModuleCertificateService {
       const rightSigX = pageWidth / 2 + 50;
 
       // Instructor signature
-      doc.moveTo(leftSigX, sigY).lineTo(leftSigX + 180, sigY).strokeColor('#374151').lineWidth(1.5).stroke();
-      doc.fontSize(12).font('Helvetica-Bold').fillColor(primaryColor).text(certificate.instructorName, leftSigX, sigY + 10, { width: 180, align: 'center' });
-      doc.fontSize(10).font('Helvetica').fillColor('#6b7280').text('Instructor Signature', leftSigX, sigY + 28, { width: 180, align: 'center' });
+      doc
+        .moveTo(leftSigX, sigY)
+        .lineTo(leftSigX + 180, sigY)
+        .strokeColor('#374151')
+        .lineWidth(1.5)
+        .stroke();
+      doc
+        .fontSize(12)
+        .font('Helvetica-Bold')
+        .fillColor(primaryColor)
+        .text(certificate.instructorName, leftSigX, sigY + 10, {
+          width: 180,
+          align: 'center',
+        });
+      doc
+        .fontSize(10)
+        .font('Helvetica')
+        .fillColor('#6b7280')
+        .text('Instructor Signature', leftSigX, sigY + 28, {
+          width: 180,
+          align: 'center',
+        });
 
       // Date line
-      doc.moveTo(rightSigX, sigY).lineTo(rightSigX + 180, sigY).strokeColor('#374151').lineWidth(1.5).stroke();
-      doc.fontSize(12).font('Helvetica-Bold').fillColor(primaryColor).text(dateStr, rightSigX, sigY + 10, { width: 180, align: 'center' });
-      doc.fontSize(10).font('Helvetica').fillColor('#6b7280').text('Date Issued', rightSigX, sigY + 28, { width: 180, align: 'center' });
+      doc
+        .moveTo(rightSigX, sigY)
+        .lineTo(rightSigX + 180, sigY)
+        .strokeColor('#374151')
+        .lineWidth(1.5)
+        .stroke();
+      doc
+        .fontSize(12)
+        .font('Helvetica-Bold')
+        .fillColor(primaryColor)
+        .text(dateStr, rightSigX, sigY + 10, { width: 180, align: 'center' });
+      doc
+        .fontSize(10)
+        .font('Helvetica')
+        .fillColor('#6b7280')
+        .text('Date Issued', rightSigX, sigY + 28, {
+          width: 180,
+          align: 'center',
+        });
 
       // Footer
-      doc.fontSize(10).font('Helvetica').fillColor(secondaryColor2).text('Arin in collaboration with Taylor & Francis', 0, pageHeight - 88, { align: 'center', width: pageWidth });
-      doc.fontSize(9).font('Helvetica').fillColor('#9ca3af').text(`Certificate ID: ${certificate.certificateNumber}`, 0, pageHeight - 70, { align: 'center', width: pageWidth });
-      doc.fontSize(11).fillColor('#6b7280').text('This certificate validates the successful completion of the module requirements', 0, pageHeight - 50, { align: 'center', width: pageWidth });
+      doc
+        .fontSize(10)
+        .font('Helvetica')
+        .fillColor(secondaryColor2)
+        .text(
+          'Arin in collaboration with Taylor & Francis',
+          0,
+          pageHeight - 88,
+          { align: 'center', width: pageWidth },
+        );
+      doc
+        .fontSize(9)
+        .font('Helvetica')
+        .fillColor('#9ca3af')
+        .text(
+          `Certificate ID: ${certificate.certificateNumber}`,
+          0,
+          pageHeight - 70,
+          { align: 'center', width: pageWidth },
+        );
+      doc
+        .fontSize(11)
+        .fillColor('#6b7280')
+        .text(
+          'This certificate validates the successful completion of the module requirements',
+          0,
+          pageHeight - 50,
+          { align: 'center', width: pageWidth },
+        );
 
       // Verified seal
       const sealX = pageWidth - 120;
       const sealY = pageHeight - 160;
       doc.circle(sealX, sealY, 45).fillAndStroke(secondaryColor2, primaryColor);
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#ffffff').text('VERIFIED', sealX - 30, sealY - 20, { width: 60, align: 'center' });
-      doc.fontSize(8).text('CERTIFICATE', sealX - 30, sealY - 5, { width: 60, align: 'center' });
+      doc
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .fillColor('#ffffff')
+        .text('VERIFIED', sealX - 30, sealY - 20, {
+          width: 60,
+          align: 'center',
+        });
+      doc.fontSize(8).text('CERTIFICATE', sealX - 30, sealY - 5, {
+        width: 60,
+        align: 'center',
+      });
 
       doc.end();
     });

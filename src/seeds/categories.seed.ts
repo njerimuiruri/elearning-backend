@@ -5,14 +5,17 @@ import { Category } from '../schemas/category.schema';
 
 async function seedCategories() {
   const app = await NestFactory.create(AppModule);
-  
+
   try {
     const categoryModel = app.get(getModelToken(Category.name));
 
     // Check if categories already exist
     const existingCategories = await categoryModel.find();
     if (existingCategories.length > 0) {
-      console.log('✓ Categories already exist. Total:', existingCategories.length);
+      console.log(
+        '✓ Categories already exist. Total:',
+        existingCategories.length,
+      );
       await app.close();
       return;
     }
@@ -42,7 +45,6 @@ async function seedCategories() {
 
     const createdCategories = await categoryModel.insertMany(defaultCategories);
     console.log('✓ Categories seeded successfully:', createdCategories.length);
-
   } catch (error) {
     console.error('✗ Error seeding categories:', error.message);
   } finally {

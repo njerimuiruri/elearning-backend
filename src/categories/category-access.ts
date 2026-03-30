@@ -17,13 +17,16 @@ export interface User {
   purchasedCategoryIds?: string[]; // List of IDs user has paid for
 }
 
-export type AccessStatus = 
-  | 'allowed'           // Can access immediately
-  | 'payment_required'  // Needs to buy
-  | 'restricted'        // Not allowed at all (e.g. Fellows only, no buy option)
-  | 'login_required';   // Guest user
+export type AccessStatus =
+  | 'allowed' // Can access immediately
+  | 'payment_required' // Needs to buy
+  | 'restricted' // Not allowed at all (e.g. Fellows only, no buy option)
+  | 'login_required'; // Guest user
 
-export function getCategoryAccessStatus(category: Category, user: User | null): AccessStatus {
+export function getCategoryAccessStatus(
+  category: Category,
+  user: User | null,
+): AccessStatus {
   // 1. Guest Check
   if (!user) return 'login_required';
 
@@ -39,32 +42,36 @@ export function getCategoryAccessStatus(category: Category, user: User | null): 
     if (category.allowedRoles && category.allowedRoles.includes(user.role)) {
       return 'allowed';
     }
-    
+
     // If not a fellow, check if they can pay for it
     if (category.paymentRequiredForNonEligible) {
-      return user.purchasedCategoryIds?.includes(category._id) 
-        ? 'allowed' 
+      return user.purchasedCategoryIds?.includes(category._id)
+        ? 'allowed'
         : 'payment_required';
     }
-    
+
     // If they can't pay and aren't a fellow
     return 'restricted';
   }
 
   // 5. Paid Categories
   if (category.accessType === 'paid') {
-    return user.purchasedCategoryIds?.includes(category._id) 
-      ? 'allowed' 
+    return user.purchasedCategoryIds?.includes(category._id)
+      ? 'allowed'
       : 'payment_required';
   }
 
   return 'restricted';
 }
 
-export function getAccessLabel(category: Category, status: AccessStatus): string {
+export function getAccessLabel(
+  category: Category,
+  status: AccessStatus,
+): string {
   if (status === 'allowed') return 'Access Granted';
   if (status === 'payment_required') return `Buy for $${category.price}`;
-  if (status === 'restricted') return `Restricted (${category.allowedRoles?.join(', ') || 'Fellows'} Only)`;
+  if (status === 'restricted')
+    return `Restricted (${category.allowedRoles?.join(', ') || 'Fellows'} Only)`;
   if (status === 'login_required') return 'Login to View';
   return '';
 }

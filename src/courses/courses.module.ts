@@ -9,8 +9,14 @@ import { Progress, ProgressSchema } from '../schemas/progress.schema';
 import { Certificate, CertificateSchema } from '../schemas/certificate.schema';
 import { Achievement, AchievementSchema } from '../schemas/achievement.schema';
 import { Discussion, DiscussionSchema } from '../schemas/discussion.schema';
-import { EmailReminder, EmailReminderSchema } from '../schemas/email-reminder.schema';
-import { InstructorReview, InstructorReviewSchema } from '../schemas/instructor-review.schema';
+import {
+  EmailReminder,
+  EmailReminderSchema,
+} from '../schemas/email-reminder.schema';
+import {
+  InstructorReview,
+  InstructorReviewSchema,
+} from '../schemas/instructor-review.schema';
 import { EmailService } from '../common/services/email.service';
 import { MessagesModule } from '../messages/messages.module';
 import { CategoriesModule } from '../categories/categories.module';

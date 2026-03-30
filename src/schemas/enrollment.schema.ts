@@ -195,7 +195,10 @@ export class Enrollment extends Document {
   inFinalAssessment?: boolean;
 
   // Track last activity type for smart resume
-  @Prop({ enum: ['lesson', 'module_assessment', 'final_assessment'], default: 'lesson' })
+  @Prop({
+    enum: ['lesson', 'module_assessment', 'final_assessment'],
+    default: 'lesson',
+  })
   lastActivityType?: string;
 
   // Per-lesson completion tracking
@@ -249,7 +252,7 @@ export class Enrollment extends Document {
 export const EnrollmentSchema = SchemaFactory.createForClass(Enrollment);
 
 // Generate certificate public ID when certificate is earned
-EnrollmentSchema.pre('save', function(next) {
+EnrollmentSchema.pre('save', function (next) {
   if (this.certificateEarned && !this.certificatePublicId) {
     this.certificatePublicId = crypto.randomUUID();
   }
@@ -260,4 +263,11 @@ EnrollmentSchema.pre('save', function(next) {
 EnrollmentSchema.index({ studentId: 1, courseId: 1 }, { unique: true });
 EnrollmentSchema.index({ courseId: 1 });
 EnrollmentSchema.index({ isCompleted: 1 });
-EnrollmentSchema.index({ certificatePublicId: 1 }, { unique: true, sparse: true, partialFilterExpression: { certificatePublicId: { $ne: null } } });
+EnrollmentSchema.index(
+  { certificatePublicId: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: { certificatePublicId: { $ne: null } },
+  },
+);

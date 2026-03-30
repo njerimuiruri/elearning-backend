@@ -1,16 +1,29 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
-import { User, UserRole, InstructorStatus, FellowshipStatus } from '../schemas/user.schema';
+import {
+  User,
+  UserRole,
+  InstructorStatus,
+  FellowshipStatus,
+} from '../schemas/user.schema';
 import { Course, CourseStatus } from '../schemas/course.schema';
 import { CourseFormat } from '../schemas/course-format.schema';
 import { PasswordReset } from '../schemas/password-reset.schema';
 import { ActivityLog, ActivityType } from '../schemas/activity-log.schema';
-import { Module as ModuleEntity, ModuleStatus, AssessmentReviewStatus } from '../schemas/module.schema';
+import {
+  Module as ModuleEntity,
+  ModuleStatus,
+  AssessmentReviewStatus,
+} from '../schemas/module.schema';
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
 import { Category } from '../schemas/category.schema';
 import { EmailService } from '../common/services/email.service';
@@ -19,36 +32,41 @@ import { UpdateModuleDto } from '../modules/dto/update-module.dto';
 
 @Injectable()
 export class AdminService {
-    async setCoursePrice(courseId: string, price: number, adminId: string) {
-      if (typeof price !== 'number' || price <= 0) {
-        throw new BadRequestException('Price must be a positive number');
-      }
-      const course = await this.courseModel.findById(courseId);
-      if (!course) throw new NotFoundException('Course not found');
-      course.price = price;
-      course.lastEditedBy = adminId ? new (this.courseModel as any).db.base.Types.ObjectId(adminId) : undefined;
-      course.lastEditedAt = new Date();
-      await course.save();
-      // Optionally log activity
-      await this.logActivity(
-        ActivityType.COURSE_UPDATED,
-        `Course price set to ${price}`,
-        adminId,
-        undefined,
-        courseId,
-        { price },
-        'DollarSign',
-      );
-      return { message: 'Course price updated', course };
+  async setCoursePrice(courseId: string, price: number, adminId: string) {
+    if (typeof price !== 'number' || price <= 0) {
+      throw new BadRequestException('Price must be a positive number');
     }
+    const course = await this.courseModel.findById(courseId);
+    if (!course) throw new NotFoundException('Course not found');
+    course.price = price;
+    course.lastEditedBy = adminId
+      ? new (this.courseModel as any).db.base.Types.ObjectId(adminId)
+      : undefined;
+    course.lastEditedAt = new Date();
+    await course.save();
+    // Optionally log activity
+    await this.logActivity(
+      ActivityType.COURSE_UPDATED,
+      `Course price set to ${price}`,
+      adminId,
+      undefined,
+      courseId,
+      { price },
+      'DollarSign',
+    );
+    return { message: 'Course price updated', course };
+  }
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     @InjectModel(Course.name) private courseModel: Model<Course>,
-    @InjectModel(CourseFormat.name) private courseFormatModel: Model<CourseFormat>,
-    @InjectModel(PasswordReset.name) private passwordResetModel: Model<PasswordReset>,
+    @InjectModel(CourseFormat.name)
+    private courseFormatModel: Model<CourseFormat>,
+    @InjectModel(PasswordReset.name)
+    private passwordResetModel: Model<PasswordReset>,
     @InjectModel(ActivityLog.name) private activityLogModel: Model<ActivityLog>,
     @InjectModel(ModuleEntity.name) private moduleModel: Model<ModuleEntity>,
-    @InjectModel(ModuleEnrollment.name) private moduleEnrollmentModel: Model<ModuleEnrollment>,
+    @InjectModel(ModuleEnrollment.name)
+    private moduleEnrollmentModel: Model<ModuleEnrollment>,
     @InjectModel(Category.name) private categoryModel: Model<Category>,
     private emailService: EmailService,
   ) {}
@@ -101,29 +119,35 @@ export class AdminService {
       this.userModel.countDocuments({ isActive: true }),
       this.userModel.countDocuments({ role: UserRole.STUDENT }),
       this.userModel.countDocuments({ role: UserRole.INSTRUCTOR }),
-      this.userModel.countDocuments({ 
-        role: UserRole.INSTRUCTOR, 
-        instructorStatus: InstructorStatus.PENDING 
+      this.userModel.countDocuments({
+        role: UserRole.INSTRUCTOR,
+        instructorStatus: InstructorStatus.PENDING,
       }),
-      this.userModel.countDocuments({ 
-        role: UserRole.INSTRUCTOR, 
-        instructorStatus: InstructorStatus.APPROVED 
+      this.userModel.countDocuments({
+        role: UserRole.INSTRUCTOR,
+        instructorStatus: InstructorStatus.APPROVED,
       }),
-      this.userModel.countDocuments({ 'fellowData.fellowId': { $exists: true } }),
-      this.userModel.countDocuments({ 
-        'fellowData.fellowshipStatus': FellowshipStatus.ACTIVE 
+      this.userModel.countDocuments({
+        'fellowData.fellowId': { $exists: true },
+      }),
+      this.userModel.countDocuments({
+        'fellowData.fellowshipStatus': FellowshipStatus.ACTIVE,
       }),
       this.userModel.countDocuments({ userType: 'public' }),
       this.userModel.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
-      this.userModel.countDocuments({ 
+      this.userModel.countDocuments({
         lastLogin: { $gte: thirtyDaysAgo },
-        isActive: true 
+        isActive: true,
       }),
     ]);
 
     // Calculate percentage changes
-    const userGrowth = totalUsers > 0 ? ((newUsersLast30Days / totalUsers) * 100).toFixed(1) : 0;
-    const activeGrowth = activeUsers > 0 ? ((activeUsersLast30Days / activeUsers) * 100).toFixed(1) : 0;
+    const userGrowth =
+      totalUsers > 0 ? ((newUsersLast30Days / totalUsers) * 100).toFixed(1) : 0;
+    const activeGrowth =
+      activeUsers > 0
+        ? ((activeUsersLast30Days / activeUsers) * 100).toFixed(1)
+        : 0;
 
     // Get recent activities for dashboard
     const recentActivities = await this.activityLogModel
@@ -135,8 +159,8 @@ export class AdminService {
             ActivityType.INSTRUCTOR_REJECTED,
             ActivityType.COURSE_APPROVED,
             ActivityType.COURSE_REJECTED,
-          ]
-        }
+          ],
+        },
       })
       .populate('performedBy', 'firstName lastName email')
       .populate('targetUser', 'firstName lastName email')
@@ -145,7 +169,7 @@ export class AdminService {
       .limit(10)
       .lean();
 
-    const activities = recentActivities.map(log => ({
+    const activities = recentActivities.map((log) => ({
       type: log.type,
       icon: log.icon || 'Activity',
       message: log.message,
@@ -170,13 +194,21 @@ export class AdminService {
       newUsersLast30Days,
       userGrowth: `+${userGrowth}%`,
       activeGrowth: `+${activeGrowth}%`,
-      fellowsPercentage: totalFellows > 0 ? ((activeFellows / totalFellows) * 100).toFixed(0) : 0,
+      fellowsPercentage:
+        totalFellows > 0
+          ? ((activeFellows / totalFellows) * 100).toFixed(0)
+          : 0,
       recentActivities: activities,
     };
   }
 
   // User Management
-  async getAllUsers(filters: { role?: string; status?: string; page?: number; limit?: number }) {
+  async getAllUsers(filters: {
+    role?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const { role, status, page = 1, limit = 20 } = filters;
     const query: any = {};
 
@@ -217,11 +249,9 @@ export class AdminService {
   }
 
   async updateUserStatus(id: string, isActive: boolean, adminId?: string) {
-    const user = await this.userModel.findByIdAndUpdate(
-      id,
-      { isActive, updatedAt: new Date() },
-      { new: true }
-    ).select('-password');
+    const user = await this.userModel
+      .findByIdAndUpdate(id, { isActive, updatedAt: new Date() }, { new: true })
+      .select('-password');
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -276,23 +306,25 @@ export class AdminService {
       .lean();
 
     // Format CV display names for all instructors
-    const formattedInstructors = instructors.map(instructor => {
+    const formattedInstructors = instructors.map((instructor) => {
       let cvDisplayName: string | null = null;
       if (instructor.cvUrl) {
         const cvPath = instructor.cvUrl.replace(/\\/g, '/');
         const cvFilename = cvPath.split('/').pop();
-        
+
         // Check if it matches our naming pattern: cv-firstname-lastname-timestamp.pdf
         const cvMatch = cvFilename?.match(/^cv-([^-]+)-([^-]+)-\d+-\d+\.pdf$/);
         if (cvMatch) {
-          const firstName = cvMatch[1].charAt(0).toUpperCase() + cvMatch[1].slice(1);
-          const lastName = cvMatch[2].charAt(0).toUpperCase() + cvMatch[2].slice(1);
+          const firstName =
+            cvMatch[1].charAt(0).toUpperCase() + cvMatch[1].slice(1);
+          const lastName =
+            cvMatch[2].charAt(0).toUpperCase() + cvMatch[2].slice(1);
           cvDisplayName = `cv-${firstName}-${lastName}.pdf`;
         } else {
           cvDisplayName = cvFilename ?? null;
         }
       }
-      
+
       return {
         ...instructor,
         cvDisplayName,
@@ -320,39 +352,43 @@ export class AdminService {
     if (instructor.cvUrl) {
       const cvPath = instructor.cvUrl.replace(/\\/g, '/');
       const cvFilename = cvPath.split('/').pop();
-      
+
       // Check if it matches our naming pattern: cv-firstname-lastname-timestamp.pdf
       const cvMatch = cvFilename?.match(/^cv-([^-]+)-([^-]+)-\d+-\d+\.pdf$/);
       if (cvMatch) {
-        const firstName = cvMatch[1].charAt(0).toUpperCase() + cvMatch[1].slice(1);
-        const lastName = cvMatch[2].charAt(0).toUpperCase() + cvMatch[2].slice(1);
+        const firstName =
+          cvMatch[1].charAt(0).toUpperCase() + cvMatch[1].slice(1);
+        const lastName =
+          cvMatch[2].charAt(0).toUpperCase() + cvMatch[2].slice(1);
         cvDisplayName = `cv-${firstName}-${lastName}.pdf`;
       } else {
         cvDisplayName = cvFilename ?? null;
       }
     }
 
-    return { 
+    return {
       instructor: {
         ...instructor,
         cvDisplayName,
-      }
+      },
     };
   }
 
   async approveInstructor(id: string, adminId?: string) {
-    const instructor = await this.userModel.findOneAndUpdate(
-      {
-        _id: id,
-        role: UserRole.INSTRUCTOR,
-        instructorStatus: InstructorStatus.PENDING,
-      },
-      {
-        instructorStatus: InstructorStatus.APPROVED,
-        updatedAt: new Date(),
-      },
-      { new: true }
-    ).select('-password');
+    const instructor = await this.userModel
+      .findOneAndUpdate(
+        {
+          _id: id,
+          role: UserRole.INSTRUCTOR,
+          instructorStatus: InstructorStatus.PENDING,
+        },
+        {
+          instructorStatus: InstructorStatus.APPROVED,
+          updatedAt: new Date(),
+        },
+        { new: true },
+      )
+      .select('-password');
 
     if (!instructor) {
       throw new NotFoundException('Instructor not found or already processed');
@@ -365,7 +401,10 @@ export class AdminService {
       adminId,
       instructor._id.toString(),
       undefined,
-      { instructorEmail: instructor.email, institution: instructor.institution },
+      {
+        instructorEmail: instructor.email,
+        institution: instructor.institution,
+      },
       'CheckCircle',
     );
 
@@ -408,18 +447,20 @@ export class AdminService {
       throw new BadRequestException('Rejection reason is required');
     }
 
-    const instructor = await this.userModel.findOneAndUpdate(
-      {
-        _id: id,
-        role: UserRole.INSTRUCTOR,
-        instructorStatus: InstructorStatus.PENDING,
-      },
-      {
-        instructorStatus: InstructorStatus.REJECTED,
-        updatedAt: new Date(),
-      },
-      { new: true }
-    ).select('-password');
+    const instructor = await this.userModel
+      .findOneAndUpdate(
+        {
+          _id: id,
+          role: UserRole.INSTRUCTOR,
+          instructorStatus: InstructorStatus.PENDING,
+        },
+        {
+          instructorStatus: InstructorStatus.REJECTED,
+          updatedAt: new Date(),
+        },
+        { new: true },
+      )
+      .select('-password');
 
     if (!instructor) {
       throw new NotFoundException('Instructor not found or already processed');
@@ -432,7 +473,11 @@ export class AdminService {
       adminId,
       instructor._id.toString(),
       undefined,
-      { reason, instructorEmail: instructor.email, institution: instructor.institution },
+      {
+        reason,
+        instructorEmail: instructor.email,
+        institution: instructor.institution,
+      },
       'XCircle',
     );
 
@@ -467,7 +512,11 @@ export class AdminService {
     };
   }
 
-  async getAllInstructors(filters: { status?: string; page?: number; limit?: number }) {
+  async getAllInstructors(filters: {
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const { status, page = 1, limit = 20 } = filters;
     const query: any = { role: UserRole.INSTRUCTOR };
 
@@ -489,23 +538,25 @@ export class AdminService {
     ]);
 
     // Format CV display names for all instructors
-    const formattedInstructors = instructors.map(instructor => {
+    const formattedInstructors = instructors.map((instructor) => {
       let cvDisplayName: string | null = null;
       if (instructor.cvUrl) {
         const cvPath = instructor.cvUrl.replace(/\\/g, '/');
         const cvFilename = cvPath.split('/').pop();
-        
+
         // Check if it matches our naming pattern: cv-firstname-lastname-timestamp.pdf
         const cvMatch = cvFilename?.match(/^cv-([^-]+)-([^-]+)-\d+-\d+\.pdf$/);
         if (cvMatch) {
-          const firstName = cvMatch[1].charAt(0).toUpperCase() + cvMatch[1].slice(1);
-          const lastName = cvMatch[2].charAt(0).toUpperCase() + cvMatch[2].slice(1);
+          const firstName =
+            cvMatch[1].charAt(0).toUpperCase() + cvMatch[1].slice(1);
+          const lastName =
+            cvMatch[2].charAt(0).toUpperCase() + cvMatch[2].slice(1);
           cvDisplayName = `cv-${firstName}-${lastName}.pdf`;
         } else {
           cvDisplayName = cvFilename ?? null;
         }
       }
-      
+
       return {
         ...instructor,
         cvDisplayName,
@@ -524,7 +575,9 @@ export class AdminService {
   }
 
   // Student Management
-  async getAllStudents(filters: { page?: number; limit?: number; search?: string } = {}) {
+  async getAllStudents(
+    filters: { page?: number; limit?: number; search?: string } = {},
+  ) {
     const { page = 1, limit = 20, search } = filters;
     const query: any = { role: UserRole.STUDENT };
 
@@ -584,7 +637,7 @@ export class AdminService {
       phoneNumber,
       country,
       isFellow,
-      assignedCategories
+      assignedCategories,
     } = createStudentDto;
 
     // Check if student already exists
@@ -619,9 +672,10 @@ export class AdminService {
         deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
         requiredCourses: [],
         fellowshipStatus: FellowshipStatus.ACTIVE,
-        assignedCategories: assignedCategories && assignedCategories.length > 0
-          ? assignedCategories.map((id: string) => new Types.ObjectId(id))
-          : [],
+        assignedCategories:
+          assignedCategories && assignedCategories.length > 0
+            ? assignedCategories.map((id: string) => new Types.ObjectId(id))
+            : [],
       };
     }
 
@@ -641,7 +695,10 @@ export class AdminService {
 
     // Create password reset token for initial setup
     const setupToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(setupToken).digest('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(setupToken)
+      .digest('hex');
 
     await this.passwordResetModel.create({
       userId: student._id,
@@ -653,7 +710,11 @@ export class AdminService {
     let categoryNames: string[] = [];
     if (assignedCategories && assignedCategories.length > 0) {
       const categories = await this.categoryModel
-        .find({ _id: { $in: assignedCategories.map((id: string) => new Types.ObjectId(id)) } })
+        .find({
+          _id: {
+            $in: assignedCategories.map((id: string) => new Types.ObjectId(id)),
+          },
+        })
         .select('name')
         .lean();
       categoryNames = categories.map((c: any) => c.name);
@@ -661,7 +722,12 @@ export class AdminService {
 
     // Send registration email with credentials
     try {
-      await this.emailService.sendStudentRegistrationEmail(email, firstName, temporaryPassword, categoryNames);
+      await this.emailService.sendStudentRegistrationEmail(
+        email,
+        firstName,
+        temporaryPassword,
+        categoryNames,
+      );
     } catch (error) {
       console.error('Failed to send registration email:', error);
       // Don't fail the creation if email fails
@@ -681,12 +747,12 @@ export class AdminService {
   }
 
   async createInstructor(createInstructorDto: any) {
-    const { 
-      firstName, 
-      lastName, 
-      email, 
-      phoneNumber, 
-      country, 
+    const {
+      firstName,
+      lastName,
+      email,
+      phoneNumber,
+      country,
       organization,
       institution,
       bio,
@@ -697,13 +763,15 @@ export class AdminService {
       teachingExperience,
       yearsOfExperience,
       profilePicture,
-      cv
+      cv,
     } = createInstructorDto;
 
     // Check if instructor already exists
     const existingInstructor = await this.userModel.findOne({ email });
     if (existingInstructor) {
-      throw new BadRequestException('Instructor with this email already exists');
+      throw new BadRequestException(
+        'Instructor with this email already exists',
+      );
     }
 
     // Generate temporary password
@@ -748,7 +816,10 @@ export class AdminService {
 
     // Create password reset token for initial setup
     const setupToken = crypto.randomBytes(32).toString('hex');
-    const hashedToken = crypto.createHash('sha256').update(setupToken).digest('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(setupToken)
+      .digest('hex');
 
     await this.passwordResetModel.create({
       userId: instructor._id,
@@ -758,7 +829,11 @@ export class AdminService {
 
     // Send registration email with credentials
     try {
-      await this.emailService.sendInstructorRegistrationEmail(email, firstName, temporaryPassword);
+      await this.emailService.sendInstructorRegistrationEmail(
+        email,
+        firstName,
+        temporaryPassword,
+      );
     } catch (error) {
       console.error('Failed to send registration email:', error);
       // Don't fail the creation if email fails
@@ -780,7 +855,9 @@ export class AdminService {
 
   async bulkCreateStudents(file: Express.Multer.File, bulkDto: any) {
     if (!file && (!bulkDto.students || !Array.isArray(bulkDto.students))) {
-      throw new BadRequestException('Please provide either a CSV file or student data');
+      throw new BadRequestException(
+        'Please provide either a CSV file or student data',
+      );
     }
 
     let studentsData = bulkDto.students || [];
@@ -792,8 +869,8 @@ export class AdminService {
       const data: any[] = [];
 
       await new Promise((resolve, reject) => {
-        stream.Readable.from([file.buffer.toString()]).
-          pipe(csv())
+        stream.Readable.from([file.buffer.toString()])
+          .pipe(csv())
           .on('data', (row: any) => {
             data.push({
               firstName: row.firstName || row['First Name'],
@@ -820,7 +897,9 @@ export class AdminService {
     for (const studentData of studentsData) {
       try {
         // Check if student already exists
-        const existingStudent = await this.userModel.findOne({ email: studentData.email });
+        const existingStudent = await this.userModel.findOne({
+          email: studentData.email,
+        });
         if (existingStudent) {
           results.failed++;
           results.errors.push({
@@ -854,7 +933,10 @@ export class AdminService {
             temporaryPassword,
           );
         } catch (emailError) {
-          console.error(`Failed to send email to ${studentData.email}:`, emailError);
+          console.error(
+            `Failed to send email to ${studentData.email}:`,
+            emailError,
+          );
         }
 
         results.created++;
@@ -880,7 +962,14 @@ export class AdminService {
   }
 
   async updateStudent(id: string, updateData: any) {
-    const allowedFields = ['firstName', 'lastName', 'phoneNumber', 'country', 'bio', 'isActive'];
+    const allowedFields = [
+      'firstName',
+      'lastName',
+      'phoneNumber',
+      'country',
+      'bio',
+      'isActive',
+    ];
     const filteredData = {};
 
     for (const field of allowedFields) {
@@ -889,9 +978,11 @@ export class AdminService {
       }
     }
 
-    const student = await this.userModel.findByIdAndUpdate(id, filteredData, {
-      new: true,
-    }).select('-password');
+    const student = await this.userModel
+      .findByIdAndUpdate(id, filteredData, {
+        new: true,
+      })
+      .select('-password');
 
     if (!student) {
       throw new NotFoundException('Student not found');
@@ -914,12 +1005,27 @@ export class AdminService {
   // ─── Fellow CRUD ──────────────────────────────────────────────────
 
   async createFellow(dto: any) {
-    const { fullName, firstName, lastName, email, gender, country, region, track, category, phoneNumber, sendEmail } = dto;
+    const {
+      fullName,
+      firstName,
+      lastName,
+      email,
+      gender,
+      country,
+      region,
+      track,
+      category,
+      phoneNumber,
+      sendEmail,
+    } = dto;
 
     if (!email) throw new BadRequestException('Email is required');
 
     const existing = await this.userModel.findOne({ email });
-    if (existing) throw new BadRequestException(`A user with email ${email} already exists`);
+    if (existing)
+      throw new BadRequestException(
+        `A user with email ${email} already exists`,
+      );
 
     const temporaryPassword = crypto.randomBytes(8).toString('hex');
     const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
@@ -970,8 +1076,16 @@ export class AdminService {
     let emailSent = false;
     if (sendEmail) {
       try {
-        await this.emailService.sendFellowInvitationEmail(email, firstName || 'Fellow', temporaryPassword, { track, cohort: fellow.fellowData.cohort });
-        await this.userModel.findByIdAndUpdate(fellow._id, { invitationEmailSent: true, invitationEmailSentAt: new Date() });
+        await this.emailService.sendFellowInvitationEmail(
+          email,
+          firstName || 'Fellow',
+          temporaryPassword,
+          { track, cohort: fellow.fellowData.cohort },
+        );
+        await this.userModel.findByIdAndUpdate(fellow._id, {
+          invitationEmailSent: true,
+          invitationEmailSentAt: new Date(),
+        });
         emailSent = true;
       } catch (err) {
         console.error('Failed to send invitation email:', err);
@@ -980,25 +1094,42 @@ export class AdminService {
 
     return {
       message: 'Fellow created successfully.',
-      fellow: { _id: fellow._id, firstName: fellow.firstName, lastName: fellow.lastName, email: fellow.email, invitationEmailSent: emailSent },
+      fellow: {
+        _id: fellow._id,
+        firstName: fellow.firstName,
+        lastName: fellow.lastName,
+        email: fellow.email,
+        invitationEmailSent: emailSent,
+      },
       temporaryPassword,
     };
   }
 
   async bulkCreateFellows(fellowsData: any[], sendEmails = false) {
-    const results = { created: 0, failed: 0, errors: [] as any[], fellows: [] as any[] };
+    const results = {
+      created: 0,
+      failed: 0,
+      errors: [] as any[],
+      fellows: [] as any[],
+    };
 
     for (const dto of fellowsData) {
       if (!dto.email) {
         results.failed++;
-        results.errors.push({ email: dto.email || '(missing)', error: 'Email is required' });
+        results.errors.push({
+          email: dto.email || '(missing)',
+          error: 'Email is required',
+        });
         continue;
       }
       try {
         const existing = await this.userModel.findOne({ email: dto.email });
         if (existing) {
           results.failed++;
-          results.errors.push({ email: dto.email, error: 'Email already exists' });
+          results.errors.push({
+            email: dto.email,
+            error: 'Email already exists',
+          });
           continue;
         }
 
@@ -1006,7 +1137,9 @@ export class AdminService {
         const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
 
         const fellow = await this.userModel.create({
-          fullName: dto.fullName || `${dto.firstName || ''} ${dto.lastName || ''}`.trim(),
+          fullName:
+            dto.fullName ||
+            `${dto.firstName || ''} ${dto.lastName || ''}`.trim(),
           firstName: dto.firstName || '',
           lastName: dto.lastName || '',
           email: dto.email,
@@ -1025,7 +1158,9 @@ export class AdminService {
             deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
             requiredCourses: [],
             fellowshipStatus: FellowshipStatus.ACTIVE,
-            assignedCategories: dto.category ? [new Types.ObjectId(dto.category)] : [],
+            assignedCategories: dto.category
+              ? [new Types.ObjectId(dto.category)]
+              : [],
             region: dto.region || null,
             track: dto.track || null,
           },
@@ -1034,14 +1169,25 @@ export class AdminService {
         await this.passwordResetModel.create({
           userId: fellow._id,
           email: dto.email,
-          token: crypto.createHash('sha256').update(crypto.randomBytes(32).toString('hex')).digest('hex'),
+          token: crypto
+            .createHash('sha256')
+            .update(crypto.randomBytes(32).toString('hex'))
+            .digest('hex'),
         });
 
         let emailSent = false;
         if (sendEmails) {
           try {
-            await this.emailService.sendFellowInvitationEmail(dto.email, dto.firstName || 'Fellow', temporaryPassword, { track: dto.track, cohort: fellow.fellowData.cohort });
-            await this.userModel.findByIdAndUpdate(fellow._id, { invitationEmailSent: true, invitationEmailSentAt: new Date() });
+            await this.emailService.sendFellowInvitationEmail(
+              dto.email,
+              dto.firstName || 'Fellow',
+              temporaryPassword,
+              { track: dto.track, cohort: fellow.fellowData.cohort },
+            );
+            await this.userModel.findByIdAndUpdate(fellow._id, {
+              invitationEmailSent: true,
+              invitationEmailSentAt: new Date(),
+            });
             emailSent = true;
           } catch (err) {
             console.error(`Failed to send invitation to ${dto.email}:`, err);
@@ -1071,7 +1217,15 @@ export class AdminService {
   }
 
   async updateFellow(id: string, updateData: any) {
-    const allowed = ['fullName', 'firstName', 'lastName', 'gender', 'country', 'phoneNumber', 'isActive'];
+    const allowed = [
+      'fullName',
+      'firstName',
+      'lastName',
+      'gender',
+      'country',
+      'phoneNumber',
+      'isActive',
+    ];
     const fellowAllowed = ['region', 'track'];
     const userUpdate: any = {};
     const fellowUpdate: any = {};
@@ -1083,7 +1237,9 @@ export class AdminService {
       if (f in updateData) fellowUpdate[`fellowData.${f}`] = updateData[f];
     }
 
-    const fellow = await this.userModel.findByIdAndUpdate(id, { ...userUpdate, ...fellowUpdate }, { new: true }).select('-password');
+    const fellow = await this.userModel
+      .findByIdAndUpdate(id, { ...userUpdate, ...fellowUpdate }, { new: true })
+      .select('-password');
     if (!fellow) throw new NotFoundException('Fellow not found');
     return { message: 'Fellow updated', fellow };
   }
@@ -1094,18 +1250,35 @@ export class AdminService {
     return { message: 'Fellow deleted' };
   }
 
-  async sendBulkEmailToFellows(fellowIds: string[], subject: string, message: string, cc?: string[], bcc?: string[]) {
-    const fellows = await this.userModel.find({ _id: { $in: fellowIds } }).select('email firstName lastName invitationEmailSent');
+  async sendBulkEmailToFellows(
+    fellowIds: string[],
+    subject: string,
+    message: string,
+    cc?: string[],
+    bcc?: string[],
+  ) {
+    const fellows = await this.userModel
+      .find({ _id: { $in: fellowIds } })
+      .select('email firstName lastName invitationEmailSent');
     const results = { sent: 0, failed: 0, details: [] as any[] };
 
     for (const fellow of fellows) {
-      const result = await this.emailService.sendCustomEmail(fellow.email, subject, message, { cc, bcc });
+      const result = await this.emailService.sendCustomEmail(
+        fellow.email,
+        subject,
+        message,
+        { cc, bcc },
+      );
       if (result.success) {
         results.sent++;
         results.details.push({ email: fellow.email, status: 'sent' });
       } else {
         results.failed++;
-        results.details.push({ email: fellow.email, status: 'failed', error: (result as any).error });
+        results.details.push({
+          email: fellow.email,
+          status: 'failed',
+          error: (result as any).error,
+        });
       }
     }
 
@@ -1116,36 +1289,61 @@ export class AdminService {
   }
 
   async sendFellowInvitations(fellowIds: string[]) {
-    const fellows = await this.userModel.find({ _id: { $in: fellowIds } }).select('email firstName fellowData invitationEmailSent');
+    const fellows = await this.userModel
+      .find({ _id: { $in: fellowIds } })
+      .select('email firstName fellowData invitationEmailSent');
     const results = { sent: 0, failed: 0, details: [] as any[] };
 
     for (const fellow of fellows) {
       const temporaryPassword = crypto.randomBytes(8).toString('hex');
       const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
-      await this.userModel.findByIdAndUpdate(fellow._id, { password: hashedPassword, mustSetPassword: true });
+      await this.userModel.findByIdAndUpdate(fellow._id, {
+        password: hashedPassword,
+        mustSetPassword: true,
+      });
 
       const result = await this.emailService.sendFellowInvitationEmail(
         fellow.email,
         fellow.firstName || 'Fellow',
         temporaryPassword,
-        { track: (fellow.fellowData as any)?.track, cohort: fellow.fellowData?.cohort },
+        {
+          track: (fellow.fellowData as any)?.track,
+          cohort: fellow.fellowData?.cohort,
+        },
       );
 
       if (result.success) {
         results.sent++;
-        await this.userModel.findByIdAndUpdate(fellow._id, { invitationEmailSent: true, invitationEmailSentAt: new Date() });
+        await this.userModel.findByIdAndUpdate(fellow._id, {
+          invitationEmailSent: true,
+          invitationEmailSentAt: new Date(),
+        });
         results.details.push({ email: fellow.email, status: 'sent' });
       } else {
         results.failed++;
-        results.details.push({ email: fellow.email, status: 'failed', error: result.message });
+        results.details.push({
+          email: fellow.email,
+          status: 'failed',
+          error: result.message,
+        });
       }
     }
 
-    return { message: `Invitations sent. ${results.sent} succeeded, ${results.failed} failed.`, ...results };
+    return {
+      message: `Invitations sent. ${results.sent} succeeded, ${results.failed} failed.`,
+      ...results,
+    };
   }
 
   // Fellows Management
-  async getAllFellows(filters: { status?: string; page?: number; limit?: number; search?: string } = {}) {
+  async getAllFellows(
+    filters: {
+      status?: string;
+      page?: number;
+      limit?: number;
+      search?: string;
+    } = {},
+  ) {
     const { status, page = 1, limit = 50, search } = filters;
     const query: any = { 'fellowData.fellowId': { $exists: true } };
 
@@ -1189,7 +1387,9 @@ export class AdminService {
 
   async getFellowsAtRisk() {
     const now = new Date();
-    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysFromNow = new Date(
+      now.getTime() + 30 * 24 * 60 * 60 * 1000,
+    );
 
     const fellows = await this.userModel
       .find({
@@ -1201,21 +1401,24 @@ export class AdminService {
       .lean();
 
     // Calculate progress for each fellow
-    const fellowsAtRisk = fellows.map(fellow => {
-      const daysLeft = Math.ceil(
-        (fellow.fellowData.deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-      );
-      
-      // Mock progress - calculate based on actual course completions in production
-      const progress = Math.floor(Math.random() * 50);
+    const fellowsAtRisk = fellows
+      .map((fellow) => {
+        const daysLeft = Math.ceil(
+          (fellow.fellowData.deadline.getTime() - now.getTime()) /
+            (1000 * 60 * 60 * 24),
+        );
 
-      return {
-        ...fellow,
-        daysLeft,
-        progress,
-        isAtRisk: daysLeft < 30 && progress < 50,
-      };
-    }).filter(f => f.isAtRisk);
+        // Mock progress - calculate based on actual course completions in production
+        const progress = Math.floor(Math.random() * 50);
+
+        return {
+          ...fellow,
+          daysLeft,
+          progress,
+          isAtRisk: daysLeft < 30 && progress < 50,
+        };
+      })
+      .filter((f) => f.isAtRisk);
 
     return { fellows: fellowsAtRisk };
   }
@@ -1239,7 +1442,11 @@ export class AdminService {
     const subject = 'Reminder from Arin Academy';
     const personalised = `Dear ${fellow.firstName || 'Fellow'},\n\n${message.trim()}`;
 
-    const result = await this.emailService.sendCustomEmail(fellow.email, subject, personalised);
+    const result = await this.emailService.sendCustomEmail(
+      fellow.email,
+      subject,
+      personalised,
+    );
 
     if (!result.success) {
       throw new BadRequestException('Failed to send reminder email');
@@ -1251,7 +1458,11 @@ export class AdminService {
     };
   }
 
-  async assignFellowCategories(userId: string, categories: string[], adminId: string) {
+  async assignFellowCategories(
+    userId: string,
+    categories: string[],
+    adminId: string,
+  ) {
     const user = await this.userModel.findById(userId);
     if (!user) {
       throw new NotFoundException('User not found');
@@ -1263,7 +1474,9 @@ export class AdminService {
     }
 
     // Update assigned categories
-    user.fellowData['assignedCategories'] = categories.map((id: string) => new Types.ObjectId(id));
+    user.fellowData['assignedCategories'] = categories.map(
+      (id: string) => new Types.ObjectId(id),
+    );
     await user.save();
 
     await this.logActivity(
@@ -1281,8 +1494,8 @@ export class AdminService {
 
   // Analytics
   async getUserAnalytics(filters: { startDate?: string; endDate?: string }) {
-    const startDate = filters.startDate 
-      ? new Date(filters.startDate) 
+    const startDate = filters.startDate
+      ? new Date(filters.startDate)
       : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const endDate = filters.endDate ? new Date(filters.endDate) : new Date();
 
@@ -1311,8 +1524,8 @@ export class AdminService {
 
   async getRevenueAnalytics(filters: { startDate?: string; endDate?: string }) {
     // Mock revenue data - implement actual revenue tracking in production
-    const startDate = filters.startDate 
-      ? new Date(filters.startDate) 
+    const startDate = filters.startDate
+      ? new Date(filters.startDate)
       : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const endDate = filters.endDate ? new Date(filters.endDate) : new Date();
 
@@ -1355,28 +1568,32 @@ export class AdminService {
 
   async approveCourse(courseId: string, adminId: string, feedback?: string) {
     // Update course status to approved and published
-    const updatedCourse = await this.courseModel.findByIdAndUpdate(
-      courseId,
-      {
-        status: 'approved',
-        approvedBy: adminId,
-        approvedAt: new Date(),
-      },
-      { new: true },
-    ).populate('instructorIds');
+    const updatedCourse = await this.courseModel
+      .findByIdAndUpdate(
+        courseId,
+        {
+          status: 'approved',
+          approvedBy: adminId,
+          approvedAt: new Date(),
+        },
+        { new: true },
+      )
+      .populate('instructorIds');
 
     if (!updatedCourse) {
       throw new NotFoundException('Course not found');
     }
 
-    const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+    const instructors = Array.isArray(updatedCourse.instructorIds)
+      ? updatedCourse.instructorIds
+      : [];
 
     // Log the activity
     const instructorNames = instructors
-      .filter(i => i && typeof i === 'object' && 'firstName' in i)
-      .map(i => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
+      .filter((i) => i && typeof i === 'object' && 'firstName' in i)
+      .map((i) => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
       .join(', ');
-    
+
     await this.logActivity(
       ActivityType.COURSE_APPROVED,
       `Course "${updatedCourse.title}" by ${instructorNames || 'Unknown'} has been approved`,
@@ -1390,7 +1607,12 @@ export class AdminService {
     // Send approval email to all instructors
     try {
       for (const instructor of instructors) {
-        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor) {
+        if (
+          instructor &&
+          typeof instructor === 'object' &&
+          'email' in instructor &&
+          'firstName' in instructor
+        ) {
           await this.emailService.sendCourseApprovalEmailToInstructor(
             String(instructor.email),
             String(instructor.firstName),
@@ -1406,7 +1628,13 @@ export class AdminService {
     // Send notification to admin email (use first instructor)
     try {
       const mainInstructor = instructors[0];
-      if (mainInstructor && typeof mainInstructor === 'object' && 'firstName' in mainInstructor && 'lastName' in mainInstructor && 'email' in mainInstructor) {
+      if (
+        mainInstructor &&
+        typeof mainInstructor === 'object' &&
+        'firstName' in mainInstructor &&
+        'lastName' in mainInstructor &&
+        'email' in mainInstructor
+      ) {
         await this.emailService.sendInstructorRegistrationNotificationToAdmin(
           'faith.muiruri@strathmore.edu',
           `${mainInstructor.firstName || ''} ${mainInstructor.lastName || ''}`,
@@ -1432,27 +1660,31 @@ export class AdminService {
     }
 
     // Update course status to rejected
-    const updatedCourse = await this.courseModel.findByIdAndUpdate(
-      courseId,
-      {
-        status: 'rejected',
-        rejectionReason: reason,
-      },
-      { new: true },
-    ).populate('instructorIds');
+    const updatedCourse = await this.courseModel
+      .findByIdAndUpdate(
+        courseId,
+        {
+          status: 'rejected',
+          rejectionReason: reason,
+        },
+        { new: true },
+      )
+      .populate('instructorIds');
 
     if (!updatedCourse) {
       throw new NotFoundException('Course not found');
     }
 
-    const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+    const instructors = Array.isArray(updatedCourse.instructorIds)
+      ? updatedCourse.instructorIds
+      : [];
 
     // Log the activity
     const instructorNames = instructors
-      .filter(i => i && typeof i === 'object' && 'firstName' in i)
-      .map(i => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
+      .filter((i) => i && typeof i === 'object' && 'firstName' in i)
+      .map((i) => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
       .join(', ');
-    
+
     await this.logActivity(
       ActivityType.COURSE_REJECTED,
       `Course "${updatedCourse.title}" by ${instructorNames || 'Unknown'} has been rejected`,
@@ -1466,7 +1698,12 @@ export class AdminService {
     // Send rejection email to all instructors
     try {
       for (const instructor of instructors) {
-        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor) {
+        if (
+          instructor &&
+          typeof instructor === 'object' &&
+          'email' in instructor &&
+          'firstName' in instructor
+        ) {
           await this.emailService.sendCourseRejectionEmailToInstructor(
             String(instructor.email),
             String(instructor.firstName),
@@ -1483,7 +1720,13 @@ export class AdminService {
     // Send notification to admin email (use first instructor)
     try {
       const mainInstructor = instructors[0];
-      if (mainInstructor && typeof mainInstructor === 'object' && 'firstName' in mainInstructor && 'lastName' in mainInstructor && 'email' in mainInstructor) {
+      if (
+        mainInstructor &&
+        typeof mainInstructor === 'object' &&
+        'firstName' in mainInstructor &&
+        'lastName' in mainInstructor &&
+        'email' in mainInstructor
+      ) {
         await this.emailService.sendInstructorRegistrationNotificationToAdmin(
           'faith.muiruri@strathmore.edu',
           `${mainInstructor.firstName || ''} ${mainInstructor.lastName || ''}`,
@@ -1504,7 +1747,9 @@ export class AdminService {
   }
 
   async approvePendingCourse(courseId: string, adminId: string) {
-    const course = await this.courseModel.findById(courseId).populate('instructorIds');
+    const course = await this.courseModel
+      .findById(courseId)
+      .populate('instructorIds');
 
     if (!course) {
       throw new NotFoundException('Course not found');
@@ -1514,28 +1759,32 @@ export class AdminService {
       throw new BadRequestException('Only submitted courses can be approved');
     }
 
-    const updatedCourse = await this.courseModel.findByIdAndUpdate(
-      courseId,
-      {
-        status: 'published', // Automatically publish course when approved
-        approvedBy: adminId,
-        approvedAt: new Date(),
-        publishedAt: new Date(),
-      },
-      { new: true },
-    ).populate('instructorIds');
+    const updatedCourse = await this.courseModel
+      .findByIdAndUpdate(
+        courseId,
+        {
+          status: 'published', // Automatically publish course when approved
+          approvedBy: adminId,
+          approvedAt: new Date(),
+          publishedAt: new Date(),
+        },
+        { new: true },
+      )
+      .populate('instructorIds');
 
     if (!updatedCourse) {
       throw new NotFoundException('Course not found');
     }
 
     // Log the activity
-    const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+    const instructors = Array.isArray(updatedCourse.instructorIds)
+      ? updatedCourse.instructorIds
+      : [];
     const instructorNames = instructors
-      .filter(i => i && typeof i === 'object' && 'firstName' in i)
-      .map(i => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
+      .filter((i) => i && typeof i === 'object' && 'firstName' in i)
+      .map((i) => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
       .join(', ');
-    
+
     await this.logActivity(
       ActivityType.COURSE_APPROVED,
       `Course "${updatedCourse.title}" by ${instructorNames || 'Unknown'} has been approved and published`,
@@ -1549,7 +1798,13 @@ export class AdminService {
     // Send approval email to all instructors
     try {
       for (const instructor of instructors) {
-        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor && 'lastName' in instructor) {
+        if (
+          instructor &&
+          typeof instructor === 'object' &&
+          'email' in instructor &&
+          'firstName' in instructor &&
+          'lastName' in instructor
+        ) {
           await this.emailService.sendCourseApprovedEmail(
             String(instructor.email),
             `${instructor.firstName} ${instructor.lastName}`,
@@ -1558,7 +1813,10 @@ export class AdminService {
         }
       }
     } catch (error) {
-      console.error('Failed to send course approval email to instructor(s):', error);
+      console.error(
+        'Failed to send course approval email to instructor(s):',
+        error,
+      );
       // Don't fail the approval if email fails
     }
 
@@ -1568,8 +1826,14 @@ export class AdminService {
     };
   }
 
-  async rejectPendingCourse(courseId: string, reason: string, adminId?: string) {
-    const course = await this.courseModel.findById(courseId).populate('instructorIds');
+  async rejectPendingCourse(
+    courseId: string,
+    reason: string,
+    adminId?: string,
+  ) {
+    const course = await this.courseModel
+      .findById(courseId)
+      .populate('instructorIds');
 
     if (!course) {
       throw new NotFoundException('Course not found');
@@ -1579,27 +1843,31 @@ export class AdminService {
       throw new BadRequestException('Only submitted courses can be rejected');
     }
 
-    const updatedCourse = await this.courseModel.findByIdAndUpdate(
-      courseId,
-      {
-        status: 'rejected',
-        rejectionReason: reason,
-        rejectedAt: new Date(),
-      },
-      { new: true },
-    ).populate('instructorIds');
+    const updatedCourse = await this.courseModel
+      .findByIdAndUpdate(
+        courseId,
+        {
+          status: 'rejected',
+          rejectionReason: reason,
+          rejectedAt: new Date(),
+        },
+        { new: true },
+      )
+      .populate('instructorIds');
 
     if (!updatedCourse) {
       throw new NotFoundException('Course not found');
     }
 
     // Log the activity
-    const instructors = Array.isArray(updatedCourse.instructorIds) ? updatedCourse.instructorIds : [];
+    const instructors = Array.isArray(updatedCourse.instructorIds)
+      ? updatedCourse.instructorIds
+      : [];
     const instructorNames = instructors
-      .filter(i => i && typeof i === 'object' && 'firstName' in i)
-      .map(i => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
+      .filter((i) => i && typeof i === 'object' && 'firstName' in i)
+      .map((i) => `${(i as any).firstName} ${(i as any).lastName || ''}`.trim())
       .join(', ');
-    
+
     await this.logActivity(
       ActivityType.COURSE_REJECTED,
       `Course "${updatedCourse.title}" by ${instructorNames || 'Unknown'} has been rejected`,
@@ -1613,7 +1881,13 @@ export class AdminService {
     // Send rejection email to all instructors
     try {
       for (const instructor of instructors) {
-        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor && 'lastName' in instructor) {
+        if (
+          instructor &&
+          typeof instructor === 'object' &&
+          'email' in instructor &&
+          'firstName' in instructor &&
+          'lastName' in instructor
+        ) {
           await this.emailService.sendCourseRejectedEmail(
             String(instructor.email),
             `${instructor.firstName} ${instructor.lastName}`,
@@ -1623,7 +1897,10 @@ export class AdminService {
         }
       }
     } catch (error) {
-      console.error('Failed to send course rejection email to instructor(s):', error);
+      console.error(
+        'Failed to send course rejection email to instructor(s):',
+        error,
+      );
       // Don't block the rejection if email fails
     }
 
@@ -1633,7 +1910,9 @@ export class AdminService {
     };
   }
 
-  async getAllCourses(filters: { status?: string; page?: number; limit?: number } = {}) {
+  async getAllCourses(
+    filters: { status?: string; page?: number; limit?: number } = {},
+  ) {
     const { status, page = 1, limit = 20 } = filters;
     const query: any = {};
 
@@ -1697,7 +1976,7 @@ export class AdminService {
             if (!module.lessons || !Array.isArray(module.lessons)) {
               needsUpdate = true;
               return {
-                ...module.toObject ? module.toObject() : module,
+                ...(module.toObject ? module.toObject() : module),
                 lessons: [], // Add empty lessons array
               };
             }
@@ -1708,7 +1987,7 @@ export class AdminService {
             await this.courseModel.findByIdAndUpdate(
               course._id,
               { modules: updatedModules },
-              { new: true }
+              { new: true },
             );
             migratedCount++;
           } else {
@@ -1731,7 +2010,9 @@ export class AdminService {
   }
 
   async deleteCourse(courseId: string) {
-    const course = await this.courseModel.findById(courseId).populate('instructorIds');
+    const course = await this.courseModel
+      .findById(courseId)
+      .populate('instructorIds');
 
     if (!course) {
       throw new NotFoundException('Course not found');
@@ -1742,12 +2023,20 @@ export class AdminService {
 
     // Send deletion notification email to instructor
     try {
-      const instructors = Array.isArray(course.instructorIds) ? course.instructorIds : [];
+      const instructors = Array.isArray(course.instructorIds)
+        ? course.instructorIds
+        : [];
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const dashboardUrl = `${frontendUrl}/instructor/dashboard`;
 
       for (const instructor of instructors) {
-        if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor && 'lastName' in instructor) {
+        if (
+          instructor &&
+          typeof instructor === 'object' &&
+          'email' in instructor &&
+          'firstName' in instructor &&
+          'lastName' in instructor
+        ) {
           const htmlContent = `
             <h2>Course Deletion Notification</h2>
             <p>Dear ${instructor.firstName} ${instructor.lastName},</p>
@@ -1761,7 +2050,7 @@ export class AdminService {
           await this.emailService.sendSimpleEmail(
             String(instructor.email),
             'Course Deletion Notification',
-            htmlContent
+            htmlContent,
           );
         }
       }
@@ -1777,7 +2066,9 @@ export class AdminService {
   }
 
   // Student Reminder System
-  async getStudentsNotFinished(filters: { page?: number; limit?: number } = {}) {
+  async getStudentsNotFinished(
+    filters: { page?: number; limit?: number } = {},
+  ) {
     const { page = 1, limit = 50 } = filters;
     const skip = (page - 1) * limit;
 
@@ -1794,7 +2085,7 @@ export class AdminService {
     const total = await Enrollment.countDocuments({ isCompleted: false });
 
     return {
-      students: enrollments.map(e => ({
+      students: enrollments.map((e) => ({
         studentId: e.userId._id,
         studentName: `${e.userId.firstName} ${e.userId.lastName}`,
         email: e.userId.email,
@@ -1828,7 +2119,9 @@ export class AdminService {
     const course = enrollment.courseId;
     const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/student`;
 
-    const customMessage = message || `We noticed you haven't finished "${course.title}" yet. Continue your learning journey and complete the course to earn your certificate!`;
+    const customMessage =
+      message ||
+      `We noticed you haven't finished "${course.title}" yet. Continue your learning journey and complete the course to earn your certificate!`;
 
     const htmlContent = `
       <h2>Complete Your Course!</h2>
@@ -1859,7 +2152,10 @@ export class AdminService {
     };
   }
 
-  async sendRemindersToMultipleStudents(enrollmentIds: string[], message?: string) {
+  async sendRemindersToMultipleStudents(
+    enrollmentIds: string[],
+    message?: string,
+  ) {
     const Enrollment = this.userModel.db.model('Enrollment');
 
     const results: Array<{ message: string; student: any; course: any }> = [];
@@ -1890,7 +2186,7 @@ export class AdminService {
       .populate('courseId', 'title');
 
     return this.sendRemindersToMultipleStudents(
-      enrollments.map(e => e._id),
+      enrollments.map((e) => e._id),
       message,
     );
   }
@@ -1912,19 +2208,23 @@ export class AdminService {
     ] = await Promise.all([
       Enrollment.countDocuments(),
       Enrollment.countDocuments({ isCompleted: true }),
-      Enrollment.countDocuments({ 
+      Enrollment.countDocuments({
         isCompleted: false,
-        lastAccessedAt: { $gte: thirtyDaysAgo }
+        lastAccessedAt: { $gte: thirtyDaysAgo },
       }),
       this.courseModel.countDocuments(),
       this.courseModel.countDocuments({ status: CourseStatus.PUBLISHED }),
       this.userModel.countDocuments({ role: UserRole.STUDENT }),
-      this.userModel.countDocuments({ role: UserRole.INSTRUCTOR, instructorStatus: InstructorStatus.APPROVED }),
+      this.userModel.countDocuments({
+        role: UserRole.INSTRUCTOR,
+        instructorStatus: InstructorStatus.APPROVED,
+      }),
     ]);
 
-    const completionRate = totalEnrollments > 0 
-      ? ((completedEnrollments / totalEnrollments) * 100).toFixed(1)
-      : 0;
+    const completionRate =
+      totalEnrollments > 0
+        ? ((completedEnrollments / totalEnrollments) * 100).toFixed(1)
+        : 0;
 
     return {
       enrollments: {
@@ -1944,7 +2244,10 @@ export class AdminService {
     };
   }
 
-  async getStudentProgressAnalytics(limit = 50, status: 'in-progress' | 'completed' | 'all' = 'all') {
+  async getStudentProgressAnalytics(
+    limit = 50,
+    status: 'in-progress' | 'completed' | 'all' = 'all',
+  ) {
     const Enrollment = this.userModel.db.model('Enrollment');
 
     const filter: any = {};
@@ -1958,7 +2261,7 @@ export class AdminService {
       .limit(limit)
       .lean();
 
-    const students = progressData.map(enrollment => ({
+    const students = progressData.map((enrollment) => ({
       enrollmentId: enrollment._id,
       status: enrollment.isCompleted ? 'completed' : 'in-progress',
       studentId: enrollment.studentId?._id,
@@ -1969,12 +2272,16 @@ export class AdminService {
       progress: enrollment.progress || 0,
       lastAccessed: enrollment.lastAccessedAt,
       enrolledAt: enrollment.enrolledAt,
-      daysEnrolled: Math.floor((new Date().getTime() - new Date(enrollment.enrolledAt).getTime()) / (1000 * 60 * 60 * 24)),
+      daysEnrolled: Math.floor(
+        (new Date().getTime() - new Date(enrollment.enrolledAt).getTime()) /
+          (1000 * 60 * 60 * 24),
+      ),
     }));
 
-    const avgProgress = students.length > 0
-      ? students.reduce((sum, s) => sum + s.progress, 0) / students.length
-      : 0;
+    const avgProgress =
+      students.length > 0
+        ? students.reduce((sum, s) => sum + s.progress, 0) / students.length
+        : 0;
 
     return {
       students,
@@ -1998,7 +2305,10 @@ export class AdminService {
           .select('title status publishedAt enrollmentCount')
           .lean();
 
-        const totalStudents = courses.reduce((sum, course) => sum + (course.enrollmentCount || 0), 0);
+        const totalStudents = courses.reduce(
+          (sum, course) => sum + (course.enrollmentCount || 0),
+          0,
+        );
 
         return {
           instructorId: instructor._id,
@@ -2006,21 +2316,29 @@ export class AdminService {
           email: instructor.email,
           status: instructor.instructorStatus,
           coursesCreated: courses.length,
-          publishedCourses: courses.filter(c => c.status === CourseStatus.PUBLISHED || !!c.publishedAt).length,
-          pendingApproval: courses.filter(c => c.status === CourseStatus.SUBMITTED).length,
+          publishedCourses: courses.filter(
+            (c) => c.status === CourseStatus.PUBLISHED || !!c.publishedAt,
+          ).length,
+          pendingApproval: courses.filter(
+            (c) => c.status === CourseStatus.SUBMITTED,
+          ).length,
           totalStudents,
           lastLogin: instructor.lastLogin,
           joinedAt: instructor.createdAt,
         };
-      })
+      }),
     );
 
     return {
       instructors: instructorActivity,
       summary: {
         total: instructors.length,
-        approved: instructors.filter(i => i.instructorStatus === InstructorStatus.APPROVED).length,
-        pending: instructors.filter(i => i.instructorStatus === InstructorStatus.PENDING).length,
+        approved: instructors.filter(
+          (i) => i.instructorStatus === InstructorStatus.APPROVED,
+        ).length,
+        pending: instructors.filter(
+          (i) => i.instructorStatus === InstructorStatus.PENDING,
+        ).length,
       },
     };
   }
@@ -2034,18 +2352,18 @@ export class AdminService {
           _id: '$courseId',
           totalEnrollments: { $sum: 1 },
           completedCount: {
-            $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] },
           },
           avgProgress: { $avg: '$progress' },
-        }
+        },
       },
       {
         $lookup: {
           from: 'courses',
           localField: '_id',
           foreignField: '_id',
-          as: 'course'
-        }
+          as: 'course',
+        },
       },
       { $unwind: '$course' },
       {
@@ -2057,13 +2375,13 @@ export class AdminService {
           completionRate: {
             $multiply: [
               { $divide: ['$completedCount', '$totalEnrollments'] },
-              100
-            ]
+              100,
+            ],
           },
           avgProgress: { $round: ['$avgProgress', 1] },
-        }
+        },
       },
-      { $sort: { completionRate: -1 } }
+      { $sort: { completionRate: -1 } },
     ]);
 
     const overallStats = await Enrollment.aggregate([
@@ -2071,16 +2389,23 @@ export class AdminService {
         $group: {
           _id: null,
           total: { $sum: 1 },
-          completed: { $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] } },
-          avgProgress: { $avg: '$progress' }
-        }
-      }
+          completed: {
+            $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] },
+          },
+          avgProgress: { $avg: '$progress' },
+        },
+      },
     ]);
 
-    const overall = overallStats[0] || { total: 0, completed: 0, avgProgress: 0 };
-    const overallCompletionRate = overall.total > 0 
-      ? ((overall.completed / overall.total) * 100).toFixed(1)
-      : 0;
+    const overall = overallStats[0] || {
+      total: 0,
+      completed: 0,
+      avgProgress: 0,
+    };
+    const overallCompletionRate =
+      overall.total > 0
+        ? ((overall.completed / overall.total) * 100).toFixed(1)
+        : 0;
 
     return {
       courses: completionStats,
@@ -2105,7 +2430,7 @@ export class AdminService {
 
     // Get all courses by this instructor
     const courses = await this.courseModel.find({ instructorIds: id });
-    const courseIds = courses.map(c => c._id);
+    const courseIds = courses.map((c) => c._id);
 
     // Delete related data
     const Enrollment = this.userModel.db.model('Enrollment');
@@ -2155,26 +2480,34 @@ export class AdminService {
       icon: log.icon || 'Activity',
       message: log.message,
       timestamp: log.createdAt,
-      performedBy: log.performedBy ? {
-        _id: log.performedBy?._id || null,
-        name: log.performedBy?.firstName && log.performedBy?.lastName 
-          ? `${log.performedBy.firstName} ${log.performedBy.lastName}`
-          : 'Unknown',
-        email: log.performedBy?.email || null,
-        role: log.performedBy?.role || null,
-      } : null,
-      targetUser: log.targetUser ? {
-        _id: log.targetUser?._id || null,
-        name: log.targetUser?.firstName && log.targetUser?.lastName
-          ? `${log.targetUser.firstName} ${log.targetUser.lastName}`
-          : 'Unknown',
-        email: log.targetUser?.email || null,
-        role: log.targetUser?.role || null,
-      } : null,
-      targetCourse: log.targetCourse ? {
-        _id: log.targetCourse?._id || null,
-        title: log.targetCourse?.title || 'Unknown',
-      } : null,
+      performedBy: log.performedBy
+        ? {
+            _id: log.performedBy?._id || null,
+            name:
+              log.performedBy?.firstName && log.performedBy?.lastName
+                ? `${log.performedBy.firstName} ${log.performedBy.lastName}`
+                : 'Unknown',
+            email: log.performedBy?.email || null,
+            role: log.performedBy?.role || null,
+          }
+        : null,
+      targetUser: log.targetUser
+        ? {
+            _id: log.targetUser?._id || null,
+            name:
+              log.targetUser?.firstName && log.targetUser?.lastName
+                ? `${log.targetUser.firstName} ${log.targetUser.lastName}`
+                : 'Unknown',
+            email: log.targetUser?.email || null,
+            role: log.targetUser?.role || null,
+          }
+        : null,
+      targetCourse: log.targetCourse
+        ? {
+            _id: log.targetCourse?._id || null,
+            title: log.targetCourse?.title || 'Unknown',
+          }
+        : null,
       metadata: log.metadata,
     }));
 
@@ -2198,14 +2531,21 @@ export class AdminService {
 
       // Validate file type
       const allowedExtensions = ['pdf', 'doc', 'docx'];
-      const fileExtension = path.extname(file.originalname).toLowerCase().replace('.', '');
-      
+      const fileExtension = path
+        .extname(file.originalname)
+        .toLowerCase()
+        .replace('.', '');
+
       if (!allowedExtensions.includes(fileExtension)) {
         throw new BadRequestException('Only PDF and DOC files are allowed');
       }
 
       // Create uploads directory if it doesn't exist
-      const courseFormatsDir = path.join(process.cwd(), 'uploads', 'course-formats');
+      const courseFormatsDir = path.join(
+        process.cwd(),
+        'uploads',
+        'course-formats',
+      );
       if (!fs.existsSync(courseFormatsDir)) {
         fs.mkdirSync(courseFormatsDir, { recursive: true });
       }
@@ -2219,7 +2559,9 @@ export class AdminService {
       fs.writeFileSync(filePath, file.buffer);
 
       // Check if course format already exists and deactivate it
-      const existingFormat = await this.courseFormatModel.findOne({ isActive: true });
+      const existingFormat = await this.courseFormatModel.findOne({
+        isActive: true,
+      });
       if (existingFormat) {
         existingFormat.isActive = false;
         await existingFormat.save();
@@ -2255,7 +2597,9 @@ export class AdminService {
         courseFormat,
       };
     } catch (error) {
-      throw new BadRequestException(error.message || 'Failed to upload course format');
+      throw new BadRequestException(
+        error.message || 'Failed to upload course format',
+      );
     }
   }
 
@@ -2278,7 +2622,9 @@ export class AdminService {
         courseFormat,
       };
     } catch (error) {
-      throw new BadRequestException(error.message || 'Failed to fetch course format');
+      throw new BadRequestException(
+        error.message || 'Failed to fetch course format',
+      );
     }
   }
 
@@ -2314,13 +2660,23 @@ export class AdminService {
         message: 'Course format deleted successfully',
       };
     } catch (error) {
-      throw new BadRequestException(error.message || 'Failed to delete course format');
+      throw new BadRequestException(
+        error.message || 'Failed to delete course format',
+      );
     }
   }
 
   // ===================== MODULE MANAGEMENT =====================
 
-  async getAllModules(filters: { status?: string; level?: string; category?: string; page?: number; limit?: number } = {}) {
+  async getAllModules(
+    filters: {
+      status?: string;
+      level?: string;
+      category?: string;
+      page?: number;
+      limit?: number;
+    } = {},
+  ) {
     const { status, level, category, page = 1, limit = 20 } = filters;
     const query: any = { isActive: { $ne: false } };
 
@@ -2350,7 +2706,10 @@ export class AdminService {
 
   async getPendingModules(filters: { page?: number; limit?: number } = {}) {
     const { page = 1, limit = 20 } = filters;
-    const query: any = { status: ModuleStatus.SUBMITTED, isActive: { $ne: false } };
+    const query: any = {
+      status: ModuleStatus.SUBMITTED,
+      isActive: { $ne: false },
+    };
     const skip = (page - 1) * limit;
 
     const [modules, total] = await Promise.all([
@@ -2390,22 +2749,29 @@ export class AdminService {
         $group: {
           _id: null,
           totalEnrollments: { $sum: 1 },
-          completedCount: { $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] } },
+          completedCount: {
+            $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] },
+          },
           avgProgress: { $avg: '$overallProgress' },
         },
       },
     ]);
 
-    const stats = enrollmentStats[0] || { totalEnrollments: 0, completedCount: 0, avgProgress: 0 };
+    const stats = enrollmentStats[0] || {
+      totalEnrollments: 0,
+      completedCount: 0,
+      avgProgress: 0,
+    };
 
     return {
       ...moduleDoc,
       enrollmentStats: {
         totalEnrollments: stats.totalEnrollments,
         completedCount: stats.completedCount,
-        completionRate: stats.totalEnrollments > 0
-          ? Math.round((stats.completedCount / stats.totalEnrollments) * 100)
-          : 0,
+        completionRate:
+          stats.totalEnrollments > 0
+            ? Math.round((stats.completedCount / stats.totalEnrollments) * 100)
+            : 0,
         avgProgress: Math.round(stats.avgProgress || 0),
       },
     };
@@ -2420,7 +2786,10 @@ export class AdminService {
       throw new NotFoundException('Module not found');
     }
 
-    if (moduleDoc.status === ModuleStatus.PUBLISHED || moduleDoc.status === ModuleStatus.ARCHIVED) {
+    if (
+      moduleDoc.status === ModuleStatus.PUBLISHED ||
+      moduleDoc.status === ModuleStatus.ARCHIVED
+    ) {
       throw new BadRequestException('Module is already published or archived');
     }
 
@@ -2442,7 +2811,11 @@ export class AdminService {
     // Send approval email to each instructor
     try {
       for (const instructor of moduleDoc.instructorIds as any[]) {
-        if (instructor && typeof instructor === 'object' && 'email' in instructor) {
+        if (
+          instructor &&
+          typeof instructor === 'object' &&
+          'email' in instructor
+        ) {
           await this.emailService.sendModuleApprovalEmailToInstructor(
             String(instructor.email),
             String(instructor.firstName || ''),
@@ -2515,7 +2888,11 @@ export class AdminService {
     // Send rejection email to each instructor
     try {
       for (const instructor of moduleDoc.instructorIds as any[]) {
-        if (instructor && typeof instructor === 'object' && 'email' in instructor) {
+        if (
+          instructor &&
+          typeof instructor === 'object' &&
+          'email' in instructor
+        ) {
           await this.emailService.sendModuleRejectionEmailToInstructor(
             String(instructor.email),
             String(instructor.firstName || ''),
@@ -2532,8 +2909,16 @@ export class AdminService {
   }
 
   // ── Admin: Create module on behalf of an instructor ───────────────────────
-  async createModuleAsAdmin(adminId: string, createModuleDto: CreateModuleDto): Promise<ModuleEntity> {
-    const { assignedInstructorId, pendingInstructorEmail, pendingInstructorName, ...rest } = createModuleDto;
+  async createModuleAsAdmin(
+    adminId: string,
+    createModuleDto: CreateModuleDto,
+  ): Promise<ModuleEntity> {
+    const {
+      assignedInstructorId,
+      pendingInstructorEmail,
+      pendingInstructorName,
+      ...rest
+    } = createModuleDto;
 
     const category = await this.categoryModel.findById(rest.categoryId);
     if (!category) throw new NotFoundException('Category not found');
@@ -2542,7 +2927,8 @@ export class AdminService {
 
     if (assignedInstructorId) {
       const instructor = await this.userModel.findById(assignedInstructorId);
-      if (!instructor) throw new NotFoundException('Assigned instructor not found');
+      if (!instructor)
+        throw new NotFoundException('Assigned instructor not found');
       instructorIds = [new Types.ObjectId(assignedInstructorId)];
     }
 
@@ -2550,7 +2936,9 @@ export class AdminService {
       ...rest,
       categoryId: new Types.ObjectId(rest.categoryId),
       instructorIds,
-      ...(pendingInstructorEmail && !assignedInstructorId ? { pendingInstructorEmail, pendingInstructorName } : {}),
+      ...(pendingInstructorEmail && !assignedInstructorId
+        ? { pendingInstructorEmail, pendingInstructorName }
+        : {}),
       createdBy: new Types.ObjectId(adminId),
       createdByRole: 'admin',
       status: ModuleStatus.PUBLISHED,
@@ -2573,7 +2961,11 @@ export class AdminService {
   }
 
   // ── Update a module (admin can edit any module regardless of status/owner) ──
-  async updateModuleAsAdmin(moduleId: string, adminId: string, dto: UpdateModuleDto): Promise<ModuleEntity> {
+  async updateModuleAsAdmin(
+    moduleId: string,
+    adminId: string,
+    dto: UpdateModuleDto,
+  ): Promise<ModuleEntity> {
     const moduleDoc = await this.moduleModel.findById(moduleId);
     if (!moduleDoc) throw new NotFoundException('Module not found');
 
@@ -2598,7 +2990,11 @@ export class AdminService {
   }
 
   // ── Add a lesson to any module (admin, bypasses ownership check) ──────────
-  async addModuleLessonAsAdmin(moduleId: string, adminId: string, lessonData: any): Promise<ModuleEntity> {
+  async addModuleLessonAsAdmin(
+    moduleId: string,
+    adminId: string,
+    lessonData: any,
+  ): Promise<ModuleEntity> {
     const moduleDoc = await this.moduleModel.findById(moduleId);
     if (!moduleDoc) throw new NotFoundException('Module not found');
 
@@ -2621,14 +3017,21 @@ export class AdminService {
   }
 
   // ── Delete a lesson from any module (admin, bypasses ownership check) ─────
-  async deleteModuleLessonAsAdmin(moduleId: string, lessonIndex: number, adminId: string): Promise<ModuleEntity> {
+  async deleteModuleLessonAsAdmin(
+    moduleId: string,
+    lessonIndex: number,
+    adminId: string,
+  ): Promise<ModuleEntity> {
     const moduleDoc = await this.moduleModel.findById(moduleId);
     if (!moduleDoc) throw new NotFoundException('Module not found');
 
-    if (lessonIndex >= moduleDoc.lessons.length) throw new NotFoundException('Lesson not found');
+    if (lessonIndex >= moduleDoc.lessons.length)
+      throw new NotFoundException('Lesson not found');
 
     moduleDoc.lessons.splice(lessonIndex, 1);
-    moduleDoc.lessons.forEach((l: any, i: number) => { l.order = i; });
+    moduleDoc.lessons.forEach((l: any, i: number) => {
+      l.order = i;
+    });
     moduleDoc.lastEditedBy = new Types.ObjectId(adminId);
     moduleDoc.lastEditedAt = new Date();
 
@@ -2655,7 +3058,10 @@ export class AdminService {
   }
 
   // ── Link pending modules to a newly approved instructor ──────────────────
-  private async linkPendingModules(instructorId: string, instructorEmail: string) {
+  private async linkPendingModules(
+    instructorId: string,
+    instructorEmail: string,
+  ) {
     try {
       await this.moduleModel.updateMany(
         { pendingInstructorEmail: instructorEmail },
@@ -2737,18 +3143,36 @@ export class AdminService {
       completedModuleEnrollments,
     ] = await Promise.all([
       this.moduleModel.countDocuments({ isActive: { $ne: false } }),
-      this.moduleModel.countDocuments({ status: ModuleStatus.DRAFT,      isActive: { $ne: false } }),
-      this.moduleModel.countDocuments({ status: ModuleStatus.SUBMITTED,  isActive: { $ne: false } }),
-      this.moduleModel.countDocuments({ status: ModuleStatus.APPROVED,   isActive: { $ne: false } }),
-      this.moduleModel.countDocuments({ status: ModuleStatus.PUBLISHED,  isActive: { $ne: false } }),
-      this.moduleModel.countDocuments({ status: ModuleStatus.REJECTED,   isActive: { $ne: false } }),
+      this.moduleModel.countDocuments({
+        status: ModuleStatus.DRAFT,
+        isActive: { $ne: false },
+      }),
+      this.moduleModel.countDocuments({
+        status: ModuleStatus.SUBMITTED,
+        isActive: { $ne: false },
+      }),
+      this.moduleModel.countDocuments({
+        status: ModuleStatus.APPROVED,
+        isActive: { $ne: false },
+      }),
+      this.moduleModel.countDocuments({
+        status: ModuleStatus.PUBLISHED,
+        isActive: { $ne: false },
+      }),
+      this.moduleModel.countDocuments({
+        status: ModuleStatus.REJECTED,
+        isActive: { $ne: false },
+      }),
       this.moduleEnrollmentModel.countDocuments(),
       this.moduleEnrollmentModel.countDocuments({ isCompleted: true }),
     ]);
 
-    const moduleCompletionRate = totalModuleEnrollments > 0
-      ? ((completedModuleEnrollments / totalModuleEnrollments) * 100).toFixed(1)
-      : '0';
+    const moduleCompletionRate =
+      totalModuleEnrollments > 0
+        ? ((completedModuleEnrollments / totalModuleEnrollments) * 100).toFixed(
+            1,
+          )
+        : '0';
 
     return {
       totalModules,

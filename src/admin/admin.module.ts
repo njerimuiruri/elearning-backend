@@ -3,11 +3,20 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { User, UserSchema } from '../schemas/user.schema';
-import { PasswordReset, PasswordResetSchema } from '../schemas/password-reset.schema';
+import {
+  PasswordReset,
+  PasswordResetSchema,
+} from '../schemas/password-reset.schema';
 import { Course, CourseSchema } from '../schemas/course.schema';
-import { CourseFormat, CourseFormatSchema } from '../schemas/course-format.schema';
+import {
+  CourseFormat,
+  CourseFormatSchema,
+} from '../schemas/course-format.schema';
 import { Enrollment, EnrollmentSchema } from '../schemas/enrollment.schema';
-import { EmailReminder, EmailReminderSchema } from '../schemas/email-reminder.schema';
+import {
+  EmailReminder,
+  EmailReminderSchema,
+} from '../schemas/email-reminder.schema';
 import { ActivityLog, ActivityLogSchema } from '../schemas/activity-log.schema';
 import {
   Module as ModuleSchema,

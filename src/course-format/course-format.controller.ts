@@ -8,11 +8,15 @@ import { CourseFormat } from '../schemas/course-format.schema';
 @ApiTags('Course Format')
 export class CourseFormatController {
   constructor(
-    @InjectModel(CourseFormat.name) private courseFormatModel: Model<CourseFormat>,
+    @InjectModel(CourseFormat.name)
+    private courseFormatModel: Model<CourseFormat>,
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get current course format document (Public - accessible to all users)' })
+  @ApiOperation({
+    summary:
+      'Get current course format document (Public - accessible to all users)',
+  })
   @ApiResponse({ status: 200, description: 'Course format document details' })
   @ApiResponse({ status: 404, description: 'No course format document found' })
   async getCourseFormat() {

@@ -101,7 +101,10 @@ export class Assessment {
   order: number;
 }
 
-import { ModuleInstructor, ModuleInstructorSchema } from './module-instructor.schema';
+import {
+  ModuleInstructor,
+  ModuleInstructorSchema,
+} from './module-instructor.schema';
 
 export class Module {
   @Prop({ required: true })
@@ -171,46 +174,45 @@ export class Module {
 }
 
 @Schema({ timestamps: true })
-
 export class Course extends Document {
-    @Prop()
-    welcomeMessage?: string;
+  @Prop()
+  welcomeMessage?: string;
 
-    @Prop()
-    audienceDescription?: string;
+  @Prop()
+  audienceDescription?: string;
 
-    @Prop()
-    deliveryMode?: string;
+  @Prop()
+  deliveryMode?: string;
 
-    @Prop()
-    courseAim?: string;
+  @Prop()
+  courseAim?: string;
 
-    @Prop()
-    courseObjective?: string;
+  @Prop()
+  courseObjective?: string;
 
-    @Prop()
-    expectedLearningOutcomes?: string;
+  @Prop()
+  expectedLearningOutcomes?: string;
 
-    @Prop()
-    briefContent?: string;
+  @Prop()
+  briefContent?: string;
 
-    @Prop()
-    teachingLearningMethods?: string;
+  @Prop()
+  teachingLearningMethods?: string;
 
-    @Prop()
-    resourcesMaterials?: string;
+  @Prop()
+  resourcesMaterials?: string;
 
-    @Prop()
-    assessmentPlan?: string;
+  @Prop()
+  assessmentPlan?: string;
 
-    @Prop()
-    supportingTechnologies?: string;
+  @Prop()
+  supportingTechnologies?: string;
 
-    @Prop()
-    coreTexts?: string;
+  @Prop()
+  coreTexts?: string;
 
-    @Prop()
-    additionalReadings?: string;
+  @Prop()
+  additionalReadings?: string;
   @Prop({ required: true, trim: true })
   title: string;
 
@@ -223,7 +225,6 @@ export class Course extends Document {
   // Support one or more instructors
   @Prop({ type: [Types.ObjectId], ref: 'User', required: true })
   instructorIds: Types.ObjectId[];
-
 
   @Prop({ default: 0 })
   price: number; // Deprecated - pricing is controlled at category level

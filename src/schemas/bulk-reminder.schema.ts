@@ -54,7 +54,11 @@ export class BulkReminder extends Document {
   @Prop({ default: 0 })
   recipientCount: number;
 
-  @Prop({ required: true, enum: ['students', 'instructors'], default: 'students' })
+  @Prop({
+    required: true,
+    enum: ['students', 'instructors'],
+    default: 'students',
+  })
   recipientType: 'students' | 'instructors';
 
   createdAt: Date;

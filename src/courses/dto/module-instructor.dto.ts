@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsEnum, IsObject, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEnum,
+  IsObject,
+  IsOptional,
+} from 'class-validator';
 import { ModuleInstructorRole } from '../../schemas/module-instructor.schema';
 
 export class ModuleInstructorDto {

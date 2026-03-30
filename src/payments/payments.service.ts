@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Payment, PaymentStatus } from './entities/payment.entity';
@@ -29,13 +34,19 @@ export class PaymentsService {
    * Initialize a Paystack payment for a course
    * Checks access requirements and generates Paystack transaction
    */
-  private getPaystackChannels(paymentType: 'local' | 'international' | undefined): string[] | undefined {
+  private getPaystackChannels(
+    paymentType: 'local' | 'international' | undefined,
+  ): string[] | undefined {
     if (paymentType === 'local') return ['bank', 'ussd', 'mobile_money', 'qr'];
     if (paymentType === 'international') return ['card'];
     return undefined; // let Paystack show all channels
   }
 
-  async initializePayment(userId: string, courseId: string, paymentType?: 'local' | 'international') {
+  async initializePayment(
+    userId: string,
+    courseId: string,
+    paymentType?: 'local' | 'international',
+  ) {
     // Fetch user and course with category
     const [user, course] = await Promise.all([
       this.userModel.findById(userId),
@@ -67,7 +78,9 @@ export class PaymentsService {
     }
 
     if (!accessCheck.requiresPayment) {
-      throw new BadRequestException('This course is not available for purchase');
+      throw new BadRequestException(
+        'This course is not available for purchase',
+      );
     }
 
     // Get the price from category
@@ -81,7 +94,8 @@ export class PaymentsService {
     const reference = this.paystackService.generateReference('COURSE');
 
     // Get callback URL from config
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     const callbackUrl = `${frontendUrl}/payment/verify?reference=${reference}`;
 
     // Initialize Paystack transaction
@@ -119,7 +133,9 @@ export class PaymentsService {
       },
     });
 
-    this.logger.log(`Initialized Paystack payment ${reference} for user ${userId}, course ${courseId}`);
+    this.logger.log(
+      `Initialized Paystack payment ${reference} for user ${userId}, course ${courseId}`,
+    );
 
     return {
       authorizationUrl: paystackResponse.data.authorization_url,
@@ -136,7 +152,9 @@ export class PaymentsService {
    */
   async verifyPayment(reference: string) {
     // Find payment record in database
-    const payment = await this.paymentModel.findOne({ paystackReference: reference });
+    const payment = await this.paymentModel.findOne({
+      paystackReference: reference,
+    });
 
     if (!payment) {
       throw new NotFoundException('Payment record not found');
@@ -155,7 +173,8 @@ export class PaymentsService {
     }
 
     // Verify transaction with Paystack
-    const verification = await this.paystackService.verifyTransaction(reference);
+    const verification =
+      await this.paystackService.verifyTransaction(reference);
 
     if (!verification.status) {
       throw new BadRequestException('Failed to verify payment with Paystack');
@@ -188,7 +207,9 @@ export class PaymentsService {
         );
       }
 
-      this.logger.log(`Payment ${reference} verified and access granted for user ${payment.userId}`);
+      this.logger.log(
+        `Payment ${reference} verified and access granted for user ${payment.userId}`,
+      );
 
       return {
         success: true,
@@ -202,10 +223,13 @@ export class PaymentsService {
     } else if (transactionData.status === 'failed') {
       // Payment failed
       payment.status = PaymentStatus.FAILED;
-      payment.failureReason = transactionData.gateway_response || 'Payment failed';
+      payment.failureReason =
+        transactionData.gateway_response || 'Payment failed';
       await payment.save();
 
-      throw new BadRequestException(`Payment failed: ${transactionData.gateway_response}`);
+      throw new BadRequestException(
+        `Payment failed: ${transactionData.gateway_response}`,
+      );
     } else {
       // Payment abandoned or pending
       return {
@@ -220,7 +244,9 @@ export class PaymentsService {
    * Check if user has already paid for a course's category
    */
   async checkCoursePaymentStatus(userId: string, courseId: string) {
-    const course = await this.courseModel.findById(courseId).populate('category');
+    const course = await this.courseModel
+      .findById(courseId)
+      .populate('category');
 
     if (!course || !course.category) {
       return { paid: false };
@@ -284,7 +310,9 @@ export class PaymentsService {
     });
 
     if (!payment) {
-      this.logger.warn(`Payment record not found for reference ${data.reference}`);
+      this.logger.warn(
+        `Payment record not found for reference ${data.reference}`,
+      );
       return;
     }
 
@@ -310,7 +338,9 @@ export class PaymentsService {
         );
       }
 
-      this.logger.log(`Webhook: Payment ${data.reference} completed and access granted`);
+      this.logger.log(
+        `Webhook: Payment ${data.reference} completed and access granted`,
+      );
     }
   }
 
@@ -336,7 +366,12 @@ export class PaymentsService {
   /**
    * Initialize a Paystack payment for a module (pays for the module's category)
    */
-  async initializeModulePayment(userId: string, moduleId: string, paymentType?: 'local' | 'international', callbackBaseUrl?: string) {
+  async initializeModulePayment(
+    userId: string,
+    moduleId: string,
+    paymentType?: 'local' | 'international',
+    callbackBaseUrl?: string,
+  ) {
     const [user, moduleDoc] = await Promise.all([
       this.userModel.findById(userId),
       this.moduleModel.findById(moduleId).populate('categoryId'),
@@ -363,7 +398,9 @@ export class PaymentsService {
     );
 
     if (accessCheck.allowed) {
-      throw new BadRequestException('You already have access to this module\'s category');
+      throw new BadRequestException(
+        "You already have access to this module's category",
+      );
     }
 
     const amount = category.price;
@@ -374,7 +411,10 @@ export class PaymentsService {
 
     const reference = this.paystackService.generateReference('MOD');
 
-    const frontendUrl = callbackBaseUrl || this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl =
+      callbackBaseUrl ||
+      this.configService.get<string>('FRONTEND_URL') ||
+      'http://localhost:3000';
     const callbackUrl = `${frontendUrl}/payment/verify?reference=${reference}`;
 
     const paystackResponse = await this.paystackService.initializeTransaction(
@@ -411,7 +451,9 @@ export class PaymentsService {
       },
     });
 
-    this.logger.log(`Initialized module payment ${reference} for user ${userId}, module ${moduleId}`);
+    this.logger.log(
+      `Initialized module payment ${reference} for user ${userId}, module ${moduleId}`,
+    );
 
     return {
       authorizationUrl: paystackResponse.data.authorization_url,
@@ -428,7 +470,9 @@ export class PaymentsService {
    * Check if user has paid for a module's category
    */
   async checkModulePaymentStatus(userId: string, moduleId: string) {
-    const moduleDoc = await this.moduleModel.findById(moduleId).populate('categoryId');
+    const moduleDoc = await this.moduleModel
+      .findById(moduleId)
+      .populate('categoryId');
 
     if (!moduleDoc || !moduleDoc.categoryId) {
       return { paid: false };
@@ -443,7 +487,8 @@ export class PaymentsService {
 
     return {
       paid: accessCheck.allowed,
-      requiresPayment: !accessCheck.allowed && accessCheck.reason === 'payment_required',
+      requiresPayment:
+        !accessCheck.allowed && accessCheck.reason === 'payment_required',
       categoryId: category._id.toString(),
       categoryName: category.name,
       price: category.price,

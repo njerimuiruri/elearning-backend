@@ -21,7 +21,10 @@ export class Progress extends Document {
   @Prop({ default: 0 })
   moduleScore: number;
 
-  @Prop({ type: [{ questionIndex: Number, score: Number, answered: Boolean }], default: [] })
+  @Prop({
+    type: [{ questionIndex: Number, score: Number, answered: Boolean }],
+    default: [],
+  })
   questionAnswers: any[];
 
   @Prop({ default: null })

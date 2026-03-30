@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as crypto from 'crypto';
 import * as sanitizeHtml from 'sanitize-html';
 
@@ -11,7 +15,10 @@ export class AssessmentSecurityService {
   private readonly submissionAttempts = new Map<string, number[]>(); // userId -> timestamps
   private readonly maxSubmissionsPerHour = 5;
   private readonly maxSubmissionsPerDay = 20;
-  private readonly csrfTokens = new Map<string, { token: string; timestamp: number }>();
+  private readonly csrfTokens = new Map<
+    string,
+    { token: string; timestamp: number }
+  >();
   private readonly tokenExpiry = 30 * 60 * 1000; // 30 minutes
 
   /**
@@ -75,21 +82,23 @@ export class AssessmentSecurityService {
   /**
    * Check rate limiting for submission attempts
    */
-  checkRateLimit(
-    userId: string,
-  ): { allowed: boolean; remainingAttempts?: number; error?: string } {
+  checkRateLimit(userId: string): {
+    allowed: boolean;
+    remainingAttempts?: number;
+    error?: string;
+  } {
     try {
       const now = Date.now();
       const userAttempts = this.submissionAttempts.get(userId) || [];
 
       // Remove attempts older than 24 hours
       const recentAttempts = userAttempts.filter(
-        timestamp => now - timestamp < 24 * 60 * 60 * 1000,
+        (timestamp) => now - timestamp < 24 * 60 * 60 * 1000,
       );
 
       // Check hourly limit
       const lastHourAttempts = recentAttempts.filter(
-        timestamp => now - timestamp < 60 * 60 * 1000,
+        (timestamp) => now - timestamp < 60 * 60 * 1000,
       );
 
       if (lastHourAttempts.length >= this.maxSubmissionsPerHour) {
@@ -323,7 +332,7 @@ export class AssessmentSecurityService {
     for (const pattern of aiPatterns) {
       const matches = text.match(pattern) || [];
       // If more than 15% of sentences use these patterns, flag
-      if (matches.length > textLength / 100 * 2) {
+      if (matches.length > (textLength / 100) * 2) {
         suspiciousCount++;
       }
     }
@@ -354,16 +363,18 @@ export class AssessmentSecurityService {
    * Private helper: Check for unusual linguistic patterns
    */
   private hasUnusualLinguisticPatterns(text: string): boolean {
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const sentences = text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
     const words = text.split(/\s+/);
 
     // Check sentence length variation
-    const sentenceLengths = sentences.map(s => s.split(/\s+/).length);
+    const sentenceLengths = sentences.map((s) => s.split(/\s+/).length);
     const avgLength =
       sentenceLengths.reduce((a, b) => a + b, 0) / sentenceLengths.length;
     const variance =
-      sentenceLengths.reduce((sum, len) => sum + Math.pow(len - avgLength, 2), 0) /
-      sentenceLengths.length;
+      sentenceLengths.reduce(
+        (sum, len) => sum + Math.pow(len - avgLength, 2),
+        0,
+      ) / sentenceLengths.length;
 
     // Too consistent sentence length is suspicious
     if (variance < 2) {
@@ -371,7 +382,7 @@ export class AssessmentSecurityService {
     }
 
     // Check for unusual vocabulary patterns
-    const uniqueWords = new Set(words.map(w => w.toLowerCase()));
+    const uniqueWords = new Set(words.map((w) => w.toLowerCase()));
     const uniqueRatio = uniqueWords.size / words.length;
 
     // Too high unique ratio is suspicious (looks like dictionary dumping)

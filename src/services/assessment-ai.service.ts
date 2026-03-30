@@ -61,15 +61,16 @@ export class AssessmentAiService {
       }
 
       // 3. VALIDATE SUBMISSION
-      const submissionValidation = this.securityService.validateSubmissionIntegrity(
-        {
-          enrollmentId: enrollmentId,
-          courseId: course._id.toString(),
-          submittedAt: new Date(),
-        },
-        enrollmentId,
-        course._id.toString(),
-      );
+      const submissionValidation =
+        this.securityService.validateSubmissionIntegrity(
+          {
+            enrollmentId: enrollmentId,
+            courseId: course._id.toString(),
+            submittedAt: new Date(),
+          },
+          enrollmentId,
+          course._id.toString(),
+        );
 
       if (!submissionValidation.valid) {
         throw new Error(submissionValidation.error);
@@ -92,10 +93,11 @@ export class AssessmentAiService {
           totalPoints += maxPts;
 
           // Sanitize answer
-          const { valid, sanitized } = this.securityService.validateAndSanitizeSubmission(
-            userAnswer || '',
-            question.type,
-          );
+          const { valid, sanitized } =
+            this.securityService.validateAndSanitizeSubmission(
+              userAnswer || '',
+              question.type,
+            );
 
           if (!valid) {
             return this.createInvalidAnswerResult(idx, question, maxPts);
@@ -150,17 +152,21 @@ export class AssessmentAiService {
       );
 
       // Count pending AI reviews
-      pendingAiReview = results.filter(r => r.aiGradingStatus === 'requires_review').length;
+      pendingAiReview = results.filter(
+        (r) => r.aiGradingStatus === 'requires_review',
+      ).length;
 
       // 5. CALCULATE SCORE
-      const scorePercentage = totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0;
+      const scorePercentage =
+        totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0;
       enrollment.finalAssessmentScore = scorePercentage;
       enrollment.finalAssessmentResults = results;
       enrollment.pendingManualGradingCount = pendingAiReview;
 
       // 6. DETERMINE PASS/FAIL
-      const allQuestionsGraded =
-        results.every(r => r.aiGradingStatus !== 'requires_review');
+      const allQuestionsGraded = results.every(
+        (r) => r.aiGradingStatus !== 'requires_review',
+      );
       const passed =
         allQuestionsGraded &&
         scorePercentage >= (course.finalAssessment.passingScore || 70);
@@ -206,7 +212,8 @@ export class AssessmentAiService {
         mustRestartCourse: !passed && enrollment.finalAssessmentAttempts >= 3,
         certificateEarned: passed,
         certificateUrl: passed ? enrollment.certificateUrl : null,
-        aiEvaluationCount: results.filter(r => r.aiScore !== undefined).length,
+        aiEvaluationCount: results.filter((r) => r.aiScore !== undefined)
+          .length,
         pendingInstructorReview: pendingAiReview,
         requiresInstructorGrading: pendingAiReview > 0,
       };
@@ -256,12 +263,9 @@ export class AssessmentAiService {
 
       // Determine if AI can auto-grade or needs manual review
       const isCorrect =
-        aiEvaluation.status === 'auto_passed' &&
-        aiEvaluation.score >= 70;
+        aiEvaluation.status === 'auto_passed' && aiEvaluation.score >= 70;
       const pointsEarned =
-        isCorrect || aiEvaluation.status === 'auto_passed'
-          ? maxPts
-          : 0;
+        isCorrect || aiEvaluation.status === 'auto_passed' ? maxPts : 0;
 
       return {
         questionIndex: idx,
@@ -274,12 +278,8 @@ export class AssessmentAiService {
         pointsEarned,
         maxPoints: maxPts,
         instructorFeedback: null,
-        gradedAt:
-          aiEvaluation.status !== 'requires_review'
-            ? new Date()
-            : null,
-        requiresManualGrading:
-          aiEvaluation.status === 'requires_review',
+        gradedAt: aiEvaluation.status !== 'requires_review' ? new Date() : null,
+        requiresManualGrading: aiEvaluation.status === 'requires_review',
         // AI evaluation fields
         aiScore: aiEvaluation.score,
         aiConfidence: aiEvaluation.confidence,
@@ -331,9 +331,7 @@ export class AssessmentAiService {
    */
   private checkAnswerCorrect(question: any, userAnswer: string): boolean {
     const normalize = (val: any) =>
-      val === undefined || val === null
-        ? ''
-        : String(val).trim().toLowerCase();
+      val === undefined || val === null ? '' : String(val).trim().toLowerCase();
 
     const normCorrect = normalize(question.correctAnswer);
     const normUser = normalize(userAnswer);
@@ -384,7 +382,11 @@ export class AssessmentAiService {
   /**
    * Create invalid answer result for sanitization failures
    */
-  private createInvalidAnswerResult(idx: number, question: any, maxPts: number) {
+  private createInvalidAnswerResult(
+    idx: number,
+    question: any,
+    maxPts: number,
+  ) {
     return {
       questionIndex: idx,
       questionText: question.text,

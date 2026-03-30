@@ -57,5 +57,8 @@ export const BadgeSchema = SchemaFactory.createForClass(Badge);
 // Indexes
 BadgeSchema.index({ studentId: 1 });
 BadgeSchema.index({ badgeType: 1 });
-BadgeSchema.index({ studentId: 1, badgeType: 1, categoryId: 1, level: 1 }, { unique: true, sparse: true });
+BadgeSchema.index(
+  { studentId: 1, badgeType: 1, categoryId: 1, level: 1 },
+  { unique: true, sparse: true },
+);
 BadgeSchema.index({ earnedAt: -1 });

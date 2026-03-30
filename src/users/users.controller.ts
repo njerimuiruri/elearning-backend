@@ -10,7 +10,14 @@ import {
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiParam,
+} from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -81,7 +88,11 @@ export class UsersController {
 
   @Put(':id')
   @UseGuards(JwtAuthGuard)
-  async updateUser(@Param('id') id: string, @Body() updateData: any, @CurrentUser() user: any) {
+  async updateUser(
+    @Param('id') id: string,
+    @Body() updateData: any,
+    @CurrentUser() user: any,
+  ) {
     // Users can only update their own profile unless they're admin
     if (user._id.toString() !== id && user.role !== UserRole.ADMIN) {
       return { error: 'Unauthorized' };
@@ -108,5 +119,4 @@ export class UsersController {
 
     return this.usersService.uploadProfilePhoto(id, file);
   }
-
 }

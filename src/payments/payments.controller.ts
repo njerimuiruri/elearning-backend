@@ -13,7 +13,11 @@ import {
 import { Request } from 'express';
 import { PaymentsService } from './payments.service';
 import { PaystackService } from './paystack.service';
-import { CreatePaymentIntentDto, CreateModulePaymentDto, VerifyPaymentDto } from './dto/create-payment.dto';
+import {
+  CreatePaymentIntentDto,
+  CreateModulePaymentDto,
+  VerifyPaymentDto,
+} from './dto/create-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { CategoryAccessControlService } from '../categories/access-control.service';
@@ -33,10 +37,15 @@ export class PaymentsController {
   @Post('initialize')
   @UseGuards(JwtAuthGuard)
   async initializePayment(
-    @Body() dto: CreatePaymentIntentDto & { paymentType?: 'local' | 'international' },
+    @Body()
+    dto: CreatePaymentIntentDto & { paymentType?: 'local' | 'international' },
     @CurrentUser() user: any,
   ) {
-    return this.paymentsService.initializePayment(user._id, dto.courseId, dto.paymentType);
+    return this.paymentsService.initializePayment(
+      user._id,
+      dto.courseId,
+      dto.paymentType,
+    );
   }
 
   /**
@@ -46,10 +55,19 @@ export class PaymentsController {
   @Post('module/initialize')
   @UseGuards(JwtAuthGuard)
   async initializeModulePayment(
-    @Body() dto: CreateModulePaymentDto & { paymentType?: 'local' | 'international'; callbackBaseUrl?: string },
+    @Body()
+    dto: CreateModulePaymentDto & {
+      paymentType?: 'local' | 'international';
+      callbackBaseUrl?: string;
+    },
     @CurrentUser() user: any,
   ) {
-    return this.paymentsService.initializeModulePayment(user._id, dto.moduleId, dto.paymentType, dto.callbackBaseUrl);
+    return this.paymentsService.initializeModulePayment(
+      user._id,
+      dto.moduleId,
+      dto.paymentType,
+      dto.callbackBaseUrl,
+    );
   }
 
   /**
