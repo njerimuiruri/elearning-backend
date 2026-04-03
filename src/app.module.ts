@@ -27,6 +27,7 @@ import { DiscussionsModule } from './discussions/discussions.module';
 import { BulkMessagingModule } from './bulk-messaging/bulk-messaging.module';
 import { ModuleRatingsModule } from './module-ratings/module-ratings.module';
 import { DraftsModule } from './drafts/drafts.module';
+import { AdmissionLettersModule } from './admission-letters/admission-letters.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { DraftsModule } from './drafts/drafts.module';
     BulkMessagingModule,
     ModuleRatingsModule,
     DraftsModule,
+    AdmissionLettersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
