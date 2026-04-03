@@ -15,31 +15,30 @@ export enum PurchaseType {
 
 @Schema({ timestamps: true })
 export class Payment extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  userId: Types.ObjectId;
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  userId!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Course', index: true })
+  @Prop({ type: Types.ObjectId, ref: 'Course' })
   courseId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Module', index: true })
+  @Prop({ type: Types.ObjectId, ref: 'Module' })
   moduleId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Category', index: true })
+  @Prop({ type: Types.ObjectId, ref: 'Category' })
   categoryId?: Types.ObjectId;
 
   @Prop({ required: true })
-  amount: number;
+  amount!: number;
 
   @Prop({
     type: String,
     enum: PaymentStatus,
     default: PaymentStatus.PENDING,
-    index: true,
   })
-  status: string;
+  status!: string;
 
   @Prop({ required: true, unique: true })
-  paystackReference: string;
+  paystackReference!: string;
 
   @Prop()
   paystackAccessCode?: string;
@@ -51,7 +50,7 @@ export class Payment extends Document {
   paystackTransactionId?: number;
 
   @Prop({ type: String, enum: PurchaseType, required: true })
-  purchaseType: string;
+  purchaseType!: string;
 
   @Prop({ type: Object })
   metadata?: Record<string, any>;
@@ -66,8 +65,8 @@ export class Payment extends Document {
   refundedAt?: Date;
 
   // Timestamps (managed by mongoose)
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt!: Date;
+  updatedAt!: Date;
 }
 
 export const PaymentSchema = SchemaFactory.createForClass(Payment);

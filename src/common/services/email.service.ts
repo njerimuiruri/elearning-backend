@@ -2264,4 +2264,57 @@ Arin Publishing Academy Team
       return { success: false, error: error.message };
     }
   }
+
+  /**
+   * Send an admission letter email with a PDF attachment.
+   * Supports custom "from" address, CC, and a pre-built HTML body.
+   */
+  async sendAdmissionLetter(options: {
+    from: string;
+    to: string;
+    cc?: string[];
+    subject: string;
+    html: string;
+    pdfUrl: string;
+    pdfName: string;
+  }): Promise<{ success: boolean; message?: string }> {
+    const { from, to, cc, subject, html, pdfUrl, pdfName } = options;
+
+    const attempts = 3;
+    let lastError: any = null;
+
+    for (let i = 1; i <= attempts; i++) {
+      try {
+        await this.transporter.sendMail({
+          from,
+          to,
+          cc: cc?.length ? cc.join(', ') : undefined,
+          subject,
+          html,
+          text: `Dear recipient,\n\nPlease find your admission letter attached.\n\nTo view the letter online, visit: ${pdfUrl}`,
+          attachments: [
+            {
+              filename: pdfName,
+              path: pdfUrl,
+            },
+          ],
+        });
+        return { success: true, message: `Admission letter sent to ${to}` };
+      } catch (error) {
+        lastError = error;
+        console.error(
+          `Attempt ${i} failed sending admission letter to ${to}:`,
+          error,
+        );
+        if (i < attempts) {
+          await new Promise((resolve) => setTimeout(resolve, 800));
+        }
+      }
+    }
+
+    return {
+      success: false,
+      message: lastError?.message || 'Failed to send admission letter',
+    };
+  }
 }
