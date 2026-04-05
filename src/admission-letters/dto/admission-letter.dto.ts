@@ -13,23 +13,27 @@ import { Transform } from 'class-transformer';
 export class SavePdfTemplateDto {
   @IsString()
   @MinLength(1)
-  name: string;
+  name!: string;
 
   @IsString()
-  pdfUrl: string;
+  pdfUrl!: string;
 
   @IsString()
-  pdfPublicId: string;
+  pdfPublicId!: string;
+
+  @IsOptional()
+  @IsString()
+  originalFileName?: string;
 }
 
 export class CreateFromEmailDto {
   @IsEmail()
   @Transform(({ value }) => value?.toLowerCase()?.trim())
-  email: string;
+  email!: string;
 
   @IsString()
   @MinLength(1)
-  displayName: string;
+  displayName!: string;
 
   @IsOptional()
   @IsBoolean()
@@ -38,22 +42,22 @@ export class CreateFromEmailDto {
 
 export class SendAdmissionLettersDto {
   @IsMongoId()
-  templateId: string;
+  templateId!: string;
 
   @IsString()
   @MinLength(1)
-  subject: string;
+  subject!: string;
 
   @IsOptional()
   @IsString()
   bodyHtml?: string;
 
   @IsEmail()
-  fromEmail: string;
+  fromEmail!: string;
 
   @IsString()
   @MinLength(1)
-  fromName: string;
+  fromName!: string;
 
   @IsOptional()
   @IsArray()
@@ -68,11 +72,11 @@ export class SendAdmissionLettersDto {
   @IsArray()
   @ArrayMinSize(1)
   @IsMongoId({ each: true })
-  recipientIds: string[];
+  recipientIds!: string[];
 
   @IsString()
-  signOffName: string;
+  signOffName!: string;
 
   @IsString()
-  signOffTitle: string;
+  signOffTitle!: string;
 }

@@ -8,6 +8,9 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
+import type { Response } from 'express';
+import * as https from 'https';
+import * as http from 'http';
 import {
   AdmissionLetterTemplate,
   AdmissionLetterTemplateDocument,
@@ -53,6 +56,7 @@ export class AdmissionLettersService {
       name: dto.name,
       pdfUrl: dto.pdfUrl,
       pdfPublicId: dto.pdfPublicId,
+      originalFileName: dto.originalFileName ?? '',
       uploadedBy: new Types.ObjectId(adminId),
     });
     return { success: true, template };
@@ -128,7 +132,7 @@ export class AdmissionLettersService {
       limit = 50,
     } = filters;
 
-    const query: any = { userType: 'FELLOW' };
+    const query: any = { userType: 'fellow' };
 
     if (search) {
       const regex = new RegExp(search, 'i');
@@ -153,7 +157,7 @@ export class AdmissionLettersService {
     const [fellows, total] = await Promise.all([
       this.userModel
         .find(query)
-        .select('firstName lastName email fellowData isActive')
+        .select('firstName lastName fullName email fellowData isActive')
         .skip(skip)
         .limit(limit)
         .lean(),
@@ -176,22 +180,28 @@ export class AdmissionLettersService {
     const fellows = await this.userModel
       .find({
         _id: { $in: dto.recipientIds.map((id) => new Types.ObjectId(id)) },
-        userType: 'FELLOW',
+        userType: 'fellow',
       })
-      .select('email firstName lastName')
+      .select('email firstName lastName fullName')
       .lean();
 
     if (fellows.length === 0) {
       throw new BadRequestException('No valid fellows found for the given IDs');
     }
 
-    const recipients = fellows.map((f: any) => ({
-      fellowId: f._id,
-      email: f.email,
-      name: `${f.firstName} ${f.lastName}`,
-      status: RecipientStatus.PENDING,
-      trackingToken: randomUUID(),
-    }));
+    const recipients = fellows.map((f: any) => {
+      const name =
+        [f.firstName, f.lastName].filter(Boolean).join(' ').trim() ||
+        f.fullName ||
+        f.email;
+      return {
+        fellowId: f._id,
+        email: f.email,
+        name,
+        status: RecipientStatus.PENDING,
+        trackingToken: randomUUID(),
+      };
+    });
 
     const sendRecord = await this.sendModel.create({
       templateId: new Types.ObjectId(dto.templateId),
@@ -231,7 +241,7 @@ export class AdmissionLettersService {
     let successCount = 0;
     let failureCount = 0;
     const backendUrl =
-      this.configService.get('BACKEND_URL') || 'http://localhost:3001';
+      this.configService.get('BACKEND_URL') || 'http://localhost:5000';
     const frontendUrl =
       this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
 
@@ -247,40 +257,85 @@ export class AdmissionLettersService {
           const acknowledgeUrl = `${frontendUrl}/acknowledge/${recipient.trackingToken}`;
           const pixelUrl = `${backendUrl}/api/admission-letters/track/${recipient.trackingToken}/pixel.png`;
 
+          // Personalize bodyHtml: replace {{name}} and {{firstName}} placeholders
+          const firstName = recipient.name?.split(' ')[0] || recipient.name;
+          const personalizedBody = (dto.bodyHtml || '').replace(
+            /\{\{name\}\}/gi,
+            recipient.name,
+          ).replace(
+            /\{\{firstName\}\}/gi,
+            firstName,
+          );
+
+          const viewUrl = `${backendUrl}/api/admission-letters/view/${sendRecord.templateId}`;
+          const ext =
+            (template.originalFileName || template.pdfUrl)
+              .split('.')
+              .pop()
+              ?.toLowerCase() || 'pdf';
+          const attachmentName = `${template.name}.${ext}`;
+
           const html = this.buildEmailHtml({
             recipientName: recipient.name,
-            pdfUrl: template.pdfUrl,
-            bodyHtml: dto.bodyHtml,
+            viewUrl,
+            bodyHtml: personalizedBody,
             signOffName: dto.signOffName,
             signOffTitle: dto.signOffTitle,
             acknowledgeUrl,
             pixelUrl,
           });
 
+          // Gmail SMTP requires the envelope sender to match the authenticated
+          // account. Use the SMTP from-email as the actual sender and set the
+          // admin's chosen address as Reply-To so replies go to the right place.
+          const smtpFromEmail =
+            this.configService.get('SMTP_FROM_EMAIL') || dto.fromEmail;
+          const envelopeFrom = `"${dto.fromName}" <${smtpFromEmail}>`;
+
           try {
-            await this.emailService.sendAdmissionLetter({
-              from: `"${dto.fromName}" <${dto.fromEmail}>`,
+            const result = await this.emailService.sendAdmissionLetter({
+              from: envelopeFrom,
+              replyTo: dto.fromEmail !== smtpFromEmail ? dto.fromEmail : undefined,
               to: recipient.email,
               cc: dto.ccEmails ?? [],
               subject: dto.subject,
               html,
               pdfUrl: template.pdfUrl,
-              pdfName: `${template.name}.pdf`,
+              pdfName: attachmentName,
             });
 
-            await this.sendModel.updateOne(
-              {
-                _id: sendRecord._id,
-                'recipients.trackingToken': recipient.trackingToken,
-              },
-              {
-                $set: {
-                  'recipients.$.status': RecipientStatus.SENT,
-                  'recipients.$.sentAt': new Date(),
+            if (result.success) {
+              await this.sendModel.updateOne(
+                {
+                  _id: sendRecord._id,
+                  'recipients.trackingToken': recipient.trackingToken,
                 },
-              },
-            );
-            successCount++;
+                {
+                  $set: {
+                    'recipients.$.status': RecipientStatus.SENT,
+                    'recipients.$.sentAt': new Date(),
+                  },
+                },
+              );
+              successCount++;
+            } else {
+              await this.sendModel.updateOne(
+                {
+                  _id: sendRecord._id,
+                  'recipients.trackingToken': recipient.trackingToken,
+                },
+                {
+                  $set: {
+                    'recipients.$.status': RecipientStatus.FAILED,
+                    'recipients.$.errorMessage': result.message || 'Send failed',
+                  },
+                },
+              );
+              failureCount++;
+              this.logger.error(
+                `Failed to send to ${recipient.email}: ${result.message}`,
+              );
+            }
           } catch (err: any) {
             await this.sendModel.updateOne(
               {
@@ -320,7 +375,7 @@ export class AdmissionLettersService {
 
   private buildEmailHtml(params: {
     recipientName: string;
-    pdfUrl: string;
+    viewUrl: string;
     bodyHtml?: string;
     signOffName: string;
     signOffTitle: string;
@@ -329,7 +384,7 @@ export class AdmissionLettersService {
   }) {
     const {
       recipientName,
-      pdfUrl,
+      viewUrl,
       bodyHtml,
       signOffName,
       signOffTitle,
@@ -337,88 +392,189 @@ export class AdmissionLettersService {
       pixelUrl,
     } = params;
 
-    return `
-<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 0;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Admission Letter — Arin Fellowship</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:Georgia,'Times New Roman',serif;-webkit-text-size-adjust:100%;">
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+       style="background:#f4f5f7;padding:48px 16px;">
+  <tr>
+    <td align="center">
+
+      <!-- Outer card -->
+      <table role="presentation" width="580" cellpadding="0" cellspacing="0"
+             style="max-width:580px;width:100%;background:#ffffff;
+                    box-shadow:0 2px 16px rgba(0,0,0,0.09);">
+
+        <!-- Top rule -->
+        <tr>
+          <td style="height:5px;background:#1a3a6b;font-size:0;line-height:0;">&nbsp;</td>
+        </tr>
 
         <!-- Header -->
         <tr>
-          <td style="background:#1a56db;padding:28px 40px;text-align:center;">
-            <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:0.5px;">
-              Arin Fellowship Program
-            </h1>
+          <td style="padding:32px 48px 24px;border-bottom:1px solid #e8e8e8;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td>
+                  <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;
+                             font-weight:700;letter-spacing:2.5px;color:#1a3a6b;
+                             text-transform:uppercase;">
+                    Africa Research &amp; Impact Network
+                  </p>
+                  <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:11px;
+                             color:#888888;letter-spacing:0.5px;">
+                    Arin Fellowship Programme &nbsp;&mdash;&nbsp; Official Communication
+                  </p>
+                </td>
+                <td align="right" style="vertical-align:top;">
+                  <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;
+                             color:#aaaaaa;">
+                    ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
 
-        <!-- Body -->
+        <!-- Salutation & body -->
         <tr>
-          <td style="padding:36px 40px;">
-            <p style="margin:0 0 16px;color:#111827;font-size:15px;">Dear <strong>${recipientName}</strong>,</p>
-            <p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.6;">
-              We are pleased to share your admission letter for the Arin Fellowship Program.
-              Please find it attached to this email or click the button below to view it online.
+          <td style="padding:36px 48px 0;">
+            <p style="margin:0 0 24px;font-family:Arial,sans-serif;font-size:15px;
+                       color:#222222;line-height:1.6;">
+              Dear <strong>${recipientName}</strong>,
             </p>
 
-            ${
-              bodyHtml
-                ? `<div style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">${bodyHtml}</div>`
-                : ''
-            }
-
-            <!-- View PDF Button -->
-            <div style="text-align:center;margin:28px 0;">
-              <a href="${pdfUrl}"
-                 style="display:inline-block;background:#1a56db;color:#ffffff;padding:13px 32px;border-radius:6px;text-decoration:none;font-size:15px;font-weight:600;">
-                View Admission Letter
-              </a>
-            </div>
-
-            <p style="margin:0 0 28px;color:#6b7280;font-size:13px;text-align:center;">
-              The PDF is also attached to this email for your records.
+            <p style="margin:0 0 18px;font-size:15px;color:#333333;line-height:1.8;">
+              We are pleased to inform you that your admission to the
+              <strong>Arin Fellowship Programme</strong> has been confirmed.
+              Please find your official admission letter attached to this email.
             </p>
 
-            <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 28px;"/>
+            ${bodyHtml ? `<p style="margin:0 0 18px;font-size:15px;color:#333333;line-height:1.8;">${bodyHtml}</p>` : ''}
 
-            <!-- Acknowledge Button -->
-            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;text-align:center;margin-bottom:28px;">
-              <p style="margin:0 0 12px;color:#166534;font-size:14px;font-weight:600;">
-                Please confirm you have received this letter
-              </p>
+            <p style="margin:0 0 18px;font-size:15px;color:#333333;line-height:1.8;">
+              You may view or download your letter at any time using the button below.
+            </p>
+          </td>
+        </tr>
+
+        <!-- CTA button -->
+        <tr>
+          <td style="padding:28px 48px;">
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="background:#1a3a6b;border-radius:3px;">
+                  <a href="${viewUrl}" target="_blank"
+                     style="display:inline-block;padding:13px 36px;color:#ffffff;
+                            text-decoration:none;font-family:Arial,sans-serif;
+                            font-size:14px;font-weight:600;letter-spacing:0.5px;">
+                    View Admission Letter
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:10px 0 0;font-family:Arial,sans-serif;font-size:12px;color:#999999;">
+              The letter is also attached to this email as a PDF for your records.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Divider -->
+        <tr>
+          <td style="padding:0 48px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="height:1px;background:#e8e8e8;font-size:0;">&nbsp;</td></tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Acknowledge -->
+        <tr>
+          <td style="padding:28px 48px;">
+            <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:14px;
+                       color:#333333;line-height:1.6;">
+              Kindly confirm that you have received this letter by clicking below.
+              This helps us ensure all fellows have been successfully notified.
+            </p>
+            <p style="margin:16px 0 0;">
               <a href="${acknowledgeUrl}"
-                 style="display:inline-block;background:#16a34a;color:#ffffff;padding:10px 24px;border-radius:6px;text-decoration:none;font-size:14px;font-weight:600;">
-                Acknowledge Receipt
+                 style="font-family:Arial,sans-serif;font-size:13px;color:#1a3a6b;
+                        font-weight:600;text-decoration:underline;">
+                Confirm receipt of this letter &rarr;
               </a>
-            </div>
+            </p>
+          </td>
+        </tr>
 
-            <!-- Sign-off -->
-            <p style="margin:0;color:#374151;font-size:15px;line-height:1.8;">
-              Warm regards,<br/>
-              <strong style="color:#111827;">${signOffName}</strong><br/>
-              <span style="color:#6b7280;font-size:13px;">${signOffTitle}</span>
+        <!-- Divider -->
+        <tr>
+          <td style="padding:0 48px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="height:1px;background:#e8e8e8;font-size:0;">&nbsp;</td></tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Sign-off -->
+        <tr>
+          <td style="padding:28px 48px 36px;">
+            <p style="margin:0 0 4px;font-size:15px;color:#333333;line-height:1.8;">
+              Yours sincerely,
+            </p>
+            <p style="margin:0 0 2px;font-size:15px;color:#111111;font-weight:bold;
+                       font-family:Arial,sans-serif;">
+              ${signOffName}
+            </p>
+            <p style="margin:0;font-family:Arial,sans-serif;font-size:13px;color:#666666;">
+              ${signOffTitle}
+            </p>
+            <p style="margin:6px 0 0;font-family:Arial,sans-serif;font-size:13px;color:#666666;">
+              Africa Research &amp; Impact Network (ARIN)
             </p>
           </td>
         </tr>
 
         <!-- Footer -->
         <tr>
-          <td style="background:#f9fafb;padding:16px 40px;text-align:center;border-top:1px solid #e5e7eb;">
-            <p style="margin:0;color:#9ca3af;font-size:12px;">
-              This is an official communication from the Arin Fellowship Program.
-              Please do not reply to this email.
+          <td style="background:#f8f8f8;border-top:1px solid #e8e8e8;
+                     padding:20px 48px;">
+            <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;
+                       color:#999999;line-height:1.8;text-align:center;">
+              ACK Gardens Plaza, 1st Floor, Upperhill &mdash; Nairobi, Kenya
+              &nbsp;&nbsp;|&nbsp;&nbsp;
+              P.O. Box 53358&#8209;00200
+              &nbsp;&nbsp;|&nbsp;&nbsp;
+              <a href="mailto:info@arin-africa.org"
+                 style="color:#999999;text-decoration:none;">info@arin-africa.org</a>
+              &nbsp;&nbsp;|&nbsp;&nbsp;
+              <a href="https://www.arin-africa.org"
+                 style="color:#999999;text-decoration:none;">www.arin-africa.org</a>
+              <br/>
+              This is an official communication. Please do not reply to this email.
             </p>
           </td>
         </tr>
 
+        <!-- Bottom rule -->
+        <tr>
+          <td style="height:5px;background:#1a3a6b;font-size:0;line-height:0;">&nbsp;</td>
+        </tr>
+
       </table>
-    </td></tr>
-  </table>
-  <!-- Tracking pixel -->
-  <img src="${pixelUrl}" width="1" height="1" style="display:none;width:1px;height:1px;" alt=""/>
+
+    </td>
+  </tr>
+</table>
+
+<img src="${pixelUrl}" width="1" height="1" style="display:none;" alt=""/>
+
 </body>
 </html>`;
   }
@@ -523,15 +679,92 @@ export class AdmissionLettersService {
     };
   }
 
+  async deleteLog(id: string) {
+    const log = await this.sendModel.findByIdAndDelete(id);
+    if (!log) throw new NotFoundException('Send log not found');
+    return { success: true, message: 'Log deleted' };
+  }
+
   async getLogDetail(id: string) {
     const log = await this.sendModel
       .findById(id)
-      .populate('templateId', 'name pdfUrl')
+      .populate('templateId', 'name pdfUrl originalFileName')
       .populate('sentBy', 'firstName lastName email')
       .populate('signedOffBy', 'firstName lastName email')
       .lean();
 
     if (!log) throw new NotFoundException('Send log not found');
     return { success: true, log };
+  }
+
+  // ─── Inline file viewer proxy ─────────────────────────────────────────────
+  // Fetches the file from Cloudinary and serves it with Content-Disposition:
+  // inline so the browser opens it instead of downloading it.
+
+  async streamTemplate(templateId: string, res: Response): Promise<void> {
+    const template = await this.templateModel.findById(templateId).lean();
+    if (!template) {
+      res.status(404).json({ message: 'Template not found' });
+      return;
+    }
+
+    const ext =
+      (template.originalFileName || template.pdfUrl)
+        .split('.')
+        .pop()
+        ?.toLowerCase() || 'pdf';
+
+    const mimeMap: Record<string, string> = {
+      pdf: 'application/pdf',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ppt: 'application/vnd.ms-powerpoint',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    };
+    const contentType = mimeMap[ext] ?? 'application/octet-stream';
+    const fileName = encodeURIComponent(`${template.name}.${ext}`);
+
+    res.set({
+      'Content-Type': contentType,
+      'Content-Disposition': `inline; filename="${template.name}.${ext}"; filename*=UTF-8''${fileName}`,
+      'Cache-Control': 'private, max-age=3600',
+    });
+
+    // Pipe the Cloudinary file through this endpoint so the browser receives
+    // it with the correct headers instead of Cloudinary's attachment headers.
+    await new Promise<void>((resolve, reject) => {
+      const url = new URL(template.pdfUrl);
+      const protocol = url.protocol === 'https:' ? https : http;
+
+      protocol
+        .get(template.pdfUrl, (fileRes) => {
+          // Follow one level of redirect (Cloudinary sometimes 301s)
+          if (
+            fileRes.statusCode &&
+            fileRes.statusCode >= 300 &&
+            fileRes.statusCode < 400 &&
+            fileRes.headers.location
+          ) {
+            const redirectUrl = fileRes.headers.location;
+            const rProtocol = redirectUrl.startsWith('https') ? https : http;
+            rProtocol
+              .get(redirectUrl, (rRes) => {
+                rRes.pipe(res);
+                rRes.on('end', resolve);
+                rRes.on('error', reject);
+              })
+              .on('error', reject);
+            return;
+          }
+
+          fileRes.pipe(res);
+          fileRes.on('end', resolve);
+          fileRes.on('error', reject);
+        })
+        .on('error', (err) => {
+          this.logger.error('Failed to proxy template file', err);
+          reject(err);
+        });
+    });
   }
 }

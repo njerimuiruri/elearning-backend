@@ -28,7 +28,7 @@ import {
 export const IS_PUBLIC_KEY = 'isPublic';
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
 
-@Controller('admission-letters')
+@Controller('api/admission-letters')
 export class AdmissionLettersController {
   constructor(private readonly service: AdmissionLettersService) {}
 
@@ -132,6 +132,24 @@ export class AdmissionLettersController {
   @Roles(UserRole.ADMIN)
   getLogDetail(@Param('id') id: string) {
     return this.service.getLogDetail(id);
+  }
+
+  @Delete('logs/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  deleteLog(@Param('id') id: string) {
+    return this.service.deleteLog(id);
+  }
+
+  // ─── Public: Inline file viewer (no auth — linked from email) ───────────────
+
+  @Get('view/:templateId')
+  @Public()
+  async viewTemplate(
+    @Param('templateId') templateId: string,
+    @Res() res: Response,
+  ) {
+    return this.service.streamTemplate(templateId, res);
   }
 
   // ─── Public Tracking Endpoints (no auth — email client requests) ──────────
