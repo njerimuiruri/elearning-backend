@@ -7,16 +7,19 @@ export type AdmissionLetterTemplateDocument = AdmissionLetterTemplate &
 @Schema({ timestamps: true })
 export class AdmissionLetterTemplate {
   @Prop({ required: true, trim: true })
-  name: string;
+  name!: string;
 
   @Prop({ required: true })
-  pdfUrl: string;
+  pdfUrl!: string;
 
   @Prop({ required: true })
-  pdfPublicId: string;
+  pdfPublicId!: string;
+
+  @Prop({ default: '' })
+  originalFileName!: string;
 
   @Prop({ type: MongooseSchema.Types.ObjectId, ref: 'User', required: true })
-  uploadedBy: Types.ObjectId;
+  uploadedBy!: Types.ObjectId;
 }
 
 export const AdmissionLetterTemplateSchema = SchemaFactory.createForClass(

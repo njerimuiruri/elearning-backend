@@ -2271,6 +2271,7 @@ Arin Publishing Academy Team
    */
   async sendAdmissionLetter(options: {
     from: string;
+    replyTo?: string;
     to: string;
     cc?: string[];
     subject: string;
@@ -2278,7 +2279,7 @@ Arin Publishing Academy Team
     pdfUrl: string;
     pdfName: string;
   }): Promise<{ success: boolean; message?: string }> {
-    const { from, to, cc, subject, html, pdfUrl, pdfName } = options;
+    const { from, replyTo, to, cc, subject, html, pdfUrl, pdfName } = options;
 
     const attempts = 3;
     let lastError: any = null;
@@ -2287,6 +2288,7 @@ Arin Publishing Academy Team
       try {
         await this.transporter.sendMail({
           from,
+          replyTo: replyTo || undefined,
           to,
           cc: cc?.length ? cc.join(', ') : undefined,
           subject,
