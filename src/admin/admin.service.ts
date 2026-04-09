@@ -408,30 +408,20 @@ export class AdminService {
       'CheckCircle',
     );
 
-    try {
-      await this.emailService.sendInstructorApprovalEmail(
-        instructor.email,
-        instructor.firstName,
-        true,
-      );
-    } catch (error) {
-      // Log but do not block approval flow
-      console.error('Failed to send instructor approval email:', error);
-    }
+    this.emailService
+      .sendInstructorApprovalEmail(instructor.email, instructor.firstName, true)
+      .catch((e) => console.error('Failed to send instructor approval email:', e.message));
 
-    // Send notification to admin email
-    try {
-      await this.emailService.sendInstructorRegistrationNotificationToAdmin(
+    this.emailService
+      .sendInstructorRegistrationNotificationToAdmin(
         'faith.muiruri@strathmore.edu',
         `${instructor.firstName} ${instructor.lastName}`,
         instructor.email,
         instructor.institution || 'Not provided',
         `Status: APPROVED`,
         instructor._id.toString(),
-      );
-    } catch (error) {
-      console.error('Failed to send admin notification:', error);
-    }
+      )
+      .catch((e) => console.error('Failed to send admin notification (approve):', e.message));
 
     // Link any modules that were pre-assigned to this instructor via email
     await this.linkPendingModules(instructor._id.toString(), instructor.email);
@@ -481,30 +471,20 @@ export class AdminService {
       'XCircle',
     );
 
-    try {
-      await this.emailService.sendInstructorApprovalEmail(
-        instructor.email,
-        instructor.firstName,
-        false,
-      );
-    } catch (error) {
-      // Log but do not block rejection flow
-      console.error('Failed to send instructor rejection email:', error);
-    }
+    this.emailService
+      .sendInstructorApprovalEmail(instructor.email, instructor.firstName, false)
+      .catch((e) => console.error('Failed to send instructor rejection email:', e.message));
 
-    // Send notification to admin email
-    try {
-      await this.emailService.sendInstructorRegistrationNotificationToAdmin(
+    this.emailService
+      .sendInstructorRegistrationNotificationToAdmin(
         'faith.muiruri@strathmore.edu',
         `${instructor.firstName} ${instructor.lastName}`,
         instructor.email,
         instructor.institution || 'Not provided',
         `Status: REJECTED - Reason: ${reason}`,
         instructor._id.toString(),
-      );
-    } catch (error) {
-      console.error('Failed to send admin notification:', error);
-    }
+      )
+      .catch((e) => console.error('Failed to send admin notification (reject):', e.message));
 
     return {
       message: 'Instructor application rejected',
@@ -720,18 +700,9 @@ export class AdminService {
       categoryNames = categories.map((c: any) => c.name);
     }
 
-    // Send registration email with credentials
-    try {
-      await this.emailService.sendStudentRegistrationEmail(
-        email,
-        firstName,
-        temporaryPassword,
-        categoryNames,
-      );
-    } catch (error) {
-      console.error('Failed to send registration email:', error);
-      // Don't fail the creation if email fails
-    }
+    this.emailService
+      .sendStudentRegistrationEmail(email, firstName, temporaryPassword, categoryNames)
+      .catch((e) => console.error('Failed to send student registration email:', e.message));
 
     return {
       student: {
@@ -827,17 +798,9 @@ export class AdminService {
       token: hashedToken,
     });
 
-    // Send registration email with credentials
-    try {
-      await this.emailService.sendInstructorRegistrationEmail(
-        email,
-        firstName,
-        temporaryPassword,
-      );
-    } catch (error) {
-      console.error('Failed to send registration email:', error);
-      // Don't fail the creation if email fails
-    }
+    this.emailService
+      .sendInstructorRegistrationEmail(email, firstName, temporaryPassword)
+      .catch((e) => console.error('Failed to send instructor registration email:', e.message));
 
     return {
       instructor: {
@@ -925,19 +888,9 @@ export class AdminService {
           isActive: true,
         });
 
-        // Send registration email
-        try {
-          await this.emailService.sendStudentRegistrationEmail(
-            studentData.email,
-            studentData.firstName,
-            temporaryPassword,
-          );
-        } catch (emailError) {
-          console.error(
-            `Failed to send email to ${studentData.email}:`,
-            emailError,
-          );
-        }
+        this.emailService
+          .sendStudentRegistrationEmail(studentData.email, studentData.firstName, temporaryPassword)
+          .catch((e) => console.error(`Failed to send email to ${studentData.email}:`, e.message));
 
         results.created++;
         results.students.push({
@@ -1073,23 +1026,24 @@ export class AdminService {
       'UserPlus',
     );
 
-    let emailSent = false;
+    // Send email in the background — never block the HTTP response waiting for SMTP
     if (sendEmail) {
-      try {
-        await this.emailService.sendFellowInvitationEmail(
+      this.emailService
+        .sendFellowInvitationEmail(
           email,
           firstName || 'Fellow',
           temporaryPassword,
           { track, cohort: fellow.fellowData.cohort },
+        )
+        .then(() =>
+          this.userModel.findByIdAndUpdate(fellow._id, {
+            invitationEmailSent: true,
+            invitationEmailSentAt: new Date(),
+          }),
+        )
+        .catch((err) =>
+          console.error('Failed to send fellow invitation email:', err.message),
         );
-        await this.userModel.findByIdAndUpdate(fellow._id, {
-          invitationEmailSent: true,
-          invitationEmailSentAt: new Date(),
-        });
-        emailSent = true;
-      } catch (err) {
-        console.error('Failed to send invitation email:', err);
-      }
     }
 
     return {
@@ -1099,7 +1053,7 @@ export class AdminService {
         firstName: fellow.firstName,
         lastName: fellow.lastName,
         email: fellow.email,
-        invitationEmailSent: emailSent,
+        invitationEmailSent: sendEmail ?? false,
       },
       temporaryPassword,
     };
@@ -1175,23 +1129,24 @@ export class AdminService {
             .digest('hex'),
         });
 
-        let emailSent = false;
+        const emailSent = sendEmails;
         if (sendEmails) {
-          try {
-            await this.emailService.sendFellowInvitationEmail(
+          this.emailService
+            .sendFellowInvitationEmail(
               dto.email,
               dto.firstName || 'Fellow',
               temporaryPassword,
               { track: dto.track, cohort: fellow.fellowData.cohort },
+            )
+            .then(() =>
+              this.userModel.findByIdAndUpdate(fellow._id, {
+                invitationEmailSent: true,
+                invitationEmailSentAt: new Date(),
+              }),
+            )
+            .catch((e) =>
+              console.error(`Failed to send invitation to ${dto.email}:`, e.message),
             );
-            await this.userModel.findByIdAndUpdate(fellow._id, {
-              invitationEmailSent: true,
-              invitationEmailSentAt: new Date(),
-            });
-            emailSent = true;
-          } catch (err) {
-            console.error(`Failed to send invitation to ${dto.email}:`, err);
-          }
         }
 
         results.created++;
@@ -1604,48 +1559,26 @@ export class AdminService {
       'BookCheck',
     );
 
-    // Send approval email to all instructors
-    try {
-      for (const instructor of instructors) {
-        if (
-          instructor &&
-          typeof instructor === 'object' &&
-          'email' in instructor &&
-          'firstName' in instructor
-        ) {
-          await this.emailService.sendCourseApprovalEmailToInstructor(
-            String(instructor.email),
-            String(instructor.firstName),
-            updatedCourse.title,
-          );
-        }
+    for (const instructor of instructors) {
+      if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor) {
+        this.emailService
+          .sendCourseApprovalEmailToInstructor(String(instructor.email), String(instructor.firstName), updatedCourse.title)
+          .catch((e) => console.error('Failed to send course approval email:', e.message));
       }
-    } catch (error) {
-      console.error('Failed to send course approval email:', error);
-      // Don't block the approval if email fails
     }
 
-    // Send notification to admin email (use first instructor)
-    try {
-      const mainInstructor = instructors[0];
-      if (
-        mainInstructor &&
-        typeof mainInstructor === 'object' &&
-        'firstName' in mainInstructor &&
-        'lastName' in mainInstructor &&
-        'email' in mainInstructor
-      ) {
-        await this.emailService.sendInstructorRegistrationNotificationToAdmin(
+    const mainInstructor = instructors[0] as any;
+    if (mainInstructor?.email) {
+      this.emailService
+        .sendInstructorRegistrationNotificationToAdmin(
           'faith.muiruri@strathmore.edu',
           `${mainInstructor.firstName || ''} ${mainInstructor.lastName || ''}`,
-          String(mainInstructor.email || ''),
+          String(mainInstructor.email),
           updatedCourse.title,
           `Course APPROVED`,
           updatedCourse._id.toString(),
-        );
-      }
-    } catch (error) {
-      console.error('Failed to send admin notification:', error);
+        )
+        .catch((e) => console.error('Failed to send admin notification (course approve):', e.message));
     }
 
     return {
@@ -1695,49 +1628,26 @@ export class AdminService {
       'BookX',
     );
 
-    // Send rejection email to all instructors
-    try {
-      for (const instructor of instructors) {
-        if (
-          instructor &&
-          typeof instructor === 'object' &&
-          'email' in instructor &&
-          'firstName' in instructor
-        ) {
-          await this.emailService.sendCourseRejectionEmailToInstructor(
-            String(instructor.email),
-            String(instructor.firstName),
-            updatedCourse.title,
-            reason,
-          );
-        }
+    for (const instructor of instructors) {
+      if (instructor && typeof instructor === 'object' && 'email' in instructor && 'firstName' in instructor) {
+        this.emailService
+          .sendCourseRejectionEmailToInstructor(String(instructor.email), String(instructor.firstName), updatedCourse.title, reason)
+          .catch((e) => console.error('Failed to send course rejection email:', e.message));
       }
-    } catch (error) {
-      console.error('Failed to send course rejection email:', error);
-      // Don't block the rejection if email fails
     }
 
-    // Send notification to admin email (use first instructor)
-    try {
-      const mainInstructor = instructors[0];
-      if (
-        mainInstructor &&
-        typeof mainInstructor === 'object' &&
-        'firstName' in mainInstructor &&
-        'lastName' in mainInstructor &&
-        'email' in mainInstructor
-      ) {
-        await this.emailService.sendInstructorRegistrationNotificationToAdmin(
+    const mainInstructorR = instructors[0] as any;
+    if (mainInstructorR?.email) {
+      this.emailService
+        .sendInstructorRegistrationNotificationToAdmin(
           'faith.muiruri@strathmore.edu',
-          `${mainInstructor.firstName || ''} ${mainInstructor.lastName || ''}`,
-          String(mainInstructor.email || ''),
+          `${mainInstructorR.firstName || ''} ${mainInstructorR.lastName || ''}`,
+          String(mainInstructorR.email),
           updatedCourse.title,
           `Course REJECTED - Reason: ${reason}`,
           updatedCourse._id.toString(),
-        );
-      }
-    } catch (error) {
-      console.error('Failed to send admin notification:', error);
+        )
+        .catch((e) => console.error('Failed to send admin notification (course reject):', e.message));
     }
 
     return {
@@ -2808,23 +2718,12 @@ export class AdminService {
       'CheckCircle',
     );
 
-    // Send approval email to each instructor
-    try {
-      for (const instructor of moduleDoc.instructorIds as any[]) {
-        if (
-          instructor &&
-          typeof instructor === 'object' &&
-          'email' in instructor
-        ) {
-          await this.emailService.sendModuleApprovalEmailToInstructor(
-            String(instructor.email),
-            String(instructor.firstName || ''),
-            moduleDoc.title,
-          );
-        }
+    for (const instructor of moduleDoc.instructorIds as any[]) {
+      if (instructor && typeof instructor === 'object' && 'email' in instructor) {
+        this.emailService
+          .sendModuleApprovalEmailToInstructor(String(instructor.email), String(instructor.firstName || ''), moduleDoc.title)
+          .catch((e) => console.error('Failed to send module approval email:', e.message));
       }
-    } catch (error) {
-      console.error('Failed to send module approval email:', error);
     }
 
     return { message: 'Module approved successfully', module: moduleDoc };
@@ -2885,24 +2784,12 @@ export class AdminService {
       'XCircle',
     );
 
-    // Send rejection email to each instructor
-    try {
-      for (const instructor of moduleDoc.instructorIds as any[]) {
-        if (
-          instructor &&
-          typeof instructor === 'object' &&
-          'email' in instructor
-        ) {
-          await this.emailService.sendModuleRejectionEmailToInstructor(
-            String(instructor.email),
-            String(instructor.firstName || ''),
-            moduleDoc.title,
-            reason,
-          );
-        }
+    for (const instructor of moduleDoc.instructorIds as any[]) {
+      if (instructor && typeof instructor === 'object' && 'email' in instructor) {
+        this.emailService
+          .sendModuleRejectionEmailToInstructor(String(instructor.email), String(instructor.firstName || ''), moduleDoc.title, reason)
+          .catch((e) => console.error('Failed to send module rejection email:', e.message));
       }
-    } catch (error) {
-      console.error('Failed to send module rejection email:', error);
     }
 
     return { message: 'Module rejected', module: moduleDoc };

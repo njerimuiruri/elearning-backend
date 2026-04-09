@@ -17,6 +17,10 @@ export class EmailService {
         user: this.configService.get('SMTP_USER'),
         pass: this.configService.get('SMTP_PASS'),
       },
+      // Fail fast if SMTP port is blocked rather than hanging indefinitely
+      connectionTimeout: 10000, // 10s to establish TCP connection
+      greetingTimeout: 10000,   // 10s to receive server greeting
+      socketTimeout: 15000,     // 15s of inactivity before aborting
     });
   }
 
