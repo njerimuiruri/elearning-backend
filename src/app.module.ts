@@ -36,10 +36,21 @@ import { AdmissionLettersModule } from './admission-letters/admission-letters.mo
     }),
     MongooseModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        uri: configService.get<string>('MONGODB_URI'),
-        dbName: 'elearning',
-      }),
+      useFactory: (configService: ConfigService) => {
+        const uri = configService.get<string>('MONGODB_URI');
+        if (!uri) throw new Error('MONGODB_URI is not set in environment variables');
+        console.log(`🔗 Connecting to MongoDB: ${uri.replace(/:\/\/.*@/, '://***@')}`);
+        return {
+          uri,
+          dbName: 'elearning',
+          connectionFactory: (connection) => {
+            connection.on('connected', () => console.log('✅ MongoDB connected'));
+            connection.on('error', (err) => console.error('❌ MongoDB error:', err));
+            connection.on('disconnected', () => console.warn('⚠️ MongoDB disconnected'));
+            return connection;
+          },
+        };
+      },
     }),
     ScheduleModule.forRoot(),
     ServeStaticModule.forRoot({

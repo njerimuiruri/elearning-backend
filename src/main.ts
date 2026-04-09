@@ -3,13 +3,10 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import connectDB from '../database/connect';
 import * as express from 'express';
 import * as path from 'path';
 
 async function bootstrap() {
-  await connectDB();
-
   const app = await NestFactory.create(AppModule, { bodyParser: false });
 
   // Register body parsers first — bodyParser: false disables NestJS's built-in 100kb limit
