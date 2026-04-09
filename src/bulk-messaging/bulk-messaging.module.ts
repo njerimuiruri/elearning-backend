@@ -6,6 +6,7 @@ import {
   BulkReminder,
   BulkReminderSchema,
 } from '../schemas/bulk-reminder.schema';
+import { BulkEmail, BulkEmailSchema } from '../schemas/bulk-email.schema';
 import {
   ModuleEnrollment,
   ModuleEnrollmentSchema,
@@ -23,6 +24,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [
     MongooseModule.forFeature([
       { name: BulkReminder.name, schema: BulkReminderSchema },
+      { name: BulkEmail.name, schema: BulkEmailSchema },
       { name: ModuleEnrollment.name, schema: ModuleEnrollmentSchema },
       { name: LearningModule.name, schema: LearningModuleSchema },
       { name: Category.name, schema: CategorySchema },

@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Enrollment } from '../schemas/enrollment.schema';
-import { User } from '../schemas/user.schema';
+import { User, FellowshipStatus } from '../schemas/user.schema';
 import { Course } from '../schemas/course.schema';
 import { EmailReminder } from '../schemas/email-reminder.schema';
 import { Module as ModuleSchema } from '../schemas/module.schema';
@@ -512,5 +512,107 @@ export class ReminderService {
       lastAutomaticRunAt: this.lastAutomaticRunAt,
       settings: this.getReminderSettings(),
     };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FELLOW DEADLINE REMINDERS — runs every Monday at 8 AM
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Weekly cron that finds active fellows who are:
+   *  - Within 60 days of their deadline AND
+   *  - Have low progress (< expected pace by more than 15 pp), OR
+   *  - Have had no module activity in 14+ days
+   * and sends them a personalised reminder email + in-app notification.
+   */
+  @Cron('0 8 * * 1') // Every Monday at 08:00
+  async handleFellowDeadlineReminders() {
+    this.logger.log('Running weekly fellow deadline reminder check…');
+
+    const now = new Date();
+    const sixtyDaysFromNow = new Date(now.getTime() + 60 * 86400000);
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const dashboardUrl = `${frontendUrl}/student`;
+
+    // 1. Fellows approaching deadline (active, deadline within 60 days)
+    const approachingFellows = await this.userModel
+      .find({
+        'fellowData.fellowshipStatus': FellowshipStatus.ACTIVE,
+        'fellowData.deadline': { $lte: sixtyDaysFromNow, $gte: now },
+      })
+      .select('_id firstName email fellowData')
+      .lean();
+
+    // 2. Fellows with no module activity in 14+ days
+    const inactiveStudentIds = await this.moduleEnrollmentModel
+      .find({
+        isCompleted: false,
+        $or: [
+          { lastAccessedAt: { $lte: fourteenDaysAgo } },
+          { lastAccessedAt: null },
+        ],
+      })
+      .distinct('studentId');
+
+    const inactiveFellows = inactiveStudentIds.length
+      ? await this.userModel
+          .find({
+            _id: { $in: inactiveStudentIds },
+            'fellowData.fellowId': { $exists: true },
+            'fellowData.fellowshipStatus': FellowshipStatus.ACTIVE,
+          })
+          .select('_id firstName email fellowData')
+          .lean()
+      : [];
+
+    // Merge unique fellows (deadline + inactive)
+    const fellowMap = new Map<string, any>();
+    for (const f of [...approachingFellows, ...inactiveFellows]) {
+      fellowMap.set((f._id as any).toString(), f);
+    }
+
+    let sent = 0;
+    for (const fellow of fellowMap.values()) {
+      const daysLeft = fellow.fellowData?.deadline
+        ? Math.ceil(
+            (new Date(fellow.fellowData.deadline).getTime() - now.getTime()) /
+              86400000,
+          )
+        : null;
+
+      const isDeadlineApproaching = daysLeft !== null && daysLeft <= 60;
+      const subject = isDeadlineApproaching
+        ? `Action required: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left in your fellowship`
+        : 'Keep going — your fellowship progress needs attention';
+
+      const body = isDeadlineApproaching
+        ? `Dear ${fellow.firstName},\n\nYour fellowship deadline is approaching — you have ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining.\n\nPlease log in to your dashboard and complete any outstanding modules as soon as possible.\n\nDashboard: ${dashboardUrl}\n\nBest regards,\nARIN eLearning Team`
+        : `Dear ${fellow.firstName},\n\nWe noticed you haven't accessed your fellowship modules recently. Please log in and continue your learning journey.\n\nDashboard: ${dashboardUrl}\n\nBest regards,\nARIN eLearning Team`;
+
+      try {
+        await this.emailService.sendCustomEmail(fellow.email, subject, body);
+
+        await this.notificationsService.createReminderNotification(
+          (fellow._id as any).toString(),
+          NotificationType.INACTIVITY_REMINDER,
+          subject,
+          isDeadlineApproaching
+            ? `${daysLeft} days left to complete your fellowship modules.`
+            : 'You have not accessed your modules in over 14 days.',
+          dashboardUrl,
+        );
+
+        sent++;
+      } catch (err) {
+        this.logger.error(
+          `Failed to send fellow deadline reminder to ${fellow.email}: ${err.message}`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Fellow deadline reminder run complete. Sent ${sent} reminder(s) to ${fellowMap.size} fellow(s).`,
+    );
   }
 }

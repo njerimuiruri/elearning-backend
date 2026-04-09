@@ -9,6 +9,12 @@ import {
   BulkReminder,
   BulkReminderFilterType,
 } from '../schemas/bulk-reminder.schema';
+import {
+  BulkEmail,
+  BulkEmailFilterType,
+  BulkEmailRecipientStatus,
+  BulkEmailStatus,
+} from '../schemas/bulk-email.schema';
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
 import { Module as LearningModule } from '../schemas/module.schema';
 import { Category } from '../schemas/category.schema';
@@ -19,13 +25,22 @@ import { NotificationType } from '../schemas/notification.schema';
 import {
   SendInstructorReminderDto,
   SendAdminReminderDto,
+  SendBulkEmailDto,
+  PreviewRecipientsDto,
 } from './dto/bulk-message.dto';
+
+// How many emails to send in each batch before pausing
+const BATCH_SIZE = 50;
+// Delay in ms between batches to avoid SMTP rate limits
+const BATCH_DELAY_MS = 500;
 
 @Injectable()
 export class BulkMessagingService {
   constructor(
     @InjectModel(BulkReminder.name)
     private bulkReminderModel: Model<BulkReminder>,
+    @InjectModel(BulkEmail.name)
+    private bulkEmailModel: Model<BulkEmail>,
     @InjectModel(ModuleEnrollment.name)
     private enrollmentModel: Model<ModuleEnrollment>,
     @InjectModel(LearningModule.name)
@@ -569,6 +584,245 @@ export class BulkMessagingService {
     );
 
     return sent;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ADMIN BULK EMAIL (composed emails with CC/BCC/attachments)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Resolve which users should receive the email based on the filter.
+   */
+  async previewBulkEmailRecipients(dto: PreviewRecipientsDto) {
+    const users = await this.resolveBulkEmailRecipients(dto);
+    return users.map((u) => ({
+      id: (u._id as any).toString(),
+      name: `${(u as any).firstName} ${(u as any).lastName}`,
+      email: (u as any).email,
+      cohort: (u as any).fellowData?.cohort,
+    }));
+  }
+
+  /**
+   * Compose and send a bulk email campaign.
+   * Persists the campaign record then sends in background batches.
+   */
+  async sendBulkEmail(adminId: string, dto: SendBulkEmailDto) {
+    const admin = (await this.userModel.findById(adminId).lean()) as any;
+    if (!admin) throw new NotFoundException('Admin not found');
+    const adminName = `${admin.firstName} ${admin.lastName}`;
+
+    const users = await this.resolveBulkEmailRecipients({
+      filterType: dto.filterType,
+      filterCategoryIds: dto.filterCategoryIds,
+      filterCohorts: dto.filterCohorts,
+      manualUserIds: dto.manualUserIds,
+    });
+
+    if (users.length === 0) {
+      return { success: true, sent: 0, total: 0, message: 'No recipients matched the filter.' };
+    }
+
+    // Build per-recipient tracking entries
+    const recipientEntries = users.map((u) => ({
+      userId: u._id,
+      email: (u as any).email,
+      name: `${(u as any).firstName} ${(u as any).lastName}`,
+      status: BulkEmailRecipientStatus.PENDING,
+      sentAt: null,
+      error: null,
+    }));
+
+    // Persist campaign record (status: sending)
+    const campaign = await this.bulkEmailModel.create({
+      senderId: new Types.ObjectId(adminId),
+      senderName: adminName,
+      subject: dto.subject,
+      body: dto.body,
+      filterType: dto.filterType,
+      filterCategoryIds: (dto.filterCategoryIds || []).map(
+        (id) => new Types.ObjectId(id),
+      ),
+      filterCohorts: dto.filterCohorts || [],
+      recipients: recipientEntries,
+      cc: dto.cc || [],
+      bcc: dto.bcc || [],
+      attachments: dto.attachments || [],
+      status: BulkEmailStatus.SENDING,
+      totalRecipients: users.length,
+      sentCount: 0,
+      failedCount: 0,
+    });
+
+    // Fire-and-forget: send in background batches, update DB as we go
+    this.dispatchBulkEmailBatches(campaign._id.toString(), dto, adminName).catch(
+      (err) => console.error('Bulk email dispatch error:', err),
+    );
+
+    return {
+      success: true,
+      campaignId: campaign._id.toString(),
+      total: users.length,
+      message: `Bulk email campaign started for ${users.length} recipient(s).`,
+    };
+  }
+
+  /** Get paginated list of bulk email campaigns (newest first). */
+  async getBulkEmailCampaigns(limit = 20, offset = 0) {
+    const [data, total] = await Promise.all([
+      this.bulkEmailModel
+        .find()
+        .sort({ createdAt: -1 })
+        .skip(offset)
+        .limit(limit)
+        .select('-recipients') // exclude large array from list view
+        .lean(),
+      this.bulkEmailModel.countDocuments(),
+    ]);
+    return { data, total };
+  }
+
+  /** Get a single campaign with full per-recipient delivery status. */
+  async getBulkEmailCampaign(campaignId: string) {
+    const campaign = await this.bulkEmailModel.findById(campaignId).lean();
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    return campaign;
+  }
+
+  // ── Private helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Resolve users based on the filter type.
+   */
+  private async resolveBulkEmailRecipients(dto: PreviewRecipientsDto) {
+    const query: any = { isActive: true };
+
+    switch (dto.filterType) {
+      case BulkEmailFilterType.ALL_FELLOWS:
+        query['fellowData.fellowshipStatus'] = { $exists: true };
+        break;
+
+      case BulkEmailFilterType.BY_CATEGORY:
+        if (!dto.filterCategoryIds || dto.filterCategoryIds.length === 0) {
+          return [];
+        }
+        query['fellowData.assignedCategories'] = {
+          $in: dto.filterCategoryIds.map((id) => new Types.ObjectId(id)),
+        };
+        break;
+
+      case BulkEmailFilterType.BY_COHORT:
+        if (!dto.filterCohorts || dto.filterCohorts.length === 0) {
+          return [];
+        }
+        query['fellowData.cohort'] = { $in: dto.filterCohorts };
+        break;
+
+      case BulkEmailFilterType.ALL_STUDENTS:
+        query.role = 'student';
+        break;
+
+      case BulkEmailFilterType.ALL_INSTRUCTORS:
+        query.role = 'instructor';
+        break;
+
+      case BulkEmailFilterType.MANUAL:
+        if (!dto.manualUserIds || dto.manualUserIds.length === 0) return [];
+        return this.userModel
+          .find({
+            _id: { $in: dto.manualUserIds.map((id) => new Types.ObjectId(id)) },
+            isActive: true,
+          })
+          .select('_id firstName lastName email fellowData')
+          .lean();
+
+      default:
+        return [];
+    }
+
+    return this.userModel
+      .find(query)
+      .select('_id firstName lastName email fellowData')
+      .lean();
+  }
+
+  /**
+   * Background batch dispatcher. Updates the campaign DB record after each batch.
+   */
+  private async dispatchBulkEmailBatches(
+    campaignId: string,
+    dto: SendBulkEmailDto,
+    adminName: string,
+  ) {
+    const campaign = await this.bulkEmailModel.findById(campaignId);
+    if (!campaign) return;
+
+    const attachments = (dto.attachments || []).map((a) => ({
+      filename: a.filename,
+      path: a.url,
+      contentType: a.mimeType,
+    }));
+
+    let sentCount = 0;
+    let failedCount = 0;
+
+    // Process recipients in batches
+    for (let i = 0; i < campaign.recipients.length; i += BATCH_SIZE) {
+      const batch = campaign.recipients.slice(i, i + BATCH_SIZE);
+
+      await Promise.allSettled(
+        batch.map(async (recipient) => {
+          const result = await this.emailService.sendComposedEmail({
+            to: recipient.email,
+            toName: recipient.name,
+            subject: dto.subject,
+            htmlBody: dto.body,
+            cc: dto.cc,
+            bcc: dto.bcc,
+            attachments,
+            fromName: `${adminName} via ARIN eLearning`,
+          });
+
+          // Update per-recipient status inline
+          const rec = campaign.recipients.find(
+            (r) => r.email === recipient.email,
+          );
+          if (rec) {
+            if (result.success) {
+              rec.status = BulkEmailRecipientStatus.SENT;
+              rec.sentAt = new Date();
+              sentCount++;
+            } else {
+              rec.status = BulkEmailRecipientStatus.FAILED;
+              rec.error = result.message;
+              failedCount++;
+            }
+          }
+        }),
+      );
+
+      // Persist progress after each batch
+      campaign.sentCount = sentCount;
+      campaign.failedCount = failedCount;
+      await campaign.save();
+
+      // Throttle between batches (skip delay after last batch)
+      if (i + BATCH_SIZE < campaign.recipients.length) {
+        await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+      }
+    }
+
+    // Final status
+    const finalStatus =
+      failedCount === 0
+        ? BulkEmailStatus.SENT
+        : sentCount === 0
+          ? BulkEmailStatus.FAILED
+          : BulkEmailStatus.PARTIAL;
+
+    campaign.status = finalStatus;
+    campaign.completedAt = new Date();
+    await campaign.save();
   }
 
   private async sendAdminMessageToInstructors(

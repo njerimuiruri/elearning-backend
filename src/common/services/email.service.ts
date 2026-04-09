@@ -2319,4 +2319,95 @@ Arin Publishing Academy Team
       message: lastError?.message || 'Failed to send admission letter',
     };
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // BULK EMAIL COMPOSITION (Admin bulk messaging feature)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Send a composed bulk email to a single recipient with full CC/BCC/attachment support.
+   * Call this per-recipient inside a batching loop in the service layer.
+   */
+  async sendComposedEmail(opts: {
+    to: string;
+    toName: string;
+    subject: string;
+    htmlBody: string;
+    cc?: Array<{ email: string; name?: string }>;
+    bcc?: Array<{ email: string; name?: string }>;
+    attachments?: Array<{ filename: string; path: string; contentType: string }>;
+    fromName?: string;
+  }): Promise<{ success: boolean; message: string }> {
+    const fromEmail =
+      this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com';
+    const fromName = opts.fromName || 'ARIN eLearning';
+
+    const mailOptions: nodemailer.SendMailOptions = {
+      from: `"${fromName}" <${fromEmail}>`,
+      to: `"${opts.toName}" <${opts.to}>`,
+      subject: opts.subject,
+      html: opts.htmlBody,
+      text: this.htmlToPlainText(opts.htmlBody),
+    };
+
+    if (opts.cc && opts.cc.length > 0) {
+      mailOptions.cc = opts.cc.map((c) =>
+        c.name ? `"${c.name}" <${c.email}>` : c.email,
+      );
+    }
+
+    if (opts.bcc && opts.bcc.length > 0) {
+      mailOptions.bcc = opts.bcc.map((b) =>
+        b.name ? `"${b.name}" <${b.email}>` : b.email,
+      );
+    }
+
+    if (opts.attachments && opts.attachments.length > 0) {
+      mailOptions.attachments = opts.attachments.map((a) => ({
+        filename: a.filename,
+        path: a.path,
+        contentType: a.contentType,
+      }));
+    }
+
+    const attempts = 3;
+    let lastError: any = null;
+
+    for (let i = 1; i <= attempts; i++) {
+      try {
+        await this.transporter.sendMail(mailOptions);
+        return { success: true, message: `Email sent to ${opts.to}` };
+      } catch (error) {
+        lastError = error;
+        console.error(
+          `Attempt ${i} failed sending composed email to ${opts.to}:`,
+          error,
+        );
+        if (i < attempts) {
+          await new Promise((resolve) => setTimeout(resolve, 800));
+        }
+      }
+    }
+
+    return {
+      success: false,
+      message: lastError?.message || 'Failed to send email',
+    };
+  }
+
+  /** Strip HTML tags to produce a plain-text fallback for email clients. */
+  private htmlToPlainText(html: string): string {
+    return html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<\/li>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&quot;/g, '"')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
 }

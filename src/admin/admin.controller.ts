@@ -667,6 +667,67 @@ export class AdminController {
     return this.adminService.deleteModuleAsAdmin(id, admin._id?.toString());
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FELLOW PROGRESS TRACKING
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  @Get('fellows/progress/stats')
+  @ApiOperation({ summary: 'Aggregate overview stats for the progress dashboard' })
+  async getFellowProgressStats() {
+    return this.adminService.getFellowProgressStats();
+  }
+
+  @Get('fellows/progress')
+  @ApiOperation({ summary: 'List all fellows with real-time progress data' })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'categoryId', required: false })
+  @ApiQuery({ name: 'cohort', required: false })
+  @ApiQuery({ name: 'risk', required: false, description: 'ON_TRACK|AT_RISK|CRITICAL|INACTIVE|COMPLETED' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'page', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  async getFellowsProgress(
+    @Query('status') status?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('cohort') cohort?: string,
+    @Query('risk') risk?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.getFellowsProgress({
+      status,
+      categoryId,
+      cohort,
+      risk,
+      search,
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 30,
+    });
+  }
+
+  @Get('fellows/:id/progress')
+  @ApiOperation({ summary: 'Get full module-by-module progress for a single fellow' })
+  async getFellowProgressDetail(@Param('id') id: string) {
+    return this.adminService.getFellowProgressDetail(id);
+  }
+
+  @Put('fellows/:id/progress-action')
+  @ApiOperation({ summary: 'Admin action: allow_proceed | deactivate | mark_completed' })
+  async updateFellowProgressAction(
+    @Param('id') id: string,
+    @Body('action') action: 'allow_proceed' | 'deactivate' | 'mark_completed',
+    @Body('note') note: string,
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.updateFellowProgressAction(
+      admin._id?.toString(),
+      id,
+      action,
+      note,
+    );
+  }
+
   @Put('modules/:id/approve-assessment')
   @ApiOperation({ summary: 'Approve a pending assessment update' })
   async approveAssessment(@Param('id') id: string, @CurrentUser() admin: any) {
