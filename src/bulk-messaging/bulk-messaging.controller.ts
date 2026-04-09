@@ -12,6 +12,8 @@ import { BulkMessagingService } from './bulk-messaging.service';
 import {
   SendInstructorReminderDto,
   SendAdminReminderDto,
+  SendBulkEmailDto,
+  PreviewRecipientsDto,
 } from './dto/bulk-message.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -155,5 +157,68 @@ export class BulkMessagingController {
       limit ? parseInt(limit, 10) : 50,
     );
     return { success: true, data: history };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ADMIN BULK EMAIL ENDPOINTS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * POST /bulk-messaging/admin/bulk-email/preview-recipients
+   * Preview who will receive the email based on the selected filter.
+   */
+  @Post('admin/bulk-email/preview-recipients')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async previewRecipients(@Body() dto: PreviewRecipientsDto) {
+    const recipients =
+      await this.bulkMessagingService.previewBulkEmailRecipients(dto);
+    return { success: true, data: recipients, count: recipients.length };
+  }
+
+  /**
+   * POST /bulk-messaging/admin/bulk-email/send
+   * Compose and send a bulk email campaign (fires in background batches).
+   */
+  @Post('admin/bulk-email/send')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async sendBulkEmail(@Body() dto: SendBulkEmailDto, @Request() req: any) {
+    const result = await this.bulkMessagingService.sendBulkEmail(
+      req.user.id,
+      dto,
+    );
+    return result;
+  }
+
+  /**
+   * GET /bulk-messaging/admin/bulk-email
+   * List all bulk email campaigns (newest first, recipients excluded from list).
+   * Query params: limit, offset
+   */
+  @Get('admin/bulk-email')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getBulkEmailCampaigns(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const result = await this.bulkMessagingService.getBulkEmailCampaigns(
+      limit ? parseInt(limit, 10) : 20,
+      offset ? parseInt(offset, 10) : 0,
+    );
+    return { success: true, ...result };
+  }
+
+  /**
+   * GET /bulk-messaging/admin/bulk-email/:id
+   * Get a single campaign with full per-recipient delivery status.
+   */
+  @Get('admin/bulk-email/:id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getBulkEmailCampaign(@Param('id') id: string) {
+    const campaign = await this.bulkMessagingService.getBulkEmailCampaign(id);
+    return { success: true, data: campaign };
   }
 }

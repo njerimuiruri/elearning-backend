@@ -3188,4 +3188,609 @@ export class AdminService {
       moduleCompletionRate: `${moduleCompletionRate}%`,
     };
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // FELLOW PROGRESS TRACKING
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Classify a fellow's risk level based on progress vs. deadline pace.
+   *   COMPLETED  – fellowship status is completed
+   *   ON_TRACK   – progress >= expected pace (or no deadline set)
+   *   AT_RISK    – progress 10-20 pp below pace, or < 50% with < 30 days left
+   *   CRITICAL   – < 30 days left AND < 30% done, or > 20 pp behind pace
+   *   INACTIVE   – no module access in 14+ days
+   */
+  private classifyRisk(
+    progressPct: number,
+    daysLeft: number | null,
+    totalDays: number | null,
+    lastAccessedAt: Date | null,
+    fellowshipStatus: string,
+  ): 'COMPLETED' | 'ON_TRACK' | 'AT_RISK' | 'CRITICAL' | 'INACTIVE' {
+    if (fellowshipStatus === FellowshipStatus.COMPLETED) return 'COMPLETED';
+
+    const daysSinceAccess = lastAccessedAt
+      ? Math.floor((Date.now() - lastAccessedAt.getTime()) / 86400000)
+      : 99999;
+
+    if (daysSinceAccess >= 14 && progressPct < 100) return 'INACTIVE';
+
+    if (daysLeft !== null && totalDays !== null && totalDays > 0) {
+      const elapsed = totalDays - daysLeft;
+      const expectedPace = totalDays > 0 ? (elapsed / totalDays) * 100 : 0;
+      const gap = expectedPace - progressPct;
+
+      if (daysLeft < 14 && progressPct < 30) return 'CRITICAL';
+      if (daysLeft < 30 && progressPct < 50) return 'CRITICAL';
+      if (gap > 25) return 'CRITICAL';
+      if (gap > 10 || (daysLeft < 60 && progressPct < 40)) return 'AT_RISK';
+    }
+
+    return 'ON_TRACK';
+  }
+
+  /**
+   * Compute real progress for one fellow across all their assigned categories.
+   * Returns aggregated module stats + per-category breakdown.
+   */
+  private async computeFellowProgress(fellow: any): Promise<{
+    totalModules: number;
+    enrolledModules: number;
+    completedModules: number;
+    inProgressModules: number;
+    overallProgressPct: number;
+    lastAccessedAt: Date | null;
+    categories: Array<{
+      categoryId: string;
+      categoryName: string;
+      totalModules: number;
+      completedModules: number;
+      progressPct: number;
+    }>;
+  }> {
+    const assignedCategoryIds: Types.ObjectId[] =
+      fellow.fellowData?.assignedCategories || [];
+
+    if (assignedCategoryIds.length === 0) {
+      return {
+        totalModules: 0,
+        enrolledModules: 0,
+        completedModules: 0,
+        inProgressModules: 0,
+        overallProgressPct: 0,
+        lastAccessedAt: null,
+        categories: [],
+      };
+    }
+
+    // Fetch all modules in assigned categories
+    const modules = await this.moduleModel
+      .find({ categoryId: { $in: assignedCategoryIds } })
+      .select('_id title level categoryId')
+      .lean();
+
+    if (modules.length === 0) {
+      return {
+        totalModules: 0,
+        enrolledModules: 0,
+        completedModules: 0,
+        inProgressModules: 0,
+        overallProgressPct: 0,
+        lastAccessedAt: null,
+        categories: [],
+      };
+    }
+
+    const moduleIds = modules.map((m) => m._id);
+
+    // Fetch all enrollments for this fellow in those modules
+    const enrollments = await this.moduleEnrollmentModel
+      .find({
+        studentId: new Types.ObjectId(fellow._id.toString()),
+        moduleId: { $in: moduleIds },
+      })
+      .select('moduleId progress isCompleted lastAccessedAt')
+      .lean();
+
+    const enrollmentMap = new Map(
+      enrollments.map((e) => [(e.moduleId as any).toString(), e]),
+    );
+
+    let totalProgress = 0;
+    let completedCount = 0;
+    let inProgressCount = 0;
+    let latestAccess: Date | null = null;
+
+    for (const enr of enrollments) {
+      if (enr.isCompleted) completedCount++;
+      else if (enr.progress > 0) inProgressCount++;
+      totalProgress += enr.progress || 0;
+      if (enr.lastAccessedAt) {
+        if (!latestAccess || enr.lastAccessedAt > latestAccess) {
+          latestAccess = enr.lastAccessedAt;
+        }
+      }
+    }
+
+    const overallProgressPct =
+      modules.length > 0
+        ? Math.round(
+            (completedCount / modules.length) * 100,
+          )
+        : 0;
+
+    // Category-level breakdown
+    const categoryMap = new Map<string, any>();
+    for (const cat of assignedCategoryIds) {
+      const catId = cat.toString();
+      categoryMap.set(catId, {
+        categoryId: catId,
+        categoryName: '',
+        totalModules: 0,
+        completedModules: 0,
+        progressPct: 0,
+      });
+    }
+
+    for (const mod of modules) {
+      const catId = (mod.categoryId as any).toString();
+      const entry = categoryMap.get(catId);
+      if (!entry) continue;
+      entry.totalModules++;
+      const enr = enrollmentMap.get((mod._id as any).toString());
+      if (enr?.isCompleted) entry.completedModules++;
+    }
+
+    // Resolve category names
+    const categories = await this.categoryModel
+      .find({ _id: { $in: assignedCategoryIds } })
+      .select('_id name')
+      .lean();
+
+    for (const cat of categories) {
+      const entry = categoryMap.get((cat._id as any).toString());
+      if (entry) {
+        entry.categoryName = (cat as any).name;
+        entry.progressPct =
+          entry.totalModules > 0
+            ? Math.round((entry.completedModules / entry.totalModules) * 100)
+            : 0;
+      }
+    }
+
+    return {
+      totalModules: modules.length,
+      enrolledModules: enrollments.length,
+      completedModules: completedCount,
+      inProgressModules: inProgressCount,
+      overallProgressPct,
+      lastAccessedAt: latestAccess,
+      categories: Array.from(categoryMap.values()),
+    };
+  }
+
+  /**
+   * GET /admin/fellows/progress — list all fellows with real progress data.
+   * Supports filters: status, category, cohort, risk, search, page, limit.
+   */
+  async getFellowsProgress(filters: {
+    status?: string;
+    categoryId?: string;
+    cohort?: string;
+    risk?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  } = {}) {
+    const { status, categoryId, cohort, risk, search, page = 1, limit = 30 } = filters;
+
+    const query: any = { 'fellowData.fellowId': { $exists: true } };
+
+    if (status && status !== 'all') {
+      query['fellowData.fellowshipStatus'] = status;
+    }
+    if (cohort) {
+      query['fellowData.cohort'] = cohort;
+    }
+    if (categoryId) {
+      query['fellowData.assignedCategories'] = new Types.ObjectId(categoryId);
+    }
+    if (search) {
+      query.$or = [
+        { firstName: { $regex: search, $options: 'i' } },
+        { lastName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { 'fellowData.track': { $regex: search, $options: 'i' } },
+        { 'fellowData.cohort': { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const fellows = await this.userModel
+      .find(query)
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const now = Date.now();
+
+    // Compute progress for each fellow (parallelised)
+    const withProgress = await Promise.all(
+      fellows.map(async (fellow) => {
+        const progress = await this.computeFellowProgress(fellow);
+
+        const deadline = fellow.fellowData?.deadline
+          ? new Date(fellow.fellowData.deadline)
+          : null;
+        const createdAt = new Date((fellow as any).createdAt || Date.now());
+
+        const daysLeft = deadline
+          ? Math.ceil((deadline.getTime() - now) / 86400000)
+          : null;
+        const totalDays = deadline
+          ? Math.ceil((deadline.getTime() - createdAt.getTime()) / 86400000)
+          : null;
+
+        const riskLevel = this.classifyRisk(
+          progress.overallProgressPct,
+          daysLeft,
+          totalDays,
+          progress.lastAccessedAt,
+          fellow.fellowData?.fellowshipStatus || '',
+        );
+
+        return {
+          _id: (fellow._id as any).toString(),
+          firstName: fellow.firstName,
+          lastName: fellow.lastName,
+          email: fellow.email,
+          phoneNumber: fellow.phoneNumber,
+          isActive: fellow.isActive,
+          fellowData: fellow.fellowData,
+          daysLeft,
+          totalDays,
+          riskLevel,
+          ...progress,
+        };
+      }),
+    );
+
+    // Apply risk filter (post-aggregation)
+    const filtered = risk && risk !== 'all'
+      ? withProgress.filter((f) => f.riskLevel === risk.toUpperCase())
+      : withProgress;
+
+    // Stats summary
+    const stats = {
+      total: filtered.length,
+      onTrack: filtered.filter((f) => f.riskLevel === 'ON_TRACK').length,
+      atRisk: filtered.filter((f) => f.riskLevel === 'AT_RISK').length,
+      critical: filtered.filter((f) => f.riskLevel === 'CRITICAL').length,
+      inactive: filtered.filter((f) => f.riskLevel === 'INACTIVE').length,
+      completed: filtered.filter((f) => f.riskLevel === 'COMPLETED').length,
+      avgProgress: filtered.length > 0
+        ? Math.round(filtered.reduce((s, f) => s + f.overallProgressPct, 0) / filtered.length)
+        : 0,
+    };
+
+    // Paginate
+    const skip = (page - 1) * limit;
+    const paginated = filtered.slice(skip, skip + limit);
+
+    return {
+      fellows: paginated,
+      stats,
+      pagination: {
+        page,
+        limit,
+        total: filtered.length,
+        pages: Math.ceil(filtered.length / limit),
+      },
+    };
+  }
+
+  /**
+   * GET /admin/fellows/:id/progress — full progress detail for one fellow.
+   */
+  async getFellowProgressDetail(fellowId: string) {
+    const fellow = await this.userModel
+      .findOne({
+        _id: fellowId,
+        'fellowData.fellowId': { $exists: true },
+      })
+      .select('-password')
+      .lean();
+
+    if (!fellow) throw new NotFoundException('Fellow not found');
+
+    const assignedCategoryIds: Types.ObjectId[] =
+      fellow.fellowData?.assignedCategories || [];
+
+    // Get all modules in assigned categories
+    const modules = await this.moduleModel
+      .find({ categoryId: { $in: assignedCategoryIds } })
+      .select('_id title level categoryId')
+      .lean();
+
+    // Get all enrollments for this fellow
+    const enrollments = await this.moduleEnrollmentModel
+      .find({
+        studentId: new Types.ObjectId(fellowId),
+        moduleId: { $in: modules.map((m) => m._id) },
+      })
+      .select(
+        'moduleId progress isCompleted completedAt lastAccessedAt finalAssessmentPassed finalAssessmentScore completedLessons totalLessons',
+      )
+      .lean();
+
+    const enrollmentMap = new Map(
+      enrollments.map((e) => [(e.moduleId as any).toString(), e]),
+    );
+
+    // Category names
+    const cats = await this.categoryModel
+      .find({ _id: { $in: assignedCategoryIds } })
+      .select('_id name')
+      .lean();
+    const catNames = new Map(
+      cats.map((c) => [(c._id as any).toString(), (c as any).name]),
+    );
+
+    // Group modules by category with enrollment data
+    const categoriesMap = new Map<string, any>();
+    for (const mod of modules) {
+      const catId = (mod.categoryId as any).toString();
+      if (!categoriesMap.has(catId)) {
+        categoriesMap.set(catId, {
+          categoryId: catId,
+          categoryName: catNames.get(catId) || 'Unknown',
+          modules: [],
+        });
+      }
+      const enr = enrollmentMap.get((mod._id as any).toString());
+      categoriesMap.get(catId).modules.push({
+        moduleId: (mod._id as any).toString(),
+        title: (mod as any).title,
+        level: (mod as any).level,
+        status: !enr
+          ? 'not_started'
+          : enr.isCompleted
+            ? 'completed'
+            : enr.progress > 0
+              ? 'in_progress'
+              : 'enrolled',
+        progress: enr?.progress || 0,
+        completedLessons: enr?.completedLessons || 0,
+        totalLessons: enr?.totalLessons || 0,
+        lastAccessedAt: enr?.lastAccessedAt || null,
+        completedAt: enr?.completedAt || null,
+        assessmentPassed: enr?.finalAssessmentPassed || false,
+        assessmentScore: enr?.finalAssessmentScore || null,
+      });
+    }
+
+    const categoriesWithProgress = Array.from(categoriesMap.values()).map(
+      (cat) => ({
+        ...cat,
+        totalModules: cat.modules.length,
+        completedModules: cat.modules.filter(
+          (m: any) => m.status === 'completed',
+        ).length,
+        progressPct:
+          cat.modules.length > 0
+            ? Math.round(
+                (cat.modules.filter((m: any) => m.status === 'completed')
+                  .length /
+                  cat.modules.length) *
+                  100,
+              )
+            : 0,
+      }),
+    );
+
+    const totalModules = modules.length;
+    const completedModules = enrollments.filter((e) => e.isCompleted).length;
+    const overallProgressPct =
+      totalModules > 0
+        ? Math.round((completedModules / totalModules) * 100)
+        : 0;
+
+    const latestAccess = enrollments.reduce(
+      (latest: Date | null, e) => {
+        if (!e.lastAccessedAt) return latest;
+        return !latest || e.lastAccessedAt > latest ? e.lastAccessedAt : latest;
+      },
+      null as Date | null,
+    );
+
+    const now = Date.now();
+    const deadline = fellow.fellowData?.deadline
+      ? new Date(fellow.fellowData.deadline)
+      : null;
+    const daysLeft = deadline
+      ? Math.ceil((deadline.getTime() - now) / 86400000)
+      : null;
+    const totalDays = deadline
+      ? Math.ceil(
+          (deadline.getTime() -
+            new Date((fellow as any).createdAt || now).getTime()) /
+            86400000,
+        )
+      : null;
+
+    const riskLevel = this.classifyRisk(
+      overallProgressPct,
+      daysLeft,
+      totalDays,
+      latestAccess,
+      fellow.fellowData?.fellowshipStatus || '',
+    );
+
+    return {
+      fellow: {
+        _id: (fellow._id as any).toString(),
+        firstName: fellow.firstName,
+        lastName: fellow.lastName,
+        email: fellow.email,
+        phoneNumber: fellow.phoneNumber,
+        isActive: fellow.isActive,
+        fellowData: fellow.fellowData,
+      },
+      totalModules,
+      completedModules,
+      inProgressModules: enrollments.filter(
+        (e) => !e.isCompleted && e.progress > 0,
+      ).length,
+      notStartedModules: totalModules - enrollments.length,
+      overallProgressPct,
+      lastAccessedAt: latestAccess,
+      daysLeft,
+      totalDays,
+      riskLevel,
+      categories: categoriesWithProgress,
+    };
+  }
+
+  /**
+   * PUT /admin/fellows/:id/progress-action
+   * Admin actions: allow_proceed | deactivate | mark_completed
+   */
+  async updateFellowProgressAction(
+    adminId: string,
+    fellowId: string,
+    action: 'allow_proceed' | 'deactivate' | 'mark_completed',
+    note?: string,
+  ) {
+    const fellow = await this.userModel.findOne({
+      _id: fellowId,
+      'fellowData.fellowId': { $exists: true },
+    });
+    if (!fellow) throw new NotFoundException('Fellow not found');
+
+    let updateFields: any = {};
+    let activityMessage = '';
+    let emailSubject = '';
+    let emailBody = '';
+
+    const name = `${fellow.firstName} ${fellow.lastName}`;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    switch (action) {
+      case 'allow_proceed':
+        updateFields = { isActive: true };
+        activityMessage = `Fellow ${name} marked as eligible to proceed`;
+        emailSubject = 'You are eligible to proceed — ARIN Fellowship';
+        emailBody = `Dear ${fellow.firstName},\n\nGreat news! The admin has reviewed your progress and confirmed you are eligible to continue to the next stage of your fellowship.\n\n${note ? `Note from admin: ${note}\n\n` : ''}Keep up the excellent work!\n\nARIN eLearning Team`;
+        break;
+      case 'deactivate':
+        updateFields = { isActive: false };
+        activityMessage = `Fellow ${name} deactivated due to insufficient progress`;
+        emailSubject = 'Fellowship Status Update — ARIN Academy';
+        emailBody = `Dear ${fellow.firstName},\n\nAfter reviewing your progress, we regret to inform you that your access to the fellowship programme has been deactivated.\n\n${note ? `Reason: ${note}\n\n` : ''}If you believe this is an error or would like to discuss this decision, please contact us.\n\nARIN eLearning Team`;
+        break;
+      case 'mark_completed':
+        updateFields = {
+          'fellowData.fellowshipStatus': FellowshipStatus.COMPLETED,
+        };
+        activityMessage = `Fellow ${name} marked as completed`;
+        emailSubject = 'Congratulations — Fellowship Completed!';
+        emailBody = `Dear ${fellow.firstName},\n\nCongratulations! You have successfully completed the ARIN Fellowship programme.\n\n${note ? `Message from admin: ${note}\n\n` : ''}We are proud of your achievement and look forward to seeing your continued growth.\n\nARIN eLearning Team`;
+        break;
+    }
+
+    await this.userModel.findByIdAndUpdate(fellowId, { $set: updateFields });
+
+    // Log the action
+    await this.logActivity(
+      ActivityType.USER_UPDATED,
+      activityMessage,
+      adminId,
+      fellowId,
+      undefined,
+      { action, note },
+      'Activity',
+    );
+
+    // Send notification email
+    if (fellow.email) {
+      await this.emailService.sendCustomEmail(
+        fellow.email,
+        emailSubject,
+        emailBody,
+      ).catch((e) =>
+        console.error('Failed to send progress-action email:', e),
+      );
+    }
+
+    return { message: activityMessage };
+  }
+
+  /**
+   * GET /admin/fellows/progress/stats — aggregate overview stats for the progress dashboard.
+   */
+  async getFellowProgressStats() {
+    const now = Date.now();
+    const sevenDaysAgo = new Date(now - 7 * 86400000);
+    const thirtyDaysFromNow = new Date(now + 30 * 86400000);
+
+    const [totalFellows, activeFellows, completedFellows, expiredFellows] =
+      await Promise.all([
+        this.userModel.countDocuments({ 'fellowData.fellowId': { $exists: true } }),
+        this.userModel.countDocuments({ 'fellowData.fellowshipStatus': FellowshipStatus.ACTIVE }),
+        this.userModel.countDocuments({ 'fellowData.fellowshipStatus': FellowshipStatus.COMPLETED }),
+        this.userModel.countDocuments({ 'fellowData.fellowshipStatus': FellowshipStatus.EXPIRED }),
+      ]);
+
+    // Fellows approaching deadline (within 30 days, still active)
+    const approachingDeadline = await this.userModel.countDocuments({
+      'fellowData.fellowshipStatus': FellowshipStatus.ACTIVE,
+      'fellowData.deadline': { $lte: thirtyDaysFromNow },
+    });
+
+    // Module completion stats across all fellows
+    const [totalEnrollments, completedEnrollments] = await Promise.all([
+      this.moduleEnrollmentModel.countDocuments(),
+      this.moduleEnrollmentModel.countDocuments({ isCompleted: true }),
+    ]);
+
+    // Recent completions (last 7 days)
+    const recentCompletions = await this.moduleEnrollmentModel.countDocuments({
+      isCompleted: true,
+      completedAt: { $gte: sevenDaysAgo },
+    });
+
+    // Inactive fellows (no module access in 14+ days)
+    const inactiveEnrollments = await this.moduleEnrollmentModel
+      .find({
+        isCompleted: false,
+        $or: [
+          { lastAccessedAt: { $lte: new Date(now - 14 * 86400000) } },
+          { lastAccessedAt: null },
+        ],
+      })
+      .distinct('studentId');
+
+    // Cohorts list for filter
+    const cohorts = await this.userModel.distinct('fellowData.cohort', {
+      'fellowData.fellowId': { $exists: true },
+      'fellowData.cohort': { $ne: null },
+    });
+
+    return {
+      totalFellows,
+      activeFellows,
+      completedFellows,
+      expiredFellows,
+      approachingDeadline,
+      inactiveFellowsEstimate: inactiveEnrollments.length,
+      totalModuleEnrollments: totalEnrollments,
+      completedModuleEnrollments: completedEnrollments,
+      moduleCompletionRate:
+        totalEnrollments > 0
+          ? Math.round((completedEnrollments / totalEnrollments) * 100)
+          : 0,
+      recentCompletions,
+      cohorts: cohorts.filter(Boolean),
+    };
+  }
 }
