@@ -10,17 +10,21 @@ import * as path from 'path';
 async function bootstrap() {
   await connectDB();
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
+
+  // Register body parsers first — bodyParser: false disables NestJS's built-in 100kb limit
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'http://localhost:3002',
-    process.env.FRONTEND_URL,
-  ]
-    .filter(Boolean)
-    .map((url) => (url as string).replace(/\/$/, '')); // strip trailing slashes
-
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  'https://demo.elearning.arin-africa.org',
+  'https://elearning.arin-africa.org',
+]
+  .filter(Boolean)
+  .map((url) => url.replace(/\/$/, '')); // strip trailing slashes
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, Postman, etc.)
@@ -41,10 +45,6 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     exposedHeaders: ['Content-Disposition'],
   });
-
-  // Increase payload size limit for course creation with large module data
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
   // Serve static files from uploads directory
   app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
