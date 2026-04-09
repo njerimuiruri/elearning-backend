@@ -102,13 +102,11 @@ export class AuthService {
       'UserPlus',
     );
 
-    // Send welcome email for self-registered students
+    // Send welcome email in background — never block registration response
     if (role !== UserRole.INSTRUCTOR) {
-      try {
-        await this.emailService.sendWelcomeEmail(email, firstName);
-      } catch (error) {
-        console.error('Failed to send welcome email:', error);
-      }
+      this.emailService
+        .sendWelcomeEmail(email, firstName)
+        .catch((e) => console.error('Failed to send welcome email:', e.message));
     }
 
     // For students, generate token immediately
@@ -197,31 +195,25 @@ export class AuthService {
       'UserPlus',
     );
 
-    // Send notification to admin about pending instructor registration
-    try {
-      const adminUsers = await this.userModel.find({ role: UserRole.ADMIN });
-      const adminEmails = adminUsers.map((admin) => admin.email);
-
-      // Also add the default admin email to ensure notifications are received
-      const defaultAdminEmail = 'faith.muiruri@strathmore.edu';
-      if (!adminEmails.includes(defaultAdminEmail)) {
-        adminEmails.push(defaultAdminEmail);
+    // Notify admin in background — never block instructor registration response
+    this.userModel.find({ role: UserRole.ADMIN }).then((adminUsers) => {
+      const adminEmails = adminUsers.map((a) => a.email);
+      if (!adminEmails.includes('faith.muiruri@strathmore.edu')) {
+        adminEmails.push('faith.muiruri@strathmore.edu');
       }
-
       for (const adminEmail of adminEmails) {
-        await this.emailService.sendInstructorRegistrationNotificationToAdmin(
-          adminEmail,
-          `${firstName} ${lastName}`,
-          email,
-          institution,
-          bio,
-          instructor._id.toString(),
-        );
+        this.emailService
+          .sendInstructorRegistrationNotificationToAdmin(
+            adminEmail,
+            `${firstName} ${lastName}`,
+            email,
+            institution,
+            bio,
+            instructor._id.toString(),
+          )
+          .catch((e) => console.error('Failed to send admin notification:', e.message));
       }
-    } catch (error) {
-      console.error('Failed to send admin notification:', error);
-      // Don't fail the registration if email notification fails
-    }
+    }).catch((e) => console.error('Failed to fetch admin users for notification:', e.message));
 
     return {
       user: this.sanitizeUser(instructor),

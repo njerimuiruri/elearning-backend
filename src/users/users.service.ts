@@ -95,17 +95,9 @@ export class UsersService {
     instructor.instructorStatus = InstructorStatus.APPROVED;
     await instructor.save();
 
-    // Send approval email to instructor
-    try {
-      await this.emailService.sendInstructorApprovalEmail(
-        instructor.email,
-        instructor.firstName,
-        true,
-      );
-    } catch (error) {
-      console.error('Failed to send approval email:', error);
-      // Don't fail the approval if email fails
-    }
+    this.emailService
+      .sendInstructorApprovalEmail(instructor.email, instructor.firstName, true)
+      .catch((e) => console.error('Failed to send approval email:', e.message));
 
     return {
       message: 'Instructor approved successfully',
@@ -132,17 +124,9 @@ export class UsersService {
     instructor.instructorStatus = InstructorStatus.REJECTED;
     await instructor.save();
 
-    // Send rejection email to instructor
-    try {
-      await this.emailService.sendInstructorApprovalEmail(
-        instructor.email,
-        instructor.firstName,
-        false,
-      );
-    } catch (error) {
-      console.error('Failed to send rejection email:', error);
-      // Don't fail the rejection if email fails
-    }
+    this.emailService
+      .sendInstructorApprovalEmail(instructor.email, instructor.firstName, false)
+      .catch((e) => console.error('Failed to send rejection email:', e.message));
 
     return {
       message: 'Instructor rejected successfully',
