@@ -43,4 +43,9 @@ export class DraftsService {
   async discard(userId: string, draftKey: string): Promise<void> {
     await this.draftModel.deleteOne({ userId, draftKey }).exec();
   }
+
+  /** Admin: list all drafts from all users, sorted by most recent */
+  async getAllDrafts(): Promise<Draft[]> {
+    return this.draftModel.find().sort({ lastSavedAt: -1 }).exec();
+  }
 }

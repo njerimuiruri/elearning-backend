@@ -9,6 +9,8 @@ import { Message } from '../schemas/message.schema';
 import { User } from '../schemas/user.schema';
 import { EmailService } from '../common/services/email.service';
 import { ConfigService } from '@nestjs/config';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../schemas/notification.schema';
 
 @Injectable()
 export class MessagesService {
@@ -17,6 +19,7 @@ export class MessagesService {
     @InjectModel(User.name) private userModel: Model<User>,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private toObjectId(id: string, fieldName: string): Types.ObjectId {
@@ -59,6 +62,30 @@ export class MessagesService {
         err?.message || err,
       );
     });
+
+    // Create in-app notification for the receiver
+    if (receiver) {
+      const senderName =
+        `${sender?.firstName || ''} ${sender?.lastName || ''}`.trim() || 'Someone';
+      const preview = (content || '').slice(0, 100);
+      const receiverRole = (receiver as any).role;
+      const inboxPath =
+        receiverRole === 'admin'
+          ? '/admin/messages'
+          : receiverRole === 'instructor'
+          ? '/instructor/messages'
+          : '/student/messages';
+      this.notificationsService
+        .createNotification(
+          receiverId,
+          NotificationType.NEW_MESSAGE,
+          `New message from ${senderName}`,
+          preview,
+          inboxPath,
+          message._id?.toString(),
+        )
+        .catch(() => {});
+    }
 
     return message.populate([
       { path: 'senderId', select: 'firstName lastName email profilePhotoUrl' },

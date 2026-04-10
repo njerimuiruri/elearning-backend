@@ -41,8 +41,7 @@ export class EmailService {
       try {
         await this.transporter.sendMail({
           from:
-            this.configService.get('SMTP_FROM_EMAIL') ||
-            'noreply@elearning.com',
+            this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
           to: toEmail,
           subject,
           html: htmlContent,
