@@ -13,6 +13,7 @@ export enum NotificationType {
   LEVEL_UNLOCKED = 'level_unlocked',
   INSTRUCTOR_REMINDER = 'instructor_reminder',
   ADMIN_REMINDER = 'admin_reminder',
+  NEW_MESSAGE = 'new_message',
 }
 
 @Schema({ timestamps: true })

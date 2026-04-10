@@ -68,6 +68,26 @@ export class UsersController {
     return this.usersService.rejectInstructor(id);
   }
 
+  /** Any authenticated user can get the admin contact info to start a support chat */
+  @Get('admin-contact')
+  @Roles(UserRole.ADMIN, UserRole.INSTRUCTOR, UserRole.STUDENT)
+  async getAdminContact() {
+    const admin = await this.usersService.findAll({ role: UserRole.ADMIN });
+    const first = admin[0];
+    if (!first) return { success: false, data: null };
+    return {
+      success: true,
+      data: {
+        _id: first._id,
+        firstName: first['firstName'],
+        lastName: first['lastName'],
+        email: first['email'],
+        profilePhotoUrl: first['profilePhotoUrl'],
+        role: first['role'],
+      },
+    };
+  }
+
   @Get('profile/current')
   async getCurrentUserProfile(@CurrentUser() user: any) {
     if (!user || !user._id) {
