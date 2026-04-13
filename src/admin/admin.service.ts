@@ -1035,12 +1035,16 @@ export class AdminService {
           temporaryPassword,
           { track, cohort: fellow.fellowData.cohort },
         )
-        .then(() =>
-          this.userModel.findByIdAndUpdate(fellow._id, {
-            invitationEmailSent: true,
-            invitationEmailSentAt: new Date(),
-          }),
-        )
+        .then((result) => {
+          if (result?.success) {
+            return this.userModel.findByIdAndUpdate(fellow._id, {
+              invitationEmailSent: true,
+              invitationEmailSentAt: new Date(),
+            });
+          } else {
+            console.error(`Fellow invitation email failed for ${email}:`, result?.message);
+          }
+        })
         .catch((err) =>
           console.error('Failed to send fellow invitation email:', err.message),
         );
@@ -1129,24 +1133,31 @@ export class AdminService {
             .digest('hex'),
         });
 
-        const emailSent = sendEmails;
+        let emailSent = false;
         if (sendEmails) {
           this.emailService
             .sendFellowInvitationEmail(
               dto.email,
-              dto.firstName || 'Fellow',
+              dto.firstName || dto.fullName?.split(' ')[0] || 'Fellow',
               temporaryPassword,
               { track: dto.track, cohort: fellow.fellowData.cohort },
             )
-            .then(() =>
-              this.userModel.findByIdAndUpdate(fellow._id, {
-                invitationEmailSent: true,
-                invitationEmailSentAt: new Date(),
-              }),
-            )
+            .then((result) => {
+              if (result?.success) {
+                emailSent = true;
+                return this.userModel.findByIdAndUpdate(fellow._id, {
+                  invitationEmailSent: true,
+                  invitationEmailSentAt: new Date(),
+                });
+              } else {
+                console.error(`Bulk invite email failed for ${dto.email}:`, result?.message);
+              }
+            })
             .catch((e) =>
               console.error(`Failed to send invitation to ${dto.email}:`, e.message),
             );
+          // Mark as sent optimistically — the .then() will confirm/update DB
+          emailSent = true;
         }
 
         results.created++;

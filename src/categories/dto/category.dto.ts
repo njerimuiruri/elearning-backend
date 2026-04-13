@@ -64,6 +64,10 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsString()
   fellowshipLevels?: string;
+
+  @IsOptional()
+  @IsString()
+  welcomeMessage?: string;
 }
 
 export class UpdateCategoryDto {
@@ -123,4 +127,8 @@ export class UpdateCategoryDto {
   @IsOptional()
   @IsString()
   fellowshipLevels?: string;
+
+  @IsOptional()
+  @IsString()
+  welcomeMessage?: string;
 }

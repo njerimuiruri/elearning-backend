@@ -50,6 +50,9 @@ export class Category extends Document {
 
   @Prop({ trim: true })
   fellowshipLevels?: string; // Rich text (HTML)
+
+  @Prop({ trim: true })
+  welcomeMessage?: string; // Shown to students on the category welcome/landing panel
 }
 
 export const CategorySchema = SchemaFactory.createForClass(Category);
