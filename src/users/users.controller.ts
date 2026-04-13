@@ -78,7 +78,7 @@ export class UsersController {
     return {
       success: true,
       data: {
-        _id: first._id,
+        _id: first._id?.toString(),
         firstName: first['firstName'],
         lastName: first['lastName'],
         email: first['email'],

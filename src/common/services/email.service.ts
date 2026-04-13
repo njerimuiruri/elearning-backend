@@ -10,17 +10,24 @@ export class EmailService {
     // Configure email transporter
     // For production, use real SMTP service (Gmail, SendGrid, etc.)
     // For development, you can use Mailtrap or similar
+    const smtpPort = parseInt(this.configService.get('SMTP_PORT') || '587');
     this.transporter = nodemailer.createTransport({
-      host: this.configService.get('SMTP_HOST') || 'smtp.mailtrap.io',
-      port: parseInt(this.configService.get('SMTP_PORT') || '2525'),
+      host: this.configService.get('SMTP_HOST') || 'smtp.gmail.com',
+      port: smtpPort,
+      // port 465 → SSL; port 587 → STARTTLS (secure must be false)
+      secure: smtpPort === 465,
       auth: {
         user: this.configService.get('SMTP_USER'),
         pass: this.configService.get('SMTP_PASS'),
       },
+      tls: {
+        // Accept self-signed certs in dev; in prod Gmail certs are valid anyway
+        rejectUnauthorized: false,
+      },
       // Fail fast if SMTP port is blocked rather than hanging indefinitely
-      connectionTimeout: 10000, // 10s to establish TCP connection
-      greetingTimeout: 10000,   // 10s to receive server greeting
-      socketTimeout: 15000,     // 15s of inactivity before aborting
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
     });
   }
 
@@ -49,7 +56,7 @@ export class EmailService {
         });
 
         return { success: true, message: `Message email sent to ${toEmail}` };
-      } catch (error) {
+      } catch (error: any) {
         lastError = error;
         console.error(
           `Attempt ${i} failed sending message notification email:`,
@@ -121,7 +128,7 @@ export class EmailService {
         text: plainTextContent,
       });
       return { success: true, message: `Email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -180,7 +187,7 @@ E-Learning Platform System
         text: plainTextContent,
       });
       return { success: true, message: `Notification sent to admin` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -331,7 +338,7 @@ The ARIN eLearning Team
         text: plainTextContent,
       });
       return { success: true, message: `Registration email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -421,7 +428,7 @@ Arin Publishing Academy Team
         text: plainTextContent,
       });
       return { success: true, message: `Registration email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -502,7 +509,7 @@ Arin Publishing Academy Team
         text: plainTextContent,
       });
       return { success: true, message: `Welcome email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -554,7 +561,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true, message: `Reset email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -606,7 +613,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true, message: `Enrollment email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -656,7 +663,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true, message: `Certificate email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -707,7 +714,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true, message: `Reminder email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -754,7 +761,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true, message: `Approval email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -807,7 +814,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true, message: `Rejection email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -887,7 +894,7 @@ E-Learning Platform System
         success: true,
         message: `Course submission notification sent to admin`,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -963,7 +970,7 @@ E-Learning Platform Team
         success: true,
         message: `Course approval email sent to ${email}`,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -1046,7 +1053,7 @@ E-Learning Platform Team
         success: true,
         message: `Course rejection email sent to ${email}`,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -1062,7 +1069,7 @@ E-Learning Platform Team
         html: htmlContent,
       });
       return { success: true, message: `Email sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
@@ -1146,7 +1153,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending question notification:', error);
       throw error;
     }
@@ -1235,7 +1242,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending response notification:', error);
       throw error;
     }
@@ -1283,7 +1290,7 @@ E-Learning Platform Team
         html: htmlContent,
       });
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending flag notification:', error);
       throw error;
     }
@@ -1333,7 +1340,7 @@ E-Learning Platform Team
         success: true,
         message: `Module approval email sent to ${email}`,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending module approval email:', error);
     }
   }
@@ -1379,7 +1386,7 @@ E-Learning Platform Team
         success: true,
         message: `Module rejection email sent to ${email}`,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending module rejection email:', error);
     }
   }
@@ -1428,7 +1435,7 @@ E-Learning Platform Team
         success: true,
         message: `Module submission notification sent to admin`,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending module submission notification:', error);
     }
   }
@@ -1478,7 +1485,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending essay submission notification:', error);
     }
   }
@@ -1554,7 +1561,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending essay grading result:', error);
     }
   }
@@ -1604,7 +1611,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending discussion notification to student:', error);
     }
   }
@@ -1651,7 +1658,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error(
         'Error sending discussion notification to instructor:',
         error,
@@ -1708,7 +1715,7 @@ E-Learning Platform Team
         text: plainTextContent,
       });
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending module inactivity reminder:', error);
     }
   }
@@ -1817,7 +1824,7 @@ This is an automated reminder. You can manage your email preferences in your acc
         text: plainTextContent,
       });
       return { success: true, message: `Completion reminder sent to ${email}` };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending completion reminder:', error);
       throw new Error(`Failed to send reminder: ${error.message}`);
     }
@@ -1911,7 +1918,7 @@ Go to Dashboard: ${dashboardUrl}
         success: true,
         message: `Bulk reminder sent to ${studentEmail}`,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending bulk reminder to student:', error);
       return { success: false, message: error.message };
     }
@@ -2001,7 +2008,7 @@ Go to Dashboard: ${dashboardUrl}
         success: true,
         message: `Admin reminder sent to instructor ${instructorEmail}`,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending admin reminder to instructor:', error);
       return { success: false, message: error.message };
     }
@@ -2190,10 +2197,18 @@ Arin Publishing Academy Team
         html: htmlContent,
         text: plainText,
       });
+      console.log(`[EmailService] Fellow invitation sent successfully to ${email}`);
       return { success: true, message: `Fellow invitation sent to ${email}` };
-    } catch (error) {
-      console.error('Error sending fellow invitation email:', error);
-      return { success: false, message: error.message };
+    } catch (error: any) {
+      console.error('[EmailService] sendFellowInvitationEmail FAILED:', {
+        to: email,
+        smtpHost: this.configService.get('SMTP_HOST'),
+        smtpPort: this.configService.get('SMTP_PORT'),
+        smtpUser: this.configService.get('SMTP_USER'),
+        error: error?.message,
+        code: error?.code,
+      });
+      return { success: false, message: error?.message ?? 'Unknown SMTP error' };
     }
   }
 
@@ -2262,7 +2277,7 @@ Arin Publishing Academy Team
     try {
       await this.transporter.sendMail(mailOptions);
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Failed to send email to ${to}:`, error);
       return { success: false, error: error.message };
     }
@@ -2305,7 +2320,7 @@ Arin Publishing Academy Team
           ],
         });
         return { success: true, message: `Admission letter sent to ${to}` };
-      } catch (error) {
+      } catch (error: any) {
         lastError = error;
         console.error(
           `Attempt ${i} failed sending admission letter to ${to}:`,
@@ -2380,7 +2395,7 @@ Arin Publishing Academy Team
       try {
         await this.transporter.sendMail(mailOptions);
         return { success: true, message: `Email sent to ${opts.to}` };
-      } catch (error) {
+      } catch (error: any) {
         lastError = error;
         console.error(
           `Attempt ${i} failed sending composed email to ${opts.to}:`,
