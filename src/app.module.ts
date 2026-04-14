@@ -43,10 +43,21 @@ import { AdmissionLettersModule } from './admission-letters/admission-letters.mo
         return {
           uri,
           dbName: 'elearning',
+          serverSelectionTimeoutMS: 30000,
+          connectTimeoutMS: 30000,
+          socketTimeoutMS: 60000,
+          heartbeatFrequencyMS: 10000,
+          maxPoolSize: 10,
+          minPoolSize: 2,
+          retryWrites: true,
+          retryReads: true,
           connectionFactory: (connection) => {
             connection.on('connected', () => console.log('✅ MongoDB connected'));
             connection.on('error', (err) => console.error('❌ MongoDB error:', err));
-            connection.on('disconnected', () => console.warn('⚠️ MongoDB disconnected'));
+            connection.on('disconnected', () => {
+              console.warn('⚠️ MongoDB disconnected — will attempt reconnect…');
+            });
+            connection.on('reconnected', () => console.log('🔄 MongoDB reconnected'));
             return connection;
           },
         };

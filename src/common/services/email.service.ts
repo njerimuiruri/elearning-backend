@@ -2021,13 +2021,13 @@ Go to Dashboard: ${dashboardUrl}
     email: string,
     firstName: string,
     temporaryPassword: string,
-    options?: { track?: string; cohort?: string },
+    options?: { track?: string; cohort?: string; setupToken?: string },
   ) {
     const subject =
       'Welcome to the Arin Fellowship Programme — Complete Your Profile';
     const frontendUrl =
       this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
-    const loginUrl = `${frontendUrl}/login`;
+    const loginUrl = `${frontendUrl}/login?ref=${Buffer.from(email).toString('base64url')}`;
     const supportEmail =
       this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
     const name = firstName || 'Fellow';
@@ -2042,149 +2042,193 @@ Go to Dashboard: ${dashboardUrl}
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Welcome to the Arin Fellowship</title>
 </head>
-<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:32px 16px;">
+<body style="margin:0;padding:0;background-color:#ffffff;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;max-width:620px;margin:0 auto;">
+
+    <!-- Top accent bar -->
     <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+      <td style="background:linear-gradient(90deg,#15803d 0%,#16a34a 60%,#22c55e 100%);height:5px;"></td>
+    </tr>
 
-          <!-- Header -->
+    <!-- Logo area -->
+    <tr>
+      <td style="padding:36px 48px 0;">
+        <p style="margin:0;font-size:13px;font-weight:700;color:#15803d;letter-spacing:1.5px;text-transform:uppercase;">Arin Publishing Academy</p>
+      </td>
+    </tr>
+
+    <!-- Greeting -->
+    <tr>
+      <td style="padding:32px 48px 0;">
+        <h1 style="margin:0 0 6px;font-size:28px;font-weight:700;color:#111827;line-height:1.25;">Welcome to the Arin Fellowship, ${name}!</h1>
+        ${cohort || track ? `<p style="margin:8px 0 0;font-size:14px;color:#6b7280;">${cohort ? 'Cohort ' + cohort : ''}${cohort && track ? ' &nbsp;·&nbsp; ' : ''}${track ? track + ' Track' : ''}</p>` : ''}
+      </td>
+    </tr>
+
+    <!-- Opening paragraph -->
+    <tr>
+      <td style="padding:24px 48px 0;">
+        <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.75;">
+          Congratulations! Your fellowship account has been created by the Arin Academy team. We are thrilled to welcome you into a community of innovators and change-makers shaping the future of publishing across Africa.
+        </p>
+        <p style="margin:0;font-size:15px;color:#374151;line-height:1.75;">
+          To access the platform, use the login details below and follow the steps to set up your personal password.
+        </p>
+      </td>
+    </tr>
+
+    <!-- Divider -->
+    <tr><td style="padding:28px 48px 0;"><div style="border-top:1px solid #e5e7eb;"></div></td></tr>
+
+    <!-- Login credentials — open layout, no card -->
+    <tr>
+      <td style="padding:28px 48px 0;">
+        <p style="margin:0 0 20px;font-size:13px;font-weight:700;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Your Login Credentials</p>
+
+        <table cellpadding="0" cellspacing="0" style="width:100%;">
           <tr>
-            <td style="background:linear-gradient(135deg,#16a34a 0%,#15803d 100%);padding:40px 40px 32px;text-align:center;">
-              <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:50%;width:64px;height:64px;line-height:64px;font-size:28px;margin-bottom:16px;">🎓</div>
-              <h1 style="color:#ffffff;margin:0;font-size:26px;font-weight:700;letter-spacing:-0.5px;">Welcome to the<br/>Arin Fellowship!</h1>
-              ${cohort ? `<p style="color:rgba(255,255,255,0.85);margin:10px 0 0;font-size:14px;">Cohort ${cohort}${track ? ' · ' + track + ' Track' : ''}</p>` : ''}
+            <td style="padding-bottom:18px;">
+              <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.8px;">Email Address</p>
+              <p style="margin:0;font-size:16px;font-weight:600;color:#111827;">${email}</p>
             </td>
           </tr>
-
-          <!-- Body -->
           <tr>
-            <td style="padding:40px;">
-              <p style="color:#374151;font-size:16px;margin:0 0 16px;">Dear <strong>${name}</strong>,</p>
-              <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px;">
-                Congratulations! Your fellowship account has been created by the Arin Academy administrator. We are thrilled to have you join our community of innovators and change-makers across Africa.
-              </p>
-              <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 32px;">
-                To get started, please log in to your account and complete your profile so we can personalise your learning experience.
-              </p>
-
-              <!-- Credentials box -->
-              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:24px;margin-bottom:32px;">
-                <p style="color:#15803d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 16px;">Your Login Credentials</p>
-                <table width="100%" cellpadding="0" cellspacing="0">
-                  <tr>
-                    <td style="padding:6px 0;">
-                      <span style="color:#6b7280;font-size:13px;">Email address</span><br/>
-                      <span style="color:#111827;font-size:15px;font-weight:600;">${email}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style="padding:12px 0 6px;">
-                      <span style="color:#6b7280;font-size:13px;">Temporary password</span><br/>
-                      <span style="display:inline-block;background:#e5e7eb;color:#111827;font-family:monospace;font-size:15px;font-weight:700;padding:6px 14px;border-radius:6px;letter-spacing:1px;margin-top:4px;">${temporaryPassword}</span>
-                    </td>
-                  </tr>
-                </table>
-              </div>
-
-              <!-- Security note -->
-              <div style="background:#fef9c3;border-left:4px solid #fbbf24;border-radius:0 8px 8px 0;padding:14px 16px;margin-bottom:32px;">
-                <p style="color:#92400e;font-size:13px;margin:0;line-height:1.5;">
-                  <strong>🔒 Security:</strong> You will be asked to set a new password the first time you log in. Please do not share your temporary password with anyone.
-                </p>
-              </div>
-
-              <!-- Steps -->
-              <p style="color:#111827;font-size:15px;font-weight:600;margin:0 0 16px;">Here's how to get started:</p>
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
-                ${[
-                  ['1', 'Click the button below to go to the login page'],
-                  ['2', 'Enter your email and temporary password'],
-                  ['3', 'Create a new secure password when prompted'],
-                  ['4', 'Complete your profile to personalise your experience'],
-                  [
-                    '5',
-                    'Start learning and engaging with your fellowship community',
-                  ],
-                ]
-                  .map(
-                    ([n, text]) => `
-                <tr>
-                  <td style="padding:6px 0;">
-                    <table cellpadding="0" cellspacing="0">
-                      <tr>
-                        <td style="vertical-align:top;padding-right:12px;">
-                          <div style="width:28px;height:28px;border-radius:50%;background:#16a34a;color:#fff;text-align:center;line-height:28px;font-size:13px;font-weight:700;">${n}</div>
-                        </td>
-                        <td style="vertical-align:middle;color:#374151;font-size:14px;line-height:1.5;">${text}</td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>`,
-                  )
-                  .join('')}
-              </table>
-
-              <!-- CTA -->
-              <div style="text-align:center;margin-bottom:40px;">
-                <a href="${loginUrl}" style="display:inline-block;background:#16a34a;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;padding:16px 40px;border-radius:10px;letter-spacing:0.3px;">
-                  Complete Your Profile →
-                </a>
-              </div>
-
-              <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;" />
-
-              <!-- Support -->
-              <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0;">
-                Need help? Our support team is ready to assist you.<br/>
-                📧 <a href="mailto:${supportEmail}" style="color:#16a34a;text-decoration:none;">${supportEmail}</a>
-              </p>
+            <td>
+              <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.8px;">Temporary Password</p>
+              <p style="margin:0;font-size:22px;font-weight:700;color:#15803d;letter-spacing:3px;font-family:monospace;">${temporaryPassword}</p>
+              <p style="margin:6px 0 0;font-size:12px;color:#9ca3af;">Use this to log in for the first time.</p>
             </td>
           </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:24px 40px;text-align:center;">
-              <p style="color:#9ca3af;font-size:12px;margin:0;">
-                © ${new Date().getFullYear()} Arin Publishing Academy · All rights reserved<br/>
-                This email was sent because an administrator created a fellowship account for you.
-              </p>
-            </td>
-          </tr>
-
         </table>
       </td>
     </tr>
+
+    <!-- Divider -->
+    <tr><td style="padding:28px 48px 0;"><div style="border-top:1px solid #e5e7eb;"></div></td></tr>
+
+    <!-- How to get started -->
+    <tr>
+      <td style="padding:28px 48px 0;">
+        <p style="margin:0 0 20px;font-size:13px;font-weight:700;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">How to Get Started</p>
+
+        <table cellpadding="0" cellspacing="0" style="width:100%;">
+          ${[
+            ['Click <strong>Begin Your Fellowship</strong> below — your email will be filled in automatically.'],
+            ['Enter the <strong>temporary password</strong> shown above and click Sign In.'],
+            ['A prompt will appear asking you to <strong>create a new personal password</strong>. Do this right away.'],
+            ['Once your password is set you are fully logged in — no further steps needed.'],
+            ['Explore your dashboard, complete your profile, and start your fellowship journey.'],
+          ].map(([text], i) => `
+          <tr>
+            <td style="padding:0 0 14px 0;">
+              <table cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:top;padding-right:14px;width:28px;">
+                    <div style="width:26px;height:26px;border-radius:50%;background:#f0fdf4;border:1.5px solid #16a34a;color:#16a34a;text-align:center;line-height:24px;font-size:12px;font-weight:700;">${i + 1}</div>
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <p style="margin:0;font-size:14px;color:#374151;line-height:1.65;">${text}</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`).join('')}
+        </table>
+      </td>
+    </tr>
+
+    <!-- Security note — inline, no card -->
+    <tr>
+      <td style="padding:4px 48px 0;">
+        <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
+          🔒 <strong>Keep your temporary password private.</strong> You will be asked to replace it the moment you log in. The temporary password becomes invalid once you have set your own.
+        </p>
+      </td>
+    </tr>
+
+    <!-- CTA button -->
+    <tr>
+      <td style="padding:36px 48px 0;">
+        <a href="${loginUrl}" style="display:inline-block;background:#15803d;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 36px;border-radius:8px;letter-spacing:0.3px;">
+          Begin Your Fellowship &rarr;
+        </a>
+      </td>
+    </tr>
+
+    <!-- Divider -->
+    <tr><td style="padding:36px 48px 0;"><div style="border-top:1px solid #e5e7eb;"></div></td></tr>
+
+    <!-- Support -->
+    <tr>
+      <td style="padding:24px 48px 0;">
+        <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.7;">
+          If you run into any difficulties or did not expect this email, please reach out to our support team at
+          <a href="mailto:${supportEmail}" style="color:#15803d;text-decoration:none;font-weight:600;">${supportEmail}</a>
+          and we will be happy to help.
+        </p>
+        <p style="margin:16px 0 0;font-size:13px;color:#374151;line-height:1.7;">
+          We look forward to seeing you on the platform.<br/>
+          <strong>The Arin Publishing Academy Team</strong>
+        </p>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="padding:32px 48px 40px;">
+        <p style="margin:0;font-size:11px;color:#d1d5db;line-height:1.6;">
+          © ${new Date().getFullYear()} Arin Publishing Academy · All rights reserved.<br/>
+          This message was sent because an administrator created a fellowship account in your name.
+        </p>
+      </td>
+    </tr>
+
+    <!-- Bottom accent bar -->
+    <tr>
+      <td style="background:linear-gradient(90deg,#15803d 0%,#16a34a 60%,#22c55e 100%);height:4px;"></td>
+    </tr>
+
   </table>
 </body>
 </html>
     `;
 
     const plainText = `
-Welcome to the Arin Fellowship Programme!
+Welcome to the Arin Fellowship, ${name}!
+${cohort ? `Cohort: ${cohort}` : ''}${track ? `  Track: ${track}` : ''}
 
-Dear ${name},
+Congratulations! Your fellowship account has been created by the Arin Academy team. We are thrilled to welcome you into a community of innovators shaping the future of publishing across Africa.
 
-Congratulations! Your fellowship account has been created by the Arin Academy administrator.
-${cohort ? `Cohort: ${cohort}` : ''}${track ? `\nTrack: ${track}` : ''}
-
+────────────────────────────
 YOUR LOGIN CREDENTIALS
-Email: ${email}
-Temporary Password: ${temporaryPassword}
+────────────────────────────
+Email Address  : ${email}
+Temporary Password : ${temporaryPassword}
 
-IMPORTANT: You will be asked to set a new password on first login.
+Keep your temporary password private. It becomes invalid once you set your own.
 
-HOW TO GET STARTED:
-1. Visit the login page: ${loginUrl}
-2. Enter your email and temporary password
-3. Create a new secure password when prompted
-4. Complete your profile
-5. Start learning!
+────────────────────────────
+HOW TO GET STARTED
+────────────────────────────
+1. Click "Begin Your Fellowship" or visit the link below — your email will be filled in automatically.
+   ${loginUrl}
 
-Need help? Contact us at: ${supportEmail}
+2. Enter the temporary password above and click Sign In.
 
-Best regards,
-Arin Publishing Academy Team
+3. A prompt will appear asking you to create a new personal password.
+   Do this right away to secure your account.
+
+4. Once your password is set you are fully logged in — no further steps needed.
+
+5. Explore your dashboard, complete your profile, and start your fellowship journey.
+
+────────────────────────────
+
+If you have any difficulties, contact our support team:
+${supportEmail}
+
+We look forward to seeing you on the platform.
+The Arin Publishing Academy Team
     `.trim();
 
     try {

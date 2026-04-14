@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   Query,
@@ -154,6 +155,22 @@ export class ModuleEnrollmentsController {
       enrollmentId,
       submitDto,
     );
+  }
+
+  // ── Admin: delete a specific enrollment (for testing / admin resets) ─────────
+  @Delete('admin/reset/:enrollmentId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminDeleteEnrollment(@Param('enrollmentId') enrollmentId: string) {
+    return await this.enrollmentsService.adminDeleteEnrollment(enrollmentId);
+  }
+
+  // ── Admin: delete ALL enrollments for a student (fresh-start reset) ──────────
+  @Delete('admin/reset-student/:studentId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminResetStudent(@Param('studentId') studentId: string) {
+    return await this.enrollmentsService.adminResetStudentEnrollments(studentId);
   }
 
   // Grade essay assessment (instructor only)
