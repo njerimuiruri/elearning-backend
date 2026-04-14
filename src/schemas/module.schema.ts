@@ -562,6 +562,10 @@ export class Module extends Document {
   })
   declare moduleResources: ModuleResource[];
 
+  // ── Ordering ───────────────────────────────────────────────────────────
+  @Prop({ default: 0 })
+  order?: number;
+
   // ── Metadata ───────────────────────────────────────────────────────────
   @Prop()
   bannerUrl?: string;

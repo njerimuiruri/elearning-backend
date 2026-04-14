@@ -141,19 +141,36 @@ export class ModulesService {
     page?: number;
     limit?: number;
   }): Promise<{ modules: any[]; total: number; pages: number }> {
-    const query: any = {
-      status: { $in: [ModuleStatus.PUBLISHED, ModuleStatus.APPROVED] },
-      isActive: true,
+    // Visible to students: published/approved modules AND admin-created drafts
+    const statusFilter = {
+      $or: [
+        { status: { $in: [ModuleStatus.PUBLISHED, ModuleStatus.APPROVED] } },
+        { status: ModuleStatus.DRAFT, createdByRole: 'admin' },
+      ],
     };
 
-    if (filters?.category)
-      query.categoryId = new Types.ObjectId(filters.category);
-    if (filters?.level) query.level = filters.level;
+    const baseQuery: any = { isActive: true, ...statusFilter };
+
+    if (filters?.category) {
+      try {
+        baseQuery.categoryId = new Types.ObjectId(filters.category);
+      } catch {
+        // invalid ObjectId — return empty
+        return { modules: [], total: 0, pages: 0 };
+      }
+    }
+    if (filters?.level) baseQuery.level = filters.level;
     if (filters?.search) {
-      query.$or = [
-        { title: { $regex: filters.search, $options: 'i' } },
-        { description: { $regex: filters.search, $options: 'i' } },
+      baseQuery.$and = [
+        statusFilter,
+        {
+          $or: [
+            { title: { $regex: filters.search, $options: 'i' } },
+            { description: { $regex: filters.search, $options: 'i' } },
+          ],
+        },
       ];
+      delete baseQuery.$or;
     }
 
     const page = filters?.page || 1;
@@ -162,14 +179,14 @@ export class ModulesService {
 
     const [modules, total] = await Promise.all([
       this.moduleModel
-        .find(query)
+        .find(baseQuery)
         .populate('instructorIds', 'firstName lastName avgRating')
         .populate('categoryId', 'name')
-        .sort({ createdAt: -1 })
+        .sort({ order: 1, createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      this.moduleModel.countDocuments(query),
+      this.moduleModel.countDocuments(baseQuery),
     ]);
 
     return { modules, total, pages: Math.ceil(total / limit) };
@@ -229,7 +246,8 @@ export class ModulesService {
         : {}),
       createdBy: new Types.ObjectId(adminId),
       createdByRole: 'admin',
-      status: ModuleStatus.DRAFT,
+      status: ModuleStatus.PUBLISHED,
+      publishedAt: new Date(),
     });
 
     return await module.save();
@@ -268,6 +286,15 @@ export class ModulesService {
       lastEditedBy: new Types.ObjectId(instructorId),
       lastEditedAt: new Date(),
     });
+
+    // Auto-publish admin-created modules that are still in DRAFT
+    if (
+      (module as any).createdByRole === 'admin' &&
+      module.status === ModuleStatus.DRAFT
+    ) {
+      module.status = ModuleStatus.PUBLISHED;
+      module.publishedAt = new Date();
+    }
 
     return await module.save();
   }
@@ -745,6 +772,15 @@ export class ModulesService {
     return await module.save();
   }
 
+  // ── Admin: Bulk-publish all admin-created DRAFT modules ──────────────────
+  async publishAllAdminDraftModules(): Promise<{ published: number }> {
+    const result = await this.moduleModel.updateMany(
+      { createdByRole: 'admin', status: ModuleStatus.DRAFT, isActive: true },
+      { $set: { status: ModuleStatus.PUBLISHED, publishedAt: new Date() } },
+    );
+    return { published: result.modifiedCount };
+  }
+
   // ── Admin: Reject ─────────────────────────────────────────────────────────
   async rejectModule(
     moduleId: string,
@@ -1191,44 +1227,6 @@ export class ModulesService {
       }
     });
 
-    // Quiz
-    const quiz = lesson.assessmentQuiz || [];
-    if (quiz.length > 0) {
-      children.push(this.sectionBanner('Lesson Quiz'));
-      children.push(
-        this.infoRow('Passing Score', `${lesson.quizPassingScore ?? 70}%`),
-      );
-      quiz.forEach((q: any, qi: number) => {
-        children.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `Q${qi + 1}. ${q.question || q.text || ''}`,
-                bold: true,
-                size: 22,
-                font: 'Calibri',
-              }),
-            ],
-            spacing: { before: 200, after: 80 },
-          }),
-        );
-        (q.options || []).forEach((opt: string, oi: number) => {
-          children.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `     ${String.fromCharCode(65 + oi)}. ${opt}`,
-                  size: 20,
-                  font: 'Calibri',
-                }),
-              ],
-              spacing: { after: 60 },
-            }),
-          );
-        });
-      });
-    }
-
     // Lesson resources
     const resources = lesson.lessonResources || lesson.resources || [];
     if (resources.length > 0) {
@@ -1579,69 +1577,6 @@ export class ModulesService {
       }
     }
 
-    // ── Quiz slide ─────────────────────────────────────────────────────────
-    const quiz = lesson.assessmentQuiz || [];
-    if (quiz.length > 0) {
-      const qSlide = pptx.addSlide();
-      qSlide.background = { color: GRAY };
-      qSlide.addShape(pptx.ShapeType.rect, {
-        x: 0,
-        y: 0,
-        w: '100%',
-        h: 1.0,
-        fill: { color: '4c1d95' },
-        line: { color: '4c1d95' },
-      });
-      qSlide.addText('LESSON QUIZ', {
-        x: 0.3,
-        y: 0.1,
-        w: 8,
-        h: 0.35,
-        fontSize: 10,
-        color: 'e9d5ff',
-        bold: true,
-      });
-      qSlide.addText(
-        `${quiz.length} question${quiz.length !== 1 ? 's' : ''}   ·   Pass: ${lesson.quizPassingScore ?? 70}%`,
-        {
-          x: 0.3,
-          y: 0.5,
-          w: 12,
-          h: 0.4,
-          fontSize: 14,
-          color: WHITE,
-          bold: true,
-        },
-      );
-
-      let qy = 1.15;
-      quiz.slice(0, 4).forEach((q: any, qi: number) => {
-        qSlide.addText(`Q${qi + 1}. ${q.question || q.text || ''}`, {
-          x: 0.4,
-          y: qy,
-          w: 12.5,
-          h: 0.45,
-          fontSize: 13,
-          bold: true,
-          color: '1f2937',
-          wrap: true,
-        });
-        qy += 0.5;
-        (q.options || []).slice(0, 4).forEach((opt: string, oi: number) => {
-          qSlide.addText(`   ${String.fromCharCode(65 + oi)}. ${opt}`, {
-            x: 0.4,
-            y: qy,
-            w: 12.5,
-            h: 0.35,
-            fontSize: 12,
-            color: SLATE,
-          });
-          qy += 0.38;
-        });
-        qy += 0.2;
-      });
-    }
-
     // ── Summary / end slide ─────────────────────────────────────────────────
     const endSlide = pptx.addSlide();
     endSlide.background = { color: NAVY };
@@ -1838,61 +1773,6 @@ export class ModulesService {
           }
         }
       }
-    }
-
-    // ── Final Assessment.docx ─────────────────────────────────────────────────
-    const fa: any = (mod as any).finalAssessment;
-    if (fa && (fa.questions || []).length > 0) {
-      const faChildren: Paragraph[] = [
-        this.heading(
-          `Final Assessment: ${fa.title || ''}`,
-          HeadingLevel.HEADING_1,
-        ),
-        this.rule(),
-      ];
-      if (fa.instructions) faChildren.push(...this.textBlock(fa.instructions));
-      faChildren.push(
-        this.infoRow('Passing Score', `${fa.passingScore ?? 70}%`),
-      );
-      faChildren.push(
-        this.infoRow('Max Attempts', String(fa.maxAttempts ?? 3)),
-      );
-      if (fa.timeLimit)
-        faChildren.push(this.infoRow('Time Limit', `${fa.timeLimit} minutes`));
-      faChildren.push(this.sectionBanner('Questions'));
-      (fa.questions || []).forEach((q: any, qi: number) => {
-        faChildren.push(
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `Q${qi + 1}. ${q.text || q.question || ''}`,
-                bold: true,
-                size: 22,
-                font: 'Calibri',
-              }),
-            ],
-            spacing: { before: 200, after: 80 },
-          }),
-        );
-        (q.options || []).forEach((opt: string, oi: number) => {
-          faChildren.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: `     ${String.fromCharCode(65 + oi)}. ${opt}`,
-                  size: 20,
-                  font: 'Calibri',
-                }),
-              ],
-              spacing: { after: 60 },
-            }),
-          );
-        });
-      });
-      const faDoc = new Document({ sections: [{ children: faChildren }] });
-      archive.append(await Packer.toBuffer(faDoc), {
-        name: `${root}/final-assessment.docx`,
-      });
     }
 
     await archive.finalize();

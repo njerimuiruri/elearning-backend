@@ -143,6 +143,36 @@ export class ModuleEnrollmentsService {
       }
     }
 
+    // ── Sequential order gate ─────────────────────────────────────────────────
+    // If a module has order > 1, the student must have completed the previous
+    // module (same category, order - 1) before enrolling.
+    if (category && (module as any).order && (module as any).order > 1) {
+      const prevModule = await this.moduleModel
+        .findOne({
+          categoryId: category._id,
+          order: (module as any).order - 1,
+          isActive: true,
+        })
+        .select('_id title order')
+        .lean();
+
+      if (prevModule) {
+        const prevEnrollment = await this.enrollmentModel
+          .findOne({
+            studentId: new Types.ObjectId(studentId),
+            moduleId: prevModule._id,
+            isCompleted: true,
+          })
+          .lean();
+
+        if (!prevEnrollment) {
+          throw new ForbiddenException(
+            `You must complete "${(prevModule as any).title || `Module ${(module as any).order - 1}`}" before enrolling in this module.`,
+          );
+        }
+      }
+    }
+
     // Check existing enrollment
     let enrollment = await this.enrollmentModel.findOne({
       studentId: new Types.ObjectId(studentId),

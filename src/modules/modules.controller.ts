@@ -384,6 +384,14 @@ export class ModulesController {
     return await this.modulesService.publishModule(id, req.user.id);
   }
 
+  // ── Bulk-publish all admin-created DRAFT modules ──────────────────────────
+  @Post('admin/publish-all-drafts')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async publishAllAdminDrafts() {
+    return await this.modulesService.publishAllAdminDraftModules();
+  }
+
   @Post(':id/reject')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

@@ -421,6 +421,10 @@ export class CreateModuleDto {
   moduleResources?: ResourceDto[];
 
   @IsOptional()
+  @IsNumber()
+  order?: number;
+
+  @IsOptional()
   @IsString()
   bannerUrl?: string;
 
