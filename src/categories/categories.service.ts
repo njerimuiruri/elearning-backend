@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Category } from '../schemas/category.schema';
 import { User } from '../schemas/user.schema';
+import { Module } from '../schemas/module.schema';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class CategoryService {
   constructor(
     @InjectModel(Category.name) private categoryModel: Model<Category>,
     @InjectModel(User.name) private userModel: Model<User>,
+    @InjectModel(Module.name) private moduleModel: Model<Module>,
   ) {}
 
   async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
@@ -45,6 +47,100 @@ export class CategoryService {
     return this.categoryModel
       .findByIdAndUpdate(id, { isActive: false }, { new: true })
       .exec();
+  }
+
+  /**
+   * Get all published modules for a specific category
+   * with pagination and sorting
+   */
+  async getModulesByCategory(
+    categoryId: string,
+    filters?: {
+      level?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<{ modules: any[]; total: number; pages: number }> {
+    // Verify category exists
+    const category = await this.categoryModel.findById(categoryId);
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    // Build query for published modules in this category
+    const query: any = {
+      isActive: true,
+      categoryId: new Types.ObjectId(categoryId),
+      $or: [
+        { status: { $in: ['PUBLISHED', 'APPROVED'] } },
+        { status: 'DRAFT', createdByRole: 'admin' },
+      ],
+    };
+
+    if (filters?.level) {
+      query.level = filters.level;
+    }
+
+    if (filters?.search) {
+      query.$and = [
+        {
+          $or: [
+            { title: { $regex: filters.search, $options: 'i' } },
+            { description: { $regex: filters.search, $options: 'i' } },
+          ],
+        },
+      ];
+    }
+
+    const page = filters?.page || 1;
+    const limit = filters?.limit || 12;
+    const skip = (page - 1) * limit;
+
+    const [modules, total] = await Promise.all([
+      this.moduleModel
+        .find(query)
+        .populate('instructorIds', 'firstName lastName avgRating email')
+        .populate('categoryId', 'name accessType price')
+        .sort({ order: 1, createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      this.moduleModel.countDocuments(query),
+    ]);
+
+    return {
+      modules,
+      total,
+      pages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Get modules by category with detailed category info
+   * Includes category data along with modules
+   */
+  async getCategoryWithModules(
+    categoryId: string,
+    filters?: {
+      level?: string;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+  ): Promise<{
+    category: Category | null;
+    modules: any[];
+    total: number;
+    pages: number;
+  }> {
+    const category = await this.categoryModel.findById(categoryId).lean();
+    const modulesData = await this.getModulesByCategory(categoryId, filters);
+
+    return {
+      category,
+      ...modulesData,
+    };
   }
 
   /**

@@ -39,6 +39,71 @@ export class CategoryController {
     };
   }
 
+  /**
+   * Get all published modules for a specific category
+   * GET /api/categories/:id/modules
+   */
+  @Get(':id/modules')
+  async getModulesByCategory(
+    @Param('id') categoryId: string,
+    @Query('level') level?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const result = await this.categoryService.getModulesByCategory(
+      categoryId,
+      {
+        level,
+        search,
+        page: page ? parseInt(page) : 1,
+        limit: limit ? parseInt(limit) : 12,
+      },
+    );
+
+    return {
+      success: true,
+      data: result.modules,
+      total: result.total,
+      pages: result.pages,
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 12,
+    };
+  }
+
+  /**
+   * Get category details with all its modules
+   * GET /api/categories/:id/with-modules
+   */
+  @Get(':id/with-modules')
+  async getCategoryWithModules(
+    @Param('id') categoryId: string,
+    @Query('level') level?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const result = await this.categoryService.getCategoryWithModules(
+      categoryId,
+      {
+        level,
+        search,
+        page: page ? parseInt(page) : 1,
+        limit: limit ? parseInt(limit) : 12,
+      },
+    );
+
+    return {
+      success: true,
+      category: result.category,
+      modules: result.modules,
+      total: result.total,
+      pages: result.pages,
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 12,
+    };
+  }
+
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

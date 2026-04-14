@@ -9,7 +9,6 @@ import * as path from 'path';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
 
-  // Register body parsers first — bodyParser: false disables NestJS's built-in 100kb limit
   app.use(express.json({ limit: '200mb' }));
   app.use(express.urlencoded({ limit: '200mb', extended: true }));
 
