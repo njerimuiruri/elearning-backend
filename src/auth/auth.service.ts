@@ -496,7 +496,7 @@ export class AuthService {
 
     const resetRecord = await this.passwordResetModel.findOne({
       token: hashedToken,
-      createdAt: { $gt: new Date(Date.now() - 24 * 3600000) }, // Within 24 hours
+      createdAt: { $gt: new Date(Date.now() - 7 * 24 * 3600000) }, // Within 7 days
     });
 
     if (!resetRecord) {
@@ -506,6 +506,7 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
     await this.userModel.findByIdAndUpdate(resetRecord.userId, {
       password: hashedPassword,
+      mustSetPassword: false,
     });
 
     await this.passwordResetModel.deleteOne({ _id: resetRecord._id });

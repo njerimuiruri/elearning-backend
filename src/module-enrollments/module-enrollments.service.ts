@@ -423,6 +423,18 @@ export class ModuleEnrollmentsService {
       lessonProgress.isCompleted = true;
       lessonProgress.completedAt = new Date();
 
+      // Mark all slides in this lesson as completed for proper sidebar display
+      if (lessonProgress.slideProgress && lessonProgress.slideProgress.length > 0) {
+        const now = new Date();
+        lessonProgress.slideProgress.forEach((sp) => {
+          if (!sp.isCompleted) {
+            sp.isCompleted = true;
+            sp.completedAt = now;
+          }
+        });
+        lessonProgress.completedSlides = lessonProgress.slideProgress.length;
+      }
+
       // Recompute from source of truth to avoid counter drift / race conditions
       enrollment.completedLessons = enrollment.lessonProgress.filter(
         (lp) => lp.isCompleted,
@@ -1296,5 +1308,53 @@ export class ModuleEnrollmentsService {
     const passed = score >= passingScore;
 
     return { score, results, passed };
+  }
+
+  // ── Admin helpers ─────────────────────────────────────────────────────────────
+
+  /** Delete a single enrollment by ID (admin testing / reset). */
+  async adminDeleteEnrollment(enrollmentId: string) {
+    if (!Types.ObjectId.isValid(enrollmentId)) {
+      throw new BadRequestException('Invalid enrollment ID');
+    }
+    const deleted = await this.enrollmentModel.findByIdAndDelete(enrollmentId).lean();
+    if (!deleted) throw new NotFoundException('Enrollment not found');
+
+    // Decrement the module enrollment count
+    await this.moduleModel.findByIdAndUpdate((deleted as any).moduleId, {
+      $inc: { enrollmentCount: -1 },
+    });
+
+    return { message: 'Enrollment deleted', deletedId: enrollmentId };
+  }
+
+  /** Delete ALL enrollments for a student — full fresh-start reset (admin only). */
+  async adminResetStudentEnrollments(studentId: string) {
+    if (!Types.ObjectId.isValid(studentId)) {
+      throw new BadRequestException('Invalid student ID');
+    }
+    const enrollments = await this.enrollmentModel
+      .find({ studentId: new Types.ObjectId(studentId) })
+      .lean();
+
+    if (enrollments.length === 0) {
+      return { message: 'No enrollments found for this student', deletedCount: 0 };
+    }
+
+    // Decrement enrollment counts on each module
+    await Promise.allSettled(
+      enrollments.map((e: any) =>
+        this.moduleModel.findByIdAndUpdate(e.moduleId, { $inc: { enrollmentCount: -1 } }),
+      ),
+    );
+
+    const result = await this.enrollmentModel.deleteMany({
+      studentId: new Types.ObjectId(studentId),
+    });
+
+    return {
+      message: `Reset complete — ${result.deletedCount} enrollment(s) removed for student ${studentId}`,
+      deletedCount: result.deletedCount,
+    };
   }
 }

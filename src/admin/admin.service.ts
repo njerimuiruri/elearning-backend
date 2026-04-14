@@ -1033,7 +1033,7 @@ export class AdminService {
           email,
           firstName || 'Fellow',
           temporaryPassword,
-          { track, cohort: fellow.fellowData.cohort },
+          { track, cohort: fellow.fellowData.cohort, setupToken },
         )
         .then((result) => {
           if (result?.success) {
@@ -1124,13 +1124,11 @@ export class AdminService {
           },
         });
 
+        const rawSetupToken = crypto.randomBytes(32).toString('hex');
         await this.passwordResetModel.create({
           userId: fellow._id,
           email: dto.email,
-          token: crypto
-            .createHash('sha256')
-            .update(crypto.randomBytes(32).toString('hex'))
-            .digest('hex'),
+          token: crypto.createHash('sha256').update(rawSetupToken).digest('hex'),
         });
 
         let emailSent = false;
@@ -1140,7 +1138,7 @@ export class AdminService {
               dto.email,
               dto.firstName || dto.fullName?.split(' ')[0] || 'Fellow',
               temporaryPassword,
-              { track: dto.track, cohort: fellow.fellowData.cohort },
+              { track: dto.track, cohort: fellow.fellowData.cohort, setupToken: rawSetupToken },
             )
             .then((result) => {
               if (result?.success) {
