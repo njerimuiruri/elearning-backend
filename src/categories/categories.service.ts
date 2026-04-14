@@ -134,7 +134,7 @@ export class CategoryService {
     total: number;
     pages: number;
   }> {
-    const category = await this.categoryModel.findById(categoryId).lean();
+    const category = await this.categoryModel.findById(categoryId).lean() as Category | null;
     const modulesData = await this.getModulesByCategory(categoryId, filters);
 
     return {
