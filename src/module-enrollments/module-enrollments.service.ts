@@ -369,10 +369,6 @@ export class ModuleEnrollmentsService {
     if (slideCompleted && !slideProgress.isCompleted) {
       slideProgress.isCompleted = true;
       slideProgress.completedAt = new Date();
-
-      // Recount completed slides
-      (lessonProgress as any).completedSlides =
-        lessonProgress.slideProgress.filter((sp) => sp.isCompleted).length;
     }
 
     // Check if all slides in this lesson are done (lessonUnlocked = ready for assessment)
@@ -382,10 +378,31 @@ export class ModuleEnrollmentsService {
     ).length;
     const lessonUnlocked = totalSlides === 0 || completedSlides >= totalSlides;
 
-    enrollment.lastAccessedAt = new Date();
-    enrollment.lastAccessedLesson = lessonIndex;
+    // Use atomic update for slide progress so this never overwrites lessonProgress.isCompleted
+    // (which completeLesson sets). A full enrollment.save() would stomp that flag when this
+    // function loaded a stale copy of the document before completeLesson ran.
+    const slideProgressFilter = { _id: enrollment._id };
+    const lpIndex = enrollment.lessonProgress.findIndex(
+      (lp) => lp.lessonIndex === lessonIndex,
+    );
+    const spIndex = enrollment.lessonProgress[lpIndex].slideProgress.findIndex(
+      (sp) => sp.slideIndex === slideIndex,
+    );
 
-    await enrollment.save();
+    const setFields: Record<string, any> = {
+      lastAccessedAt: new Date(),
+      lastAccessedLesson: lessonIndex,
+      [`lessonProgress.${lpIndex}.slideProgress.${spIndex}.timeSpent`]: slideProgress.timeSpent,
+      [`lessonProgress.${lpIndex}.slideProgress.${spIndex}.scrolledToBottom`]: slideProgress.scrolledToBottom,
+    };
+
+    if (slideCompleted && slideProgress.isCompleted) {
+      setFields[`lessonProgress.${lpIndex}.slideProgress.${spIndex}.isCompleted`] = true;
+      setFields[`lessonProgress.${lpIndex}.slideProgress.${spIndex}.completedAt`] = new Date();
+      setFields[`lessonProgress.${lpIndex}.completedSlides`] = completedSlides;
+    }
+
+    await this.enrollmentModel.updateOne(slideProgressFilter, { $set: setFields });
 
     return { enrollment, slideCompleted, lessonUnlocked };
   }
@@ -416,6 +433,11 @@ export class ModuleEnrollmentsService {
     );
 
     if (!lessonProgress) {
+      console.error(`[completeLesson] lessonProgress not found for lessonIndex=${lessonIndex}`, {
+        enrollmentId,
+        availableLessonIndexes: enrollment.lessonProgress.map(lp => lp.lessonIndex),
+        totalLessons: enrollment.totalLessons,
+      });
       throw new NotFoundException('Lesson not found');
     }
 
@@ -463,6 +485,9 @@ export class ModuleEnrollmentsService {
       enrollment.lastAccessedAt = new Date();
 
       await enrollment.save();
+      console.log(`[completeLesson] Lesson ${lessonIndex} marked as completed`, { enrollmentId });
+    } else {
+      console.log(`[completeLesson] Lesson ${lessonIndex} already completed`, { enrollmentId });
     }
 
     // ── Navigation hint ───────────────────────────────────────────────────────
@@ -510,6 +535,9 @@ export class ModuleEnrollmentsService {
     if (!Types.ObjectId.isValid(enrollmentId)) {
       throw new BadRequestException('Invalid enrollment ID');
     }
+    
+    // Refresh enrollment to ensure latest changes are fetched from DB
+    // (prevents race condition where assessment check happens before completion write)
     const enrollment = await this.enrollmentModel
       .findById(enrollmentId)
       .populate('moduleId');
@@ -545,11 +573,26 @@ export class ModuleEnrollmentsService {
       throw new NotFoundException('Lesson progress not found');
     }
 
-    // Guard: lesson must be completed before taking its assessment
+    // Auto-complete the lesson if not already marked done.
+    // This handles a race condition where the periodic slide-progress timer
+    // (trackSlideProgress) saves a stale document after completeLesson has
+    // already set isCompleted = true, overwriting it back to false.
     if (!lessonProgress.isCompleted) {
-      throw new BadRequestException(
-        'Please complete the lesson content before taking the assessment.',
-      );
+      lessonProgress.isCompleted = true;
+      lessonProgress.completedAt = new Date();
+
+      enrollment.completedLessons = enrollment.lessonProgress.filter(
+        (lp) => lp.isCompleted,
+      ).length;
+      enrollment.progress =
+        enrollment.totalLessons > 0
+          ? Math.min(
+              100,
+              Math.round(
+                (enrollment.completedLessons / enrollment.totalLessons) * 100,
+              ),
+            )
+          : 0;
     }
 
     // Guard: assessment already passed — no re-submission needed
