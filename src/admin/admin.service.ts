@@ -1133,29 +1133,26 @@ export class AdminService {
 
         let emailSent = false;
         if (sendEmails) {
-          this.emailService
-            .sendFellowInvitationEmail(
+          try {
+            const result = await this.emailService.sendFellowInvitationEmail(
               dto.email,
               dto.firstName || dto.fullName?.split(' ')[0] || 'Fellow',
               temporaryPassword,
               { track: dto.track, cohort: fellow.fellowData.cohort, setupToken: rawSetupToken },
-            )
-            .then((result) => {
-              if (result?.success) {
-                emailSent = true;
-                return this.userModel.findByIdAndUpdate(fellow._id, {
-                  invitationEmailSent: true,
-                  invitationEmailSentAt: new Date(),
-                });
-              } else {
-                console.error(`Bulk invite email failed for ${dto.email}:`, result?.message);
-              }
-            })
-            .catch((e) =>
-              console.error(`Failed to send invitation to ${dto.email}:`, e.message),
             );
-          // Mark as sent optimistically — the .then() will confirm/update DB
-          emailSent = true;
+            
+            if (result?.success) {
+              emailSent = true;
+              await this.userModel.findByIdAndUpdate(fellow._id, {
+                invitationEmailSent: true,
+                invitationEmailSentAt: new Date(),
+              });
+            } else {
+              console.error(`Bulk invite email failed for ${dto.email}:`, result?.message);
+            }
+          } catch (e) {
+            console.error(`Failed to send invitation to ${dto.email}:`, (e as any).message);
+          }
         }
 
         results.created++;
