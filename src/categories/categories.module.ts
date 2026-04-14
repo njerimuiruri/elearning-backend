@@ -6,6 +6,7 @@ import { CategoryAccessControlService } from './access-control.service';
 import { Category, CategorySchema } from '../schemas/category.schema';
 import { User, UserSchema } from '../schemas/user.schema';
 import { Course, CourseSchema } from '../schemas/course.schema';
+import { Module as ModuleEntity, ModuleSchema } from '../schemas/module.schema';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { Course, CourseSchema } from '../schemas/course.schema';
       { name: Category.name, schema: CategorySchema },
       { name: User.name, schema: UserSchema },
       { name: Course.name, schema: CourseSchema },
+      { name: ModuleEntity.name, schema: ModuleSchema },
     ]),
   ],
   providers: [CategoryService, CategoryAccessControlService],
