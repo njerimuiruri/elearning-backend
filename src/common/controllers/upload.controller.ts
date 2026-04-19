@@ -12,6 +12,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage, memoryStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
+// Note: diskStorage and fs are still used by the image upload endpoint
 import { CloudinaryService } from '../services/cloudinary.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
@@ -71,14 +72,11 @@ export class UploadController {
     return { success: true, url: `/uploads/images/${file.filename}` };
   }
 
-  // ── Documents → local disk ────────────────────────────────────────────────
+  // ── Documents → Cloudinary (persistent, survives server restarts) ──────────
   @Post('document')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: path.join(UPLOADS_ROOT, 'documents'),
-        filename: (_req, file, cb) => cb(null, safeFilename(file.originalname)),
-      }),
+      storage: memoryStorage(),
       limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
     }),
   )
@@ -98,17 +96,20 @@ export class UploadController {
       'application/zip',
     ];
     if (!allowed.includes(file.mimetype)) {
-      fs.unlinkSync(file.path);
       throw new BadRequestException(
         'Invalid document format. Allowed: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, CSV, TXT, ZIP',
       );
     }
 
-    return {
-      success: true,
-      url: `/uploads/documents/${file.filename}`,
-      originalName: file.originalname,
-    };
+    try {
+      const url = await this.cloudinaryService.uploadDocument(
+        file.buffer,
+        safeFilename(file.originalname),
+      );
+      return { success: true, url, originalName: file.originalname };
+    } catch (error) {
+      handleUploadError(error);
+    }
   }
 
   // ── Videos → Cloudinary (large files, CDN delivery) ──────────────────────
