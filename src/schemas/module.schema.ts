@@ -543,6 +543,11 @@ export class Module extends Document {
   @Prop({ type: ModuleFinalAssessment, required: false })
   finalAssessment?: ModuleFinalAssessment;
 
+  // When true: instructor has finished adding all lessons → Final Assessment unlocks for students.
+  // When false (default): more lessons are still being added → students see "More content coming soon".
+  @Prop({ default: false })
+  isContentFinalized?: boolean;
+
   // ── Assessment review workflow ─────────────────────────────────────────
   @Prop({ enum: AssessmentReviewStatus, default: AssessmentReviewStatus.NONE })
   declare assessmentReviewStatus: AssessmentReviewStatus;

@@ -30,6 +30,7 @@ import { Category, CategorySchema } from '../schemas/category.schema';
 import { EmailService } from '../common/services/email.service';
 import { ReminderService } from '../services/reminder.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { EmailQueueModule } from '../email-queue/email-queue.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       { name: Category.name, schema: CategorySchema },
     ]),
     NotificationsModule,
+    EmailQueueModule,
   ],
   controllers: [AdminController],
   providers: [AdminService, EmailService, ReminderService],

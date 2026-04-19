@@ -256,6 +256,11 @@ export class AdminController {
     return this.adminService.getFellowsAtRisk();
   }
 
+  @Get('fellows/:id')
+  async getFellowById(@Param('id') id: string) {
+    return this.adminService.getFellowById(id);
+  }
+
   @Post('fellows')
   async createFellow(@Body() dto: CreateFellowDto) {
     return this.adminService.createFellow(dto);
@@ -622,6 +627,12 @@ export class AdminController {
       admin._id?.toString(),
       dto,
     );
+  }
+
+  @Put('modules/:id/finalize')
+  @ApiOperation({ summary: 'Finalize module content — unlocks Final Assessment for students' })
+  async finalizeModuleContent(@Param('id') id: string, @CurrentUser() admin: any) {
+    return this.adminService.finalizeContentAsAdmin(id, admin._id?.toString());
   }
 
   @Post('modules/:id/lessons')

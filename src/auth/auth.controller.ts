@@ -268,6 +268,9 @@ export class AuthController {
         teachingExperience: user.teachingExperience,
         yearsOfExperience: user.yearsOfExperience,
         cvUrl: user.cvUrl,
+        fullName: user.fullName,
+        region: (user as any).region,
+        fellowData: user.fellowData,
         totalPoints: user.totalPoints,
         currentStreakDays: user.currentStreakDays,
         longestStreakDays: user.longestStreakDays,
@@ -287,11 +290,13 @@ export class AuthController {
   ) {
     // Don't allow updating sensitive fields
     const allowedFields = [
+      'fullName',
       'firstName',
       'lastName',
       'bio',
       'phoneNumber',
       'country',
+      'region',
       'institution',
     ];
 

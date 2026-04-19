@@ -449,6 +449,55 @@ export class AuthService {
     };
   }
 
+  async sendForgotPasswordOtp(email: string) {
+    const user = await this.userModel.findOne({ email });
+    // Always respond the same way to avoid email enumeration
+    if (!user) {
+      return { success: true, message: 'If an account exists, a code has been sent.' };
+    }
+
+    // Delete any existing OTP records for this email
+    await this.passwordResetModel.deleteMany({ email });
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+    await this.passwordResetModel.create({
+      userId: user._id,
+      email,
+      token: hashedOtp,
+    });
+
+    const name = user.fullName || user.firstName || 'Student';
+    await this.emailService.sendPasswordResetOtpEmail(email, name, otp);
+
+    return { success: true, message: 'If an account exists, a code has been sent.' };
+  }
+
+  async verifyForgotPasswordOtp(email: string, otp: string) {
+    const hashedOtp = crypto.createHash('sha256').update(otp).digest('hex');
+
+    const record = await this.passwordResetModel.findOne({
+      email,
+      token: hashedOtp,
+      createdAt: { $gt: new Date(Date.now() - 10 * 60 * 1000) }, // 10 minutes
+    });
+
+    if (!record) {
+      throw new BadRequestException('Invalid or expired code. Please try again.');
+    }
+
+    // Generate a one-time reset token so the next step doesn't need the OTP again
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedReset = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    // Replace the OTP record with the reset token
+    await this.passwordResetModel.findByIdAndUpdate(record._id, { token: hashedReset });
+
+    return { success: true, resetToken };
+  }
+
   async resetPassword(
     token: string,
     newPassword: string,

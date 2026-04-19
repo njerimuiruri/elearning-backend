@@ -10,6 +10,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as crypto from 'crypto';
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
+import { LessonCompletion } from '../schemas/lesson-completion.schema';
 import { Module, ModuleStatus } from '../schemas/module.schema';
 import { ModuleCertificate } from '../schemas/module-certificate.schema';
 import { Category } from '../schemas/category.schema';
@@ -28,6 +29,8 @@ export class ModuleEnrollmentsService {
   constructor(
     @InjectModel(ModuleEnrollment.name)
     private enrollmentModel: Model<ModuleEnrollment>,
+    @InjectModel(LessonCompletion.name)
+    private lessonCompletionModel: Model<LessonCompletion>,
     @InjectModel(Module.name)
     private moduleModel: Model<Module>,
     @InjectModel(ModuleCertificate.name)
@@ -272,6 +275,268 @@ export class ModuleEnrollmentsService {
       });
   }
 
+  // ── Shared helper: resolve sorted lessons from a populated module ──────────
+  private getSortedLessons(module: any): any[] {
+    if (module.lessons && module.lessons.length > 0) {
+      return [...module.lessons].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+    }
+    return (module.topics || []).flatMap((t: any) => t.lessons || []);
+  }
+
+  // ── NEW: Get fresh, server-derived enrollment progress ────────────────────
+  /**
+   * Single source of truth for the frontend.
+   * Derives every UI-visible state from the database — never from a cached flag.
+   *
+   * Returns:
+   *  lessonStates[]   — per-lesson { isCompleted, isAccessible, isLocked }
+   *  nextLessonIndex  — lowest-index incomplete & accessible lesson
+   *  completedLessons / totalLessons / progress (%)
+   */
+  async getEnrollmentProgress(enrollmentId: string, studentId: string) {
+    if (!Types.ObjectId.isValid(enrollmentId)) {
+      throw new BadRequestException('Invalid enrollment ID');
+    }
+
+    const enrollment = await this.enrollmentModel
+      .findById(enrollmentId)
+      .populate('moduleId');
+
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+    if (String(enrollment.studentId) !== String(studentId)) {
+      throw new NotFoundException('Enrollment not found');
+    }
+
+    const module = enrollment.moduleId as any;
+    const lessons = this.getSortedLessons(module);
+    const totalLessons = lessons.length;
+    const generation = enrollment.moduleRepeatGeneration ?? 0;
+
+    // Fetch all completions for the current repeat generation — O(lessons) query
+    const completionDocs = await this.lessonCompletionModel.find({
+      enrollmentId: new Types.ObjectId(enrollmentId),
+      repeatGeneration: generation,
+    });
+
+    const completedSet = new Map<number, Date>(
+      completionDocs.map((c) => [c.lessonIndex, c.completedAt]),
+    );
+
+    // Build per-lesson accessibility state (sequential: each lesson unlocks
+    // when the previous one is completed and, if it had a quiz, passed it).
+    const lessonStates = lessons.map((lesson: any, i: number) => {
+      const lp = enrollment.lessonProgress.find((lp) => lp.lessonIndex === i);
+      // Primary truth: lessonProgress.isCompleted (mutable current state).
+      // Fallback: legacy/new completion docs for older enrollments.
+      const isCompleted = lp ? !!lp.isCompleted : completedSet.has(i);
+      const hasQuiz = (lesson.assessmentQuiz?.length ?? 0) > 0;
+      const assessmentPassed = lp?.assessmentPassed ?? false;
+
+      let isAccessible: boolean;
+      if (i === 0) {
+        isAccessible = true;
+      } else {
+        const prevCompleted = completedSet.has(i - 1);
+        const prevLesson = lessons[i - 1];
+        const prevHasQuiz = (prevLesson?.assessmentQuiz?.length ?? 0) > 0;
+        const prevLp = enrollment.lessonProgress.find((lp) => lp.lessonIndex === i - 1);
+        const prevAssessmentPassed = prevLp?.assessmentPassed ?? false;
+        isAccessible = prevHasQuiz ? prevAssessmentPassed : prevCompleted;
+      }
+
+      const lastAnswers = lp?.lastAnswers ?? null;
+      console.log(
+        `[getProgress] Lesson ${i} | completed=${isCompleted} | assessmentPassed=${assessmentPassed} | lastAccessedSlide=${lp?.lastAccessedSlide ?? 0} | hasLastAnswers=${!!lastAnswers}`,
+      );
+
+      return {
+        lessonIndex: i,
+        title: lesson.title || `Lesson ${i + 1}`,
+        isCompleted,
+        isAccessible,
+        isLocked: !isCompleted && !isAccessible,
+        completedAt: lp?.completedAt ?? completedSet.get(i) ?? null,
+        hasQuiz,
+        assessmentPassed,
+        assessmentAttempts: lp?.assessmentAttempts ?? 0,
+        lastScore: lp?.lastScore ?? 0,
+        lastAccessedSlide: lp?.lastAccessedSlide ?? 0,
+        lastAnswers,
+      };
+    });
+
+    const completedLessons = lessonStates.filter((ls) => ls.isCompleted).length;
+    const progress =
+      totalLessons > 0 ? Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
+
+    // Next lesson = lowest-index that is accessible but not yet completed
+    let nextLessonIndex: number | null = null;
+    for (const ls of lessonStates) {
+      if (!ls.isCompleted && ls.isAccessible) {
+        nextLessonIndex = ls.lessonIndex;
+        break;
+      }
+    }
+
+    const savedLessonIndex =
+      typeof enrollment.lastAccessedLesson === 'number'
+        ? enrollment.lastAccessedLesson
+        : null;
+    const savedLessonState =
+      savedLessonIndex !== null ? lessonStates[savedLessonIndex] : null;
+    const currentLessonIndex =
+      savedLessonState && (savedLessonState.isAccessible || savedLessonState.isCompleted)
+        ? savedLessonIndex
+        : nextLessonIndex;
+    const currentSlideIndex =
+      currentLessonIndex !== null
+        ? lessonStates[currentLessonIndex]?.lastAccessedSlide ?? 0
+        : 0;
+
+    const allLessonsCompleted =
+      totalLessons > 0 && completedLessons >= totalLessons && !enrollment.requiresModuleRepeat;
+
+    console.log(
+      `[getProgress] Returning resume position | enrollmentId=${enrollmentId} | lastAccessedLesson=${enrollment.lastAccessedLesson} | currentLessonIndex=${currentLessonIndex} | currentSlideIndex=${currentSlideIndex} | nextLessonIndex=${nextLessonIndex} | completedLessons=${completedLessons}/${totalLessons}`,
+    );
+
+    return {
+      enrollmentId: enrollment._id,
+      moduleId: (enrollment.moduleId as any)._id ?? enrollment.moduleId,
+      totalLessons,
+      completedLessons,
+      progress,
+      lessonStates,
+      nextLessonIndex,
+      currentLessonIndex,
+      currentSlideIndex,
+      allLessonsCompleted,
+      requiresModuleRepeat: enrollment.requiresModuleRepeat ?? false,
+      moduleRepeatGeneration: generation,
+      finalAssessmentPassed: enrollment.finalAssessmentPassed,
+      finalAssessmentAttempts: enrollment.finalAssessmentAttempts,
+      isCompleted: enrollment.isCompleted,
+      certificateEarned: enrollment.certificateEarned,
+      certificatePublicId: enrollment.certificatePublicId ?? null,
+      // true = instructor finished adding all lessons; Final Assessment is now unlockable
+      isContentFinalized: (module as any).isContentFinalized ?? false,
+    };
+  }
+
+  // ── NEW: Idempotent lesson completion ──────────────────────────────────────
+  /**
+   * Marks a lesson as completed for the student's current repeat generation.
+   *
+   * Properties:
+   *  - Idempotent: calling it twice for the same lesson is safe (upsert).
+   *  - Append-only: never sets any flag to false, never overwrites a completion.
+   *  - Atomic counter update: uses $inc / $set on specific fields — never saves
+   *    the full enrollment document, so it cannot race with trackSlideProgress.
+   *
+   * Returns the fresh progress state (same shape as getEnrollmentProgress).
+   */
+  async markLessonCompleted(enrollmentId: string, lessonIndex: number, studentId: string) {
+    if (!Types.ObjectId.isValid(enrollmentId)) {
+      throw new BadRequestException('Invalid enrollment ID');
+    }
+
+    const enrollment = await this.enrollmentModel
+      .findById(enrollmentId)
+      .populate('moduleId');
+
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+    if (String(enrollment.studentId) !== String(studentId)) {
+      throw new NotFoundException('Enrollment not found');
+    }
+
+    const module = enrollment.moduleId as any;
+    const lessons = this.getSortedLessons(module);
+    const totalLessons = lessons.length;
+
+    if (lessonIndex < 0 || lessonIndex >= totalLessons) {
+      throw new BadRequestException('Lesson index out of range');
+    }
+
+    const generation = enrollment.moduleRepeatGeneration ?? 0;
+
+    // Upsert — creates the record only if it doesn't exist yet.
+    // $setOnInsert means: if the document is being INSERTED (not updated), apply these fields.
+    // If the document already existed, the operation is a no-op — nothing changes.
+    const upsertResult = await this.lessonCompletionModel.findOneAndUpdate(
+      { enrollmentId: new Types.ObjectId(enrollmentId), lessonIndex, repeatGeneration: generation },
+      {
+        $setOnInsert: {
+          enrollmentId: new Types.ObjectId(enrollmentId),
+          studentId: new Types.ObjectId(studentId),
+          moduleId: (enrollment.moduleId as any)._id ?? enrollment.moduleId,
+          lessonIndex,
+          repeatGeneration: generation,
+          completedAt: new Date(),
+        },
+      },
+      { upsert: true, new: false }, // new: false → returns null when newly inserted
+    );
+
+    const wasNewlyCompleted = upsertResult === null;
+
+    const lpIndex = enrollment.lessonProgress.findIndex(
+      (lp) => lp.lessonIndex === lessonIndex,
+    );
+
+    if (wasNewlyCompleted) {
+      // Count completions for this generation to get the authoritative number
+      const completedCount = await this.lessonCompletionModel.countDocuments({
+        enrollmentId: new Types.ObjectId(enrollmentId),
+        repeatGeneration: generation,
+      });
+
+      const newProgress =
+        totalLessons > 0 ? Math.min(100, Math.round((completedCount / totalLessons) * 100)) : 0;
+
+      // Atomic field-level update — never touches the rest of the document
+      const atomicUpdate: Record<string, any> = {
+        $set: {
+          completedLessons: completedCount,
+          progress: newProgress,
+          lastAccessedLesson: lessonIndex,
+          lastAccessedAt: new Date(),
+        },
+      };
+
+      // Keep lessonProgress in sync with completion docs so the progress endpoint
+      // and the learning UI always reflect the same completion state.
+      if (lpIndex >= 0) {
+        atomicUpdate.$set[`lessonProgress.${lpIndex}.isCompleted`] = true;
+        atomicUpdate.$set[`lessonProgress.${lpIndex}.completedAt`] = new Date();
+      }
+
+      // If student has completed all lessons during a module repeat, clear the block
+      if (enrollment.requiresModuleRepeat && completedCount >= totalLessons) {
+        atomicUpdate.$set.requiresModuleRepeat = false;
+        atomicUpdate.$set.finalAssessmentAttempts = 0;
+      }
+
+      await this.enrollmentModel.updateOne({ _id: enrollmentId }, atomicUpdate);
+    } else if (lpIndex >= 0) {
+      // Backfill/sync for old enrollments where completion doc exists but
+      // lessonProgress flag was not previously updated.
+      await this.enrollmentModel.updateOne(
+        { _id: enrollmentId },
+        {
+          $set: {
+            [`lessonProgress.${lpIndex}.isCompleted`]: true,
+            [`lessonProgress.${lpIndex}.completedAt`]: new Date(),
+            lastAccessedLesson: lessonIndex,
+            lastAccessedAt: new Date(),
+          },
+        },
+      );
+    }
+
+    // Always return fresh, server-derived progress (never a stale in-memory snapshot)
+    return this.getEnrollmentProgress(enrollmentId, studentId);
+  }
+
   // ── Track slide progress (engagement: time + scroll) ──────────────────────
   async trackSlideProgress(
     enrollmentId: string,
@@ -283,6 +548,7 @@ export class ModuleEnrollmentsService {
     enrollment: ModuleEnrollment;
     slideCompleted: boolean;
     lessonUnlocked: boolean;
+    lessonAutoCompleted?: boolean;
   }> {
     if (!Types.ObjectId.isValid(enrollmentId)) {
       throw new BadRequestException('Invalid enrollment ID');
@@ -316,6 +582,7 @@ export class ModuleEnrollmentsService {
     const slide = slides[slideIndex] || null;
     const minTime = slide?.minViewingTime ?? 15;
     const needsScroll = slide?.scrollTrackingEnabled ?? false;
+    const hasQuiz = (lesson?.assessmentQuiz?.length ?? 0) > 0;
 
     // Find or create lesson progress entry
     let lessonProgress = enrollment.lessonProgress.find(
@@ -328,6 +595,7 @@ export class ModuleEnrollmentsService {
         isCompleted: false,
         slideProgress: [],
         completedSlides: 0,
+        lastAccessedSlide: 0,
         assessmentAttempts: 0,
         assessmentPassed: false,
         lastScore: 0,
@@ -338,7 +606,7 @@ export class ModuleEnrollmentsService {
     }
 
     // Find or create slide progress entry
-    if (!lessonProgress.slideProgress) {
+    if (!Array.isArray(lessonProgress.slideProgress)) {
       (lessonProgress as any).slideProgress = [];
     }
 
@@ -392,6 +660,7 @@ export class ModuleEnrollmentsService {
     const setFields: Record<string, any> = {
       lastAccessedAt: new Date(),
       lastAccessedLesson: lessonIndex,
+      [`lessonProgress.${lpIndex}.lastAccessedSlide`]: slideIndex,
       [`lessonProgress.${lpIndex}.slideProgress.${spIndex}.timeSpent`]: slideProgress.timeSpent,
       [`lessonProgress.${lpIndex}.slideProgress.${spIndex}.scrolledToBottom`]: slideProgress.scrolledToBottom,
     };
@@ -402,9 +671,51 @@ export class ModuleEnrollmentsService {
       setFields[`lessonProgress.${lpIndex}.completedSlides`] = completedSlides;
     }
 
+    let lessonAutoCompleted = false;
+    if (lessonUnlocked && !hasQuiz && !lessonProgress.isCompleted) {
+      lessonAutoCompleted = true;
+      const completedAt = new Date();
+      const generation = enrollment.moduleRepeatGeneration ?? 0;
+
+      // Keep append-only completion records in sync for compatibility/migrations.
+      await this.lessonCompletionModel.findOneAndUpdate(
+        {
+          enrollmentId: new Types.ObjectId(enrollmentId),
+          lessonIndex,
+          repeatGeneration: generation,
+        },
+        {
+          $setOnInsert: {
+            enrollmentId: new Types.ObjectId(enrollmentId),
+            studentId: enrollment.studentId,
+            moduleId: (enrollment.moduleId as any)._id ?? enrollment.moduleId,
+            lessonIndex,
+            repeatGeneration: generation,
+            completedAt,
+          },
+        },
+        { upsert: true, new: false },
+      );
+
+      // Sync mutable lessonProgress completion flag used by the progress endpoint.
+      lessonProgress.isCompleted = true;
+      lessonProgress.completedAt = completedAt as any;
+      setFields[`lessonProgress.${lpIndex}.isCompleted`] = true;
+      setFields[`lessonProgress.${lpIndex}.completedAt`] = completedAt;
+
+      const completedLessonsCount = enrollment.lessonProgress.filter((lp) => lp.isCompleted).length;
+      const newProgress =
+        enrollment.totalLessons > 0
+          ? Math.min(100, Math.round((completedLessonsCount / enrollment.totalLessons) * 100))
+          : 0;
+
+      setFields.completedLessons = completedLessonsCount;
+      setFields.progress = newProgress;
+    }
+
     await this.enrollmentModel.updateOne(slideProgressFilter, { $set: setFields });
 
-    return { enrollment, slideCompleted, lessonUnlocked };
+    return { enrollment, slideCompleted, lessonUnlocked, lessonAutoCompleted };
   }
 
   // Complete lesson
@@ -609,12 +920,20 @@ export class ModuleEnrollmentsService {
       );
     }
 
-    // Normalise QuizQuestion fields (question/answer) to the shape gradeAssessment expects (text/correctAnswer)
-    const normalizedQuestions = (lesson.assessmentQuiz || []).map((q: any) => ({
-      ...q,
-      text: q.text || q.question,
-      correctAnswer: q.correctAnswer || q.answer,
-    }));
+    // Normalise QuizQuestion fields — use .toObject() to get a plain JS object
+    // (Mongoose subdocuments don't spread cleanly: arrays like `options` get lost with { ...q })
+    const normalizedQuestions = (lesson.assessmentQuiz || []).map((q: any) => {
+      const plain = typeof q.toObject === 'function' ? q.toObject() : { ...q };
+      const answerKey =
+        (plain.correctAnswer && plain.correctAnswer.toString().trim()) ||
+        (plain.answer && plain.answer.toString().trim()) ||
+        '';
+      console.log(
+        `[normalizeQ] Q index | type="${plain.type ?? 'MISSING'}" | answer="${plain.answer ?? 'MISSING'}" | answerKey="${answerKey}" | options:`,
+        plain.options,
+      );
+      return { ...plain, text: plain.text || plain.question, correctAnswer: answerKey };
+    });
 
     const { score, results, passed } = this.gradeAssessment(
       normalizedQuestions,
@@ -625,6 +944,20 @@ export class ModuleEnrollmentsService {
     lessonProgress.assessmentAttempts++;
     lessonProgress.lastScore = score;
     lessonProgress.assessmentPassed = passed;
+
+    // Always persist the student's last submitted answers for quiz review mode.
+    // On pass: these are the winning answers shown when revisiting the lesson.
+    // On fail: these are available for debugging/review before retry.
+    const answersMap: Record<string, string> = {};
+    submitDto.answers.forEach((a) => {
+      answersMap[String(a.questionIndex)] = String(a.answer);
+    });
+    lessonProgress.lastAnswers = answersMap;
+    // Mixed (Object) fields aren't auto-tracked by Mongoose — must mark as modified
+    enrollment.markModified('lessonProgress');
+    console.log(
+      `[submitLessonAssessment] Saved lastAnswers | lesson=${lessonIndex} | passed=${passed} | answersCount=${Object.keys(answersMap).length}`,
+    );
 
     let lessonResetRequired = false;
     let remainingAttempts: number | undefined;
@@ -918,15 +1251,11 @@ export class ModuleEnrollmentsService {
         enrollment.requiresModuleRepeat = true;
         enrollment.moduleRepeatCount = (enrollment.moduleRepeatCount || 0) + 1;
 
-        // Reset all lesson progress so student must redo the module
-        enrollment.lessonProgress = enrollment.lessonProgress.map((lp) => ({
-          ...lp,
-          isCompleted: false,
-          completedAt: undefined,
-          assessmentAttempts: 0,
-          assessmentPassed: false,
-          lastScore: 0,
-        })) as any;
+        // NEW: Increment the generation counter so the next pass of lesson
+        // completions are written as fresh LessonCompletion records.
+        // Old completion records are PRESERVED in the DB — nothing is deleted.
+        // The student's history is intact; only the current generation changes.
+        enrollment.moduleRepeatGeneration = (enrollment.moduleRepeatGeneration ?? 0) + 1;
         enrollment.completedLessons = 0;
         enrollment.progress = 0;
         // Reset attempts — they get a fresh set after completing the module
@@ -1313,7 +1642,7 @@ export class ModuleEnrollmentsService {
       const question = questions[i];
       const answer = answers.find((a) => a.questionIndex === i);
 
-      totalPoints += question.points;
+      totalPoints += question.points > 0 ? question.points : 1;
 
       const result: any = {
         questionIndex: i,
@@ -1324,20 +1653,51 @@ export class ModuleEnrollmentsService {
         pointsEarned: 0,
       };
 
-      // Auto-grade multiple choice and true-false
-      if (
-        question.type === 'multiple-choice' ||
-        question.type === 'true-false'
-      ) {
-        result.correctAnswer = question.correctAnswer;
+      // Grade by data shape, not by `type` field (type may be missing in older data).
+      // A question is auto-gradable when it has an answer key AND either:
+      //   • an options array  → multiple-choice
+      //   • a True/False answer with no options → true-false
+      const rawCorrect: string = (question.correctAnswer || question.answer || '').toString().trim();
+      // Exclude all-empty-string arrays (true-false questions often have ['','','',''])
+      const hasOptions = Array.isArray(question.options) && question.options.some((o: string) => o && o.trim() !== '');
+      const isTrueFalse =
+        !hasOptions &&
+        ['true', 'false'].includes(rawCorrect.toLowerCase());
+      const isAutoGradable = (hasOptions || isTrueFalse) && rawCorrect !== '';
+
+      if (isAutoGradable) {
+        // Build the resolved options list
+        const options: string[] = hasOptions
+          ? question.options
+          : ['True', 'False'];
+
+        // Correct answer may be stored as an index ("0") or as the full option text.
+        const correctIdx = Number(rawCorrect);
+        const resolvedCorrect =
+          !isNaN(correctIdx) &&
+          Number.isInteger(correctIdx) &&
+          correctIdx >= 0 &&
+          correctIdx < options.length
+            ? options[correctIdx]
+            : rawCorrect;
+
+        const studentAnswer = (answer?.answer ?? '').trim().toLowerCase();
         const isCorrect =
-          answer?.answer?.toLowerCase() ===
-          question.correctAnswer?.toLowerCase();
+          studentAnswer === resolvedCorrect.trim().toLowerCase();
+
+        console.log(
+          `[gradeAssessment] Q${i} | type="${question.type ?? 'no-type'}" | student="${answer?.answer}" | correct="${resolvedCorrect}" | raw="${rawCorrect}" | isCorrect=${isCorrect}`,
+        );
+
+        result.correctAnswer = resolvedCorrect;
         result.isCorrect = isCorrect;
-        result.pointsEarned = isCorrect ? question.points : 0;
+        result.pointsEarned = isCorrect ? (question.points || 1) : 0;
         result.explanation = question.explanation;
-      } else if (question.type === 'essay') {
-        // Mark for manual grading or AI grading
+      } else {
+        // Essay / short-answer / no answer key → manual grading
+        console.log(
+          `[gradeAssessment] Q${i} | type="${question.type ?? 'no-type'}" | no answer key or essay — manual grading, scored 0`,
+        );
         result.isCorrect = false;
         result.pointsEarned = 0;
       }

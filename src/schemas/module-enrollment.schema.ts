@@ -49,6 +49,10 @@ export class LessonProgress {
   @Prop({ default: 0 })
   completedSlides: number;
 
+  // Last slide the student viewed in this lesson (for resume)
+  @Prop({ default: 0 })
+  lastAccessedSlide: number;
+
   // If lesson has assessment
   @Prop({ default: 0 })
   assessmentAttempts: number;
@@ -58,6 +62,10 @@ export class LessonProgress {
 
   @Prop({ default: 0 })
   lastScore: number;
+
+  // Student's last submitted answers for quiz review (keyed by question index string)
+  @Prop({ type: Object, default: null })
+  lastAnswers?: Record<string, string>;
 }
 
 // Assessment result per attempt
@@ -174,6 +182,15 @@ export class ModuleEnrollment extends Document {
   // How many times the student has been forced to repeat the module
   @Prop({ default: 0 })
   moduleRepeatCount: number;
+
+  /**
+   * Incremented each time a module repeat is triggered (final assessment
+   * max attempts exhausted). LessonCompletion records are scoped to this
+   * generation so old completions are never deleted — they become part of
+   * the student's history while the current pass starts fresh.
+   */
+  @Prop({ default: 0 })
+  moduleRepeatGeneration: number;
 
   // Completion status
   @Prop({ default: false })

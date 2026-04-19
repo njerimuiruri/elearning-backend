@@ -7,21 +7,17 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor(private configService: ConfigService) {
-    // Configure email transporter
-    // For production, use real SMTP service (Gmail, SendGrid, etc.)
-    // For development, you can use Mailtrap or similar
+   
     const smtpPort = parseInt(this.configService.get('SMTP_PORT') || '587');
     this.transporter = nodemailer.createTransport({
       host: this.configService.get('SMTP_HOST') || 'smtp.gmail.com',
       port: smtpPort,
-      // port 465 → SSL; port 587 → STARTTLS (secure must be false)
       secure: smtpPort === 465,
       auth: {
         user: this.configService.get('SMTP_USER'),
         pass: this.configService.get('SMTP_PASS'),
       },
       tls: {
-        // Accept self-signed certs in dev; in prod Gmail certs are valid anyway
         rejectUnauthorized: false,
       },
       // Fail fast if SMTP port is blocked rather than hanging indefinitely
@@ -565,6 +561,29 @@ E-Learning Platform Team
       console.error('Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
+  }
+
+  async sendPasswordResetOtpEmail(email: string, name: string, otp: string) {
+    const subject = 'Your Password Reset Code – ARIN E-Learning';
+    const htmlContent = `
+      <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#f9fafb;border-radius:12px;">
+        <h2 style="color:#021d49;margin-bottom:8px;">Password Reset</h2>
+        <p style="color:#374151;">Hi ${name},</p>
+        <p style="color:#374151;">Use the verification code below to reset your password. It expires in <strong>10 minutes</strong>.</p>
+        <div style="text-align:center;margin:32px 0;">
+          <span style="display:inline-block;font-size:36px;font-weight:900;letter-spacing:12px;color:#021d49;background:#e0e7ff;padding:16px 32px;border-radius:12px;">${otp}</span>
+        </div>
+        <p style="color:#6b7280;font-size:13px;">If you did not request a password reset, you can safely ignore this email.</p>
+        <p style="color:#6b7280;font-size:13px;">— ARIN E-Learning Platform</p>
+      </div>
+    `;
+    await this.transporter.sendMail({
+      from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+      to: email,
+      subject,
+      html: htmlContent,
+      text: `Your password reset code is: ${otp}\nIt expires in 10 minutes.`,
+    });
   }
 
   async sendCourseEnrollmentEmail(
@@ -2232,7 +2251,7 @@ The Arin Publishing Academy Team
     `.trim();
 
     try {
-      await this.transporter.sendMail({
+   const Emailsent  =  await this.transporter.sendMail({
         from:
           this.configService.get('SMTP_FROM_EMAIL') ||
           'noreply@arin-africa.org',
@@ -2241,6 +2260,7 @@ The Arin Publishing Academy Team
         html: htmlContent,
         text: plainText,
       });
+            console.log(Emailsent)
       console.log(`[EmailService] Fellow invitation sent successfully to ${email}`);
       return { success: true, message: `Fellow invitation sent to ${email}` };
     } catch (error: any) {
@@ -2455,6 +2475,60 @@ The Arin Publishing Academy Team
       success: false,
       message: lastError?.message || 'Failed to send email',
     };
+  }
+
+  async sendNewLessonNotification(
+    email: string,
+    studentName: string,
+    moduleName: string,
+    lessonTitle: string,
+    lessonNumber: number,
+    loginUrl: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const subject = `New Lesson Available: ${moduleName}`;
+    const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#021d49;padding:24px;border-radius:8px 8px 0 0"><h2 style="color:#fff;margin:0">New Lesson Available</h2></div>
+      <div style="background:#f9fafb;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb">
+        <p style="color:#374151">Hi ${studentName},</p>
+        <p style="color:#374151">A new lesson has been added to <strong>${moduleName}</strong>:</p>
+        <div style="background:#fff;border:1px solid #d1fae5;border-radius:8px;padding:16px;margin:16px 0">
+          <p style="margin:0;font-size:16px;font-weight:bold;color:#065f46">Lesson ${lessonNumber}: ${lessonTitle}</p>
+        </div>
+        <p style="color:#374151">Log in to continue your learning journey.</p>
+        <a href="${loginUrl}" style="display:inline-block;background:#021d49;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Continue Learning</a>
+        <p style="color:#6b7280;font-size:13px;margin-top:24px">ARIN E-Learning Platform</p>
+      </div></div>`;
+    try {
+      await this.transporter.sendMail({ from: this.configService.get('SMTP_FROM') || 'noreply@arin.org', to: email, subject, html });
+      return { success: true, message: `New lesson notification sent to ${email}` };
+    } catch (error: any) {
+      console.error('[EmailService] sendNewLessonNotification FAILED:', error.message);
+      return { success: false, message: error.message };
+    }
+  }
+
+  async sendContentFinalizedNotification(
+    email: string,
+    studentName: string,
+    moduleName: string,
+    loginUrl: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const subject = `Final Assessment Unlocked: ${moduleName}`;
+    const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#021d49;padding:24px;border-radius:8px 8px 0 0"><h2 style="color:#fff;margin:0">Final Assessment Unlocked 🎉</h2></div>
+      <div style="background:#f9fafb;padding:24px;border-radius:0 0 8px 8px;border:1px solid #e5e7eb">
+        <p style="color:#374151">Hi ${studentName},</p>
+        <p style="color:#374151">All lessons for <strong>${moduleName}</strong> are now available. Complete all lessons to unlock the Final Assessment.</p>
+        <a href="${loginUrl}" style="display:inline-block;background:#021d49;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Continue Learning</a>
+        <p style="color:#6b7280;font-size:13px;margin-top:24px">ARIN E-Learning Platform</p>
+      </div></div>`;
+    try {
+      await this.transporter.sendMail({ from: this.configService.get('SMTP_FROM') || 'noreply@arin.org', to: email, subject, html });
+      return { success: true, message: `Content finalized notification sent to ${email}` };
+    } catch (error: any) {
+      console.error('[EmailService] sendContentFinalizedNotification FAILED:', error.message);
+      return { success: false, message: error.message };
+    }
   }
 
   /** Strip HTML tags to produce a plain-text fallback for email clients. */

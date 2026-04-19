@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bullmq';
 import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -28,6 +29,7 @@ import { BulkMessagingModule } from './bulk-messaging/bulk-messaging.module';
 import { ModuleRatingsModule } from './module-ratings/module-ratings.module';
 import { DraftsModule } from './drafts/drafts.module';
 import { AdmissionLettersModule } from './admission-letters/admission-letters.module';
+import { EmailQueueModule } from './email-queue/email-queue.module';
 
 @Module({
   imports: [
@@ -63,6 +65,21 @@ import { AdmissionLettersModule } from './admission-letters/admission-letters.mo
         };
       },
     }),
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const isProd = config.get<string>('NODE_ENV') === 'production';
+        return {
+          connection: {
+            host: config.get<string>('REDIS_HOST', 'localhost'),
+            port: config.get<number>('REDIS_PORT', 6379),
+            password: config.get<string>('REDIS_PASSWORD') || undefined,
+            // Upstash requires TLS in production
+            tls: isProd ? {} : undefined,
+          },
+        };
+      },
+    }),
     ScheduleModule.forRoot(),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads'),
@@ -90,6 +107,7 @@ import { AdmissionLettersModule } from './admission-letters/admission-letters.mo
     ModuleRatingsModule,
     DraftsModule,
     AdmissionLettersModule,
+    EmailQueueModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -37,6 +37,8 @@ export interface LessonSummaryItem {
   attempts: number;
   score: number;
   canAccess: boolean;
+  lastAccessedSlide: number;
+  lastAnswers?: Record<string, string>;
 }
 
 @Injectable()
@@ -109,6 +111,8 @@ export class LessonProgressionService {
     retriesRemaining: number;
   }> {
     try {
+      console.log(`[QUIZ_EVALUATION_START] Enrollment: ${enrollmentId}, Lesson Index: ${lessonIndex}, Module: ${moduleId}`);
+      
       const enrollment = await this.enrollmentModel.findById(enrollmentId);
       if (!enrollment) {
         throw new NotFoundException('Enrollment not found');
@@ -134,12 +138,32 @@ export class LessonProgressionService {
 
       const evaluation = this.gradeQuiz(quiz, studentAnswers, passingScore);
 
-      let lessonProgress = enrollment.lessonProgress?.find(
+      if (!enrollment.lessonProgress) {
+        enrollment.lessonProgress = [];
+      }
+
+      let lessonProgress = enrollment.lessonProgress.find(
         (lp) => lp.lessonIndex === lessonIndex,
       );
 
+      // Guard: If the quiz was already passed, do not process attempts or update score
+      if (lessonProgress?.assessmentPassed) {
+        console.log(`[QUIZ_ALREADY_PASSED] Lesson ${lessonIndex} is already completed. Returning stored evaluation.`);
+        
+        // Reconstruct evaluation from stored answers if available
+        const storedAnswers = (lessonProgress as any).lastAnswers || studentAnswers;
+        const storedEvaluation = this.gradeQuiz(quiz, storedAnswers, passingScore);
+        
+        return {
+          evaluation: storedEvaluation,
+          lessonNowCompleted: true,
+          canRetry: false,
+          retriesRemaining: Math.max(0, maxAttempts - lessonProgress.assessmentAttempts),
+        };
+      }
+
       if (!lessonProgress) {
-        lessonProgress = {
+        const newLessonProgress = {
           lessonIndex,
           isCompleted: false,
           assessmentAttempts: 0,
@@ -147,15 +171,18 @@ export class LessonProgressionService {
           lastScore: 0,
           slideProgress: [],
           completedSlides: 0,
+          lastAccessedSlide: 0,
         };
-        if (!enrollment.lessonProgress) {
-          enrollment.lessonProgress = [];
-        }
-        enrollment.lessonProgress.push(lessonProgress);
+        enrollment.lessonProgress.push(newLessonProgress);
+        lessonProgress = newLessonProgress;
       }
 
       lessonProgress.assessmentAttempts += 1;
       lessonProgress.lastScore = evaluation.percentage;
+      
+      // Persist student answers for later review (schema field, persisted to DB)
+      (lessonProgress as any).lastAnswers = studentAnswers;
+      console.log(`[QUIZ_SAVE_ANSWERS] Saving lastAnswers for Lesson ${lessonIndex}:`, JSON.stringify(studentAnswers));
 
       const passed = evaluation.percentage >= passingScore;
       const canRetry =
@@ -167,6 +194,7 @@ export class LessonProgressionService {
         lessonProgress.completedAt = new Date();
       }
 
+      console.log(`[QUIZ_SAVE_TO_BACKEND] Saving results: Passed=${passed}, Score=${evaluation.percentage}%, Attempts Used=${lessonProgress.assessmentAttempts}`);
       await enrollment.save();
 
       return {
@@ -187,17 +215,28 @@ export class LessonProgressionService {
     lessonIndex: number,
   ): Promise<void> {
     try {
+      console.log(`[markLessonCompleted] Attempting to complete Lesson ${lessonIndex} for Enrollment ${enrollmentId}`);
       const enrollment = await this.enrollmentModel.findById(enrollmentId);
       if (!enrollment) {
         throw new NotFoundException('Enrollment not found');
       }
 
-      let lessonProgress = enrollment.lessonProgress?.find(
+      if (!enrollment.lessonProgress) {
+        enrollment.lessonProgress = [];
+      }
+
+      let lessonProgress = enrollment.lessonProgress.find(
         (lp) => lp.lessonIndex === lessonIndex,
       );
 
+      // Guard: If already completed, no need to update
+      if (lessonProgress?.isCompleted) {
+        console.log(`[LESSON_STATUS_CHECK] Lesson ${lessonIndex} is already marked as completed. Skipping update.`);
+        return;
+      }
+
       if (!lessonProgress) {
-        lessonProgress = {
+        const newLessonProgress = {
           lessonIndex,
           isCompleted: false,
           assessmentAttempts: 0,
@@ -205,20 +244,64 @@ export class LessonProgressionService {
           lastScore: 0,
           slideProgress: [],
           completedSlides: 0,
+          lastAccessedSlide: 0,
         };
-        if (!enrollment.lessonProgress) {
-          enrollment.lessonProgress = [];
-        }
-        enrollment.lessonProgress.push(lessonProgress);
+        enrollment.lessonProgress.push(newLessonProgress);
+        lessonProgress = newLessonProgress;
       }
 
       lessonProgress.isCompleted = true;
       lessonProgress.completedAt = new Date();
 
+      console.log(`[LESSON_COMPLETION_SAVE] Marking Lesson ${lessonIndex} as permanently DONE for Enrollment ${enrollmentId}`);
       await enrollment.save();
     } catch (error) {
       throw new BadRequestException(
         `Failed to mark lesson completed: ${error.message}`,
+      );
+    }
+  }
+
+  async updateLessonSlideProgress(
+    enrollmentId: string,
+    lessonIndex: number,
+    slideIndex: number,
+  ): Promise<void> {
+    try {
+      console.log(`[SLIDE_PROGRESS_SAVE] Saving Slide Index: ${slideIndex} for Lesson: ${lessonIndex}, Enrollment: ${enrollmentId}`);
+      const enrollment = await this.enrollmentModel.findById(enrollmentId);
+      if (!enrollment) {
+        throw new NotFoundException('Enrollment not found');
+      }
+
+      if (!enrollment.lessonProgress) {
+        enrollment.lessonProgress = [];
+      }
+
+      let lessonProgress = enrollment.lessonProgress.find(
+        (lp) => lp.lessonIndex === lessonIndex,
+      );
+
+      if (!lessonProgress) {
+        const newLessonProgress = {
+          lessonIndex,
+          isCompleted: false,
+          assessmentAttempts: 0,
+          assessmentPassed: false,
+          lastScore: 0,
+          slideProgress: [],
+          completedSlides: 0,
+          lastAccessedSlide: slideIndex,
+        };
+        enrollment.lessonProgress.push(newLessonProgress);
+      } else {
+        lessonProgress.lastAccessedSlide = slideIndex;
+      }
+
+      await enrollment.save();
+    } catch (error) {
+      throw new BadRequestException(
+        `Failed to update slide progress: ${error.message}`,
       );
     }
   }
@@ -228,6 +311,7 @@ export class LessonProgressionService {
     totalLessons: number,
   ): Promise<{
     lessonIndex: number | null;
+    lastAccessedSlide: number;
     reason: string;
   }> {
     try {
@@ -236,20 +320,32 @@ export class LessonProgressionService {
         throw new NotFoundException('Enrollment not found');
       }
 
+      console.log(`[RESUME_POINT_CALCULATION] Checking progress for Enrollment: ${enrollmentId}`);
+
       for (let i = 0; i < totalLessons; i++) {
         const isCompleted = this.isLessonCompleted(enrollment, i);
         const isAccessible = await this.canAccessLesson(enrollmentId, i);
 
         if (!isCompleted && isAccessible.canAccess) {
-          return {
+          const lessonProgress = enrollment.lessonProgress?.find(
+            (lp) => lp.lessonIndex === i,
+          );
+          
+          const resumePoint = {
             lessonIndex: i,
-            reason: `Continue with Lesson ${i + 1}`,
+            lastAccessedSlide: lessonProgress?.lastAccessedSlide ?? 0,
+            reason: `Resume at Lesson ${i + 1}, Slide ${lessonProgress?.lastAccessedSlide ?? 0}`,
           };
+          
+          console.log(`[RESUME_POINT_FOUND] Student should resume exactly at:`, resumePoint);
+          return resumePoint;
         }
       }
 
+      console.log(`[RESUME_POINT_NONE] All lessons are completed.`);
       return {
         lessonIndex: null,
+        lastAccessedSlide: 0,
         reason: 'All lessons completed',
       };
     } catch (error) {
@@ -277,6 +373,8 @@ export class LessonProgressionService {
       let completedLessons = 0;
       const lessons: LessonSummaryItem[] = [];
 
+      console.log(`[DATA_RETRIEVAL_LOGIN] Fetching full progression summary for Enrollment ${enrollmentId}`);
+
       for (let i = 0; i < totalLessons; i++) {
         const isCompleted = this.isLessonCompleted(enrollment, i);
         const access = await this.canAccessLesson(enrollmentId, i);
@@ -293,8 +391,13 @@ export class LessonProgressionService {
           attempts: lessonProgress?.assessmentAttempts ?? 0,
           score: lessonProgress?.lastScore ?? 0,
           canAccess: access.canAccess,
+          lastAccessedSlide: lessonProgress?.lastAccessedSlide ?? 0,
+          lastAnswers: (lessonProgress as any)?.lastAnswers,
         });
       }
+
+      const completedList = lessons.filter(l => l.isCompleted).map(l => l.lessonIndex);
+      console.log(`[PROGRESS_RETRIEVE_SUCCESS] Completed Lessons: [${completedList.join(', ')}], Progress: ${Math.round((completedLessons / totalLessons) * 100)}%`);
 
       return {
         completedLessons,
@@ -325,6 +428,12 @@ export class LessonProgressionService {
         (lp) => lp.lessonIndex === lessonIndex,
       );
 
+      // "Never reset or unmarked under any circumstance" - if it's completed, we block reset.
+      if (lessonProgress?.isCompleted) {
+        console.warn(`[PROGRESS_RESET_DENIED] Attempted to reset already completed Lesson ${lessonIndex}. Operation blocked per integrity rules.`);
+        return;
+      }
+
       if (lessonProgress) {
         lessonProgress.isCompleted = false;
         lessonProgress.assessmentPassed = false;
@@ -335,6 +444,7 @@ export class LessonProgressionService {
         lessonProgress.completedSlides = 0;
       }
 
+      console.log(`[PROGRESS_RESET_SAVE] Resetting progress for incomplete Lesson ${lessonIndex}`);
       await enrollment.save();
     } catch (error) {
       throw new BadRequestException(

@@ -7,6 +7,10 @@ import {
   ModuleEnrollmentSchema,
 } from '../schemas/module-enrollment.schema';
 import {
+  LessonCompletion,
+  LessonCompletionSchema,
+} from '../schemas/lesson-completion.schema';
+import {
   Module as ModuleSchema,
   ModuleSchema as ModuleSchemaDefinition,
 } from '../schemas/module.schema';
@@ -24,6 +28,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [
     MongooseModule.forFeature([
       { name: ModuleEnrollment.name, schema: ModuleEnrollmentSchema },
+      { name: LessonCompletion.name, schema: LessonCompletionSchema },
       { name: ModuleSchema.name, schema: ModuleSchemaDefinition },
       { name: ModuleCertificate.name, schema: ModuleCertificateSchema },
       { name: Category.name, schema: CategorySchema },

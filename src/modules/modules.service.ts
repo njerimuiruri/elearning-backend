@@ -333,7 +333,107 @@ export class ModulesService {
     module.lastEditedBy = new Types.ObjectId(instructorId);
     module.lastEditedAt = new Date();
 
-    return await module.save();
+    const saved = await module.save();
+
+    // Notify all enrolled students that a new lesson is available (fire-and-forget)
+    this.notifyEnrolledStudentsNewLesson(
+      moduleId,
+      module.title,
+      lesson.title || `Lesson ${saved.lessons.length}`,
+      saved.lessons.length,
+    ).catch((err) => console.error('[addModuleLesson] Email notification failed:', err));
+
+    return saved;
+  }
+
+  /** Fire-and-forget: email all active enrollments for this module about a new lesson. */
+  private async notifyEnrolledStudentsNewLesson(
+    moduleId: string,
+    moduleName: string,
+    lessonTitle: string,
+    lessonNumber: number,
+  ): Promise<void> {
+    const enrollments = await this.moduleEnrollmentModel
+      .find({ moduleId: new Types.ObjectId(moduleId) })
+      .populate<{ studentId: { firstName: string; lastName: string; email: string } }>(
+        'studentId',
+        'firstName lastName email',
+      )
+      .lean();
+
+    const loginUrl = process.env.FRONTEND_URL
+      ? `${process.env.FRONTEND_URL}/login`
+      : 'https://elearning.arin-africa.org/login';
+
+    for (const enrollment of enrollments) {
+      const student = enrollment.studentId as any;
+      if (!student?.email) continue;
+      const studentName = `${student.firstName || ''} ${student.lastName || ''}`.trim() || 'Student';
+      try {
+        await this.emailService.sendNewLessonNotification(
+          student.email,
+          studentName,
+          moduleName,
+          lessonTitle,
+          lessonNumber,
+          loginUrl,
+        );
+        console.log(`[addModuleLesson] Notified ${student.email} of new lesson`);
+      } catch (err: any) {
+        console.error(`[addModuleLesson] Failed to notify ${student.email}:`, err.message);
+      }
+    }
+  }
+
+  /** Mark module content as finalized — unlocks Final Assessment for enrolled students. */
+  async finalizeContent(moduleId: string, actorId: string): Promise<Module> {
+    const module = await this.moduleModel.findById(moduleId);
+    if (!module) throw new NotFoundException('Module not found');
+
+    module.isContentFinalized = true;
+    module.lastEditedBy = new Types.ObjectId(actorId);
+    module.lastEditedAt = new Date();
+    const saved = await module.save();
+
+    // Notify enrolled students that the final assessment is now unlocked (fire-and-forget)
+    this.notifyEnrolledStudentsContentFinalized(moduleId, module.title).catch((err) =>
+      console.error('[finalizeContent] Email notification failed:', err),
+    );
+
+    return saved;
+  }
+
+  private async notifyEnrolledStudentsContentFinalized(
+    moduleId: string,
+    moduleName: string,
+  ): Promise<void> {
+    const enrollments = await this.moduleEnrollmentModel
+      .find({ moduleId: new Types.ObjectId(moduleId) })
+      .populate<{ studentId: { firstName: string; lastName: string; email: string } }>(
+        'studentId',
+        'firstName lastName email',
+      )
+      .lean();
+
+    const loginUrl = process.env.FRONTEND_URL
+      ? `${process.env.FRONTEND_URL}/login`
+      : 'https://elearning.arin-africa.org/login';
+
+    for (const enrollment of enrollments) {
+      const student = enrollment.studentId as any;
+      if (!student?.email) continue;
+      const studentName = `${student.firstName || ''} ${student.lastName || ''}`.trim() || 'Student';
+      try {
+        await this.emailService.sendContentFinalizedNotification(
+          student.email,
+          studentName,
+          moduleName,
+          loginUrl,
+        );
+      } catch (err: any) {
+        console.error(`[finalizeContent] Failed to notify ${student.email}:`, err.message);
+      }
+    }
   }
 
   async updateModuleLesson(

@@ -460,6 +460,10 @@ export class CreateModuleDto {
   @IsString({ each: true })
   targetAudience?: string[];
 
+  @IsOptional()
+  @IsBoolean()
+  isContentFinalized?: boolean;
+
   // ── Admin-only: instructor assignment ─────────────────────────────────────
   /** ID of an existing instructor to assign as module owner (admin use only) */
   @IsOptional()

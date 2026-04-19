@@ -78,7 +78,7 @@ export class LessonProgressionController {
   async getNextIncompleteLesson(
     @Param('enrollmentId') enrollmentId: string,
     @Param('totalLessons') totalLessons: string,
-  ): Promise<{ lessonIndex: number | null; reason: string }> {
+  ): Promise<{ lessonIndex: number | null; lastAccessedSlide: number; reason: string }> {
     const total = parseInt(totalLessons, 10);
     if (isNaN(total)) {
       throw new BadRequestException('Invalid total lessons count');
@@ -114,5 +114,24 @@ export class LessonProgressionController {
     }
     await this.lessonProgressionService.resetLessonProgress(enrollmentId, index);
     return { success: true, message: 'Lesson progress reset' };
+  }
+
+  @Post(':enrollmentId/lesson/:lessonIndex/slide/:slideIndex')
+  async updateSlideProgress(
+    @Param('enrollmentId') enrollmentId: string,
+    @Param('lessonIndex') lessonIndex: string,
+    @Param('slideIndex') slideIndex: string,
+  ): Promise<{ success: boolean }> {
+    const lIndex = parseInt(lessonIndex, 10);
+    const sIndex = parseInt(slideIndex, 10);
+    if (isNaN(lIndex) || isNaN(sIndex)) {
+      throw new BadRequestException('Invalid indices');
+    }
+    await this.lessonProgressionService.updateLessonSlideProgress(
+      enrollmentId,
+      lIndex,
+      sIndex,
+    );
+    return { success: true };
   }
 }

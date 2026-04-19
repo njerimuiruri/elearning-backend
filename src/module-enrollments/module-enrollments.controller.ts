@@ -23,13 +23,23 @@ import { UserRole } from '../schemas/user.schema';
 @Controller('module-enrollments')
 export class ModuleEnrollmentsController {
   constructor(private readonly enrollmentsService: ModuleEnrollmentsService) {}
+  private getUserId(req: any): string {
+    const userId = req?.user?.id ?? req?.user?._id?.toString?.() ?? req?.user?._id;
+    if (!userId) {
+      throw new Error('Authenticated user id is missing on request');
+    }
+    return String(userId);
+  }
 
   // Enroll in module
   @Post('modules/:moduleId/enroll')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.STUDENT)
   async enrollInModule(@Param('moduleId') moduleId: string, @Request() req) {
-    return await this.enrollmentsService.enrollInModule(req.user.id, moduleId);
+    return await this.enrollmentsService.enrollInModule(
+      this.getUserId(req),
+      moduleId,
+    );
   }
 
   // Get student's enrollments
@@ -37,7 +47,9 @@ export class ModuleEnrollmentsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.STUDENT)
   async getMyEnrollments(@Request() req) {
-    return await this.enrollmentsService.getStudentEnrollments(req.user.id);
+    return await this.enrollmentsService.getStudentEnrollments(
+      this.getUserId(req),
+    );
   }
 
   // Get enrollment by student and module
@@ -48,7 +60,7 @@ export class ModuleEnrollmentsController {
     @Request() req,
   ) {
     return await this.enrollmentsService.getEnrollmentByStudentAndModule(
-      req.user.id,
+      this.getUserId(req),
       moduleId,
     );
   }
@@ -67,7 +79,7 @@ export class ModuleEnrollmentsController {
     @Query('status') status?: 'pending' | 'passed' | 'failed' | 'all',
   ) {
     const data = await this.enrollmentsService.getInstructorSubmissions(
-      req.user.id,
+      this.getUserId(req),
       { moduleId, submissionType, status },
     );
     return { success: true, data };
@@ -82,7 +94,7 @@ export class ModuleEnrollmentsController {
   @Roles(UserRole.INSTRUCTOR)
   async getInstructorModules(@Request() req) {
     const data = await this.enrollmentsService.getInstructorModulesList(
-      req.user.id,
+      this.getUserId(req),
     );
     return { success: true, data };
   }
@@ -113,17 +125,37 @@ export class ModuleEnrollmentsController {
     );
   }
 
-  // Complete lesson
+  // ── NEW: Get fresh, server-derived progress (single source of truth) ──────
+  // Returns lessonStates[], nextLessonIndex, completedLessons, progress%, etc.
+  // Frontend should call this on mount and after every mutation.
+  @Get(':enrollmentId/progress')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.STUDENT)
+  async getEnrollmentProgress(
+    @Param('enrollmentId') enrollmentId: string,
+    @Request() req,
+  ) {
+    return await this.enrollmentsService.getEnrollmentProgress(
+      enrollmentId,
+      this.getUserId(req),
+    );
+  }
+
+  // ── NEW: Idempotent lesson completion (replaces old completeLesson) ────────
+  // Safe to call multiple times for the same lesson — second call is a no-op.
+  // Returns fresh progress state (same shape as GET /progress).
   @Put(':enrollmentId/lessons/:lessonIndex/complete')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.STUDENT)
   async completeLesson(
     @Param('enrollmentId') enrollmentId: string,
     @Param('lessonIndex') lessonIndex: string,
+    @Request() req,
   ) {
-    return await this.enrollmentsService.completeLesson(
+    return await this.enrollmentsService.markLessonCompleted(
       enrollmentId,
       parseInt(lessonIndex),
+      this.getUserId(req),
     );
   }
 
@@ -184,7 +216,7 @@ export class ModuleEnrollmentsController {
   ) {
     return await this.enrollmentsService.gradeEssayAssessment(
       enrollmentId,
-      req.user.id,
+      this.getUserId(req),
       body.pass,
       body.feedback,
       body.score,

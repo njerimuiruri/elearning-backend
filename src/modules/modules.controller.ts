@@ -114,6 +114,14 @@ export class ModulesController {
     );
   }
 
+  // ── Finalize content (unlocks Final Assessment for students) ─────────────
+  @Put(':id/finalize')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async finalizeContent(@Param('id') id: string, @Request() req) {
+    return await this.modulesService.finalizeContent(id, req.user.id);
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // DIRECT LESSON ENDPOINTS (Category → Module → Lesson)
   // ══════════════════════════════════════════════════════════════════════════

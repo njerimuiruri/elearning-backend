@@ -24,6 +24,7 @@
     "rebuild:indexes": "ts-node -r tsconfig-paths/register scripts/rebuild-indexes.ts"
   },
   "dependencies": {
+    "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
@@ -37,6 +38,7 @@
     "archiver": "^7.0.1",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
+    "bullmq": "^5.74.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "cloudinary": "^2.8.0",
@@ -44,6 +46,7 @@
     "docx": "^9.6.1",
     "dotenv": "^17.2.3",
     "google-auth-library": "^9.15.1",
+    "ioredis": "^5.10.1",
     "mongoose": "^8.20.2",
     "multer": "^2.0.2",
     "next-cloudinary": "^6.17.5",

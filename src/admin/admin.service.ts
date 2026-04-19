@@ -27,6 +27,7 @@ import {
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
 import { Category } from '../schemas/category.schema';
 import { EmailService } from '../common/services/email.service';
+import { EmailQueueService } from '../email-queue/email-queue.service';
 import { CreateModuleDto } from '../modules/dto/create-module.dto';
 import { UpdateModuleDto } from '../modules/dto/update-module.dto';
 
@@ -69,6 +70,7 @@ export class AdminService {
     private moduleEnrollmentModel: Model<ModuleEnrollment>,
     @InjectModel(Category.name) private categoryModel: Model<Category>,
     private emailService: EmailService,
+    private emailQueueService: EmailQueueService,
   ) {}
 
   // Helper method to log admin activities
@@ -1069,7 +1071,19 @@ export class AdminService {
       failed: 0,
       errors: [] as any[],
       fellows: [] as any[],
+      emailsQueued: 0,
     };
+
+    // Collect jobs to enqueue in a single Redis round-trip after all DB writes
+    const emailJobs: Array<{
+      userId: string;
+      email: string;
+      firstName: string;
+      temporaryPassword: string;
+      track?: string;
+      cohort?: string;
+      setupToken: string;
+    }> = [];
 
     for (const dto of fellowsData) {
       if (!dto.email) {
@@ -1131,28 +1145,16 @@ export class AdminService {
           token: crypto.createHash('sha256').update(rawSetupToken).digest('hex'),
         });
 
-        let emailSent = false;
         if (sendEmails) {
-          try {
-            const result = await this.emailService.sendFellowInvitationEmail(
-              dto.email,
-              dto.firstName || dto.fullName?.split(' ')[0] || 'Fellow',
-              temporaryPassword,
-              { track: dto.track, cohort: fellow.fellowData.cohort, setupToken: rawSetupToken },
-            );
-            
-            if (result?.success) {
-              emailSent = true;
-              await this.userModel.findByIdAndUpdate(fellow._id, {
-                invitationEmailSent: true,
-                invitationEmailSentAt: new Date(),
-              });
-            } else {
-              console.error(`Bulk invite email failed for ${dto.email}:`, result?.message);
-            }
-          } catch (e) {
-            console.error(`Failed to send invitation to ${dto.email}:`, (e as any).message);
-          }
+          emailJobs.push({
+            userId: (fellow._id as any).toString(),
+            email: dto.email,
+            firstName: dto.firstName || dto.fullName?.split(' ')[0] || 'Fellow',
+            temporaryPassword,
+            track: dto.track,
+            cohort: fellow.fellowData.cohort,
+            setupToken: rawSetupToken,
+          });
         }
 
         results.created++;
@@ -1161,9 +1163,8 @@ export class AdminService {
           firstName: fellow.firstName,
           lastName: fellow.lastName,
           email: fellow.email,
-          invitationEmailSent: emailSent,
-          // Only expose temporaryPassword when email was not sent (admin may need to share manually)
-          temporaryPassword: emailSent ? undefined : temporaryPassword,
+          // Password only exposed when emails are not being sent (admin shares manually)
+          temporaryPassword: sendEmails ? undefined : temporaryPassword,
         });
       } catch (err: any) {
         results.failed++;
@@ -1171,8 +1172,18 @@ export class AdminService {
       }
     }
 
+    // Enqueue all invitation emails in a single Redis call after DB writes finish
+    if (emailJobs.length > 0) {
+      await this.emailQueueService.enqueueBulkFellowInvitations(emailJobs);
+      results.emailsQueued = emailJobs.length;
+    }
+
+    const emailNote = sendEmails
+      ? ` ${results.emailsQueued} invitation email(s) queued for background delivery.`
+      : '';
+
     return {
-      message: `Bulk creation complete. ${results.created} created, ${results.failed} failed.`,
+      message: `Bulk creation complete. ${results.created} created, ${results.failed} failed.${emailNote}`,
       ...results,
     };
   }
@@ -1184,6 +1195,7 @@ export class AdminService {
       'lastName',
       'gender',
       'country',
+      'region',      // also stored directly on user so profile page reads it
       'phoneNumber',
       'isActive',
     ];
@@ -1344,6 +1356,12 @@ export class AdminService {
         pages: Math.ceil(total / limit),
       },
     };
+  }
+
+  async getFellowById(id: string) {
+    const fellow = await this.userModel.findById(id).select('-password').lean();
+    if (!fellow) throw new NotFoundException('Fellow not found');
+    return fellow;
   }
 
   async getFellowsAtRisk() {
@@ -2906,6 +2924,16 @@ export class AdminService {
     moduleDoc.lastEditedBy = new Types.ObjectId(adminId);
     moduleDoc.lastEditedAt = new Date();
 
+    return await moduleDoc.save();
+  }
+
+  // ── Finalize module content (admin, bypasses ownership check) ──────────────
+  async finalizeContentAsAdmin(moduleId: string, adminId: string): Promise<ModuleEntity> {
+    const moduleDoc = await this.moduleModel.findById(moduleId);
+    if (!moduleDoc) throw new NotFoundException('Module not found');
+    moduleDoc.isContentFinalized = true;
+    moduleDoc.lastEditedBy = new Types.ObjectId(adminId);
+    moduleDoc.lastEditedAt = new Date();
     return await moduleDoc.save();
   }
 
