@@ -269,7 +269,7 @@ export class AuthController {
         yearsOfExperience: user.yearsOfExperience,
         cvUrl: user.cvUrl,
         fullName: user.fullName,
-        region: (user as any).region,
+        region: user.region,
         fellowData: user.fellowData,
         totalPoints: user.totalPoints,
         currentStreakDays: user.currentStreakDays,
@@ -288,7 +288,6 @@ export class AuthController {
     @CurrentUser() user: User,
     @Body() updateData: Partial<User>,
   ) {
-    // Don't allow updating sensitive fields
     const allowedFields = [
       'fullName',
       'firstName',

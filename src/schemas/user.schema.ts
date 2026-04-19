@@ -92,6 +92,9 @@ export class User extends Document {
   country: string;
 
   @Prop({ default: null })
+  region: string;
+
+  @Prop({ default: null })
   gender: string;
 
   @Prop({ default: true })
