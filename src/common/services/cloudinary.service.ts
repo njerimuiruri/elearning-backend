@@ -56,7 +56,7 @@ export class CloudinaryService {
         {
           folder: 'elearning/resources',
           resource_type: 'raw',
-          public_id: fileName.replace(/\.[^/.]+$/, ''),
+          public_id: fileName,
         },
         (error, result) => {
           if (error) reject(error);
