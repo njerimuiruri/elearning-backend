@@ -69,6 +69,27 @@ export class CloudinaryService {
     });
   }
 
+  generateSignedUrl(cloudinaryUrl: string): string {
+    // URL format: https://res.cloudinary.com/{cloud}/raw/upload/v{ver}/{folder}/{public_id}
+    const match = cloudinaryUrl.match(/\/raw\/upload\/(?:v\d+\/)?(.+)$/);
+    if (!match) return cloudinaryUrl;
+
+    // For raw resources the extension IS part of the public_id — pass it as-is
+    const publicId = match[1];
+    const dotPos = publicId.lastIndexOf('.');
+    const format = dotPos !== -1 ? publicId.slice(dotPos + 1) : '';
+    const publicIdNoExt = dotPos !== -1 ? publicId.slice(0, dotPos) : publicId;
+
+    return cloudinary.url(publicIdNoExt, {
+      resource_type: 'raw',
+      type: 'upload',
+      format,
+      sign_url: true,
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+      secure: true,
+    });
+  }
+
   async deleteResource(publicId: string): Promise<void> {
     try {
       await cloudinary.uploader.destroy(publicId);

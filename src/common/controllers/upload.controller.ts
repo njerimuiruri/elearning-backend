@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Res,
   UseInterceptors,
   UploadedFile,
   BadRequestException,
@@ -10,12 +11,11 @@ import {
   HttpStatus,
   Query,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage, memoryStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
-import { v2 as cloudinary } from 'cloudinary';
-// Note: diskStorage and fs are still used by the image upload endpoint
 import { CloudinaryService } from '../services/cloudinary.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 
@@ -75,11 +75,14 @@ export class UploadController {
     return { success: true, url: `/uploads/images/${file.filename}` };
   }
 
-  // ── Documents → Cloudinary (persistent, survives server restarts) ──────────
+  // ── Documents → local disk ────────────────────────────────────────────────
   @Post('document')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: memoryStorage(),
+      storage: diskStorage({
+        destination: path.join(UPLOADS_ROOT, 'documents'),
+        filename: (_req, file, cb) => cb(null, safeFilename(file.originalname)),
+      }),
       limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
     }),
   )
@@ -97,22 +100,20 @@ export class UploadController {
       'text/csv',
       'text/plain',
       'application/zip',
+      'application/octet-stream',
     ];
     if (!allowed.includes(file.mimetype)) {
+      fs.unlinkSync(file.path);
       throw new BadRequestException(
         'Invalid document format. Allowed: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, CSV, TXT, ZIP',
       );
     }
 
-    try {
-      const url = await this.cloudinaryService.uploadDocument(
-        file.buffer,
-        safeFilename(file.originalname),
-      );
-      return { success: true, url, originalName: file.originalname };
-    } catch (error) {
-      handleUploadError(error);
-    }
+    return {
+      success: true,
+      url: `/uploads/documents/${file.filename}`,
+      originalName: file.originalname,
+    };
   }
 
   // ── Videos → Cloudinary (large files, CDN delivery) ──────────────────────
@@ -148,5 +149,44 @@ export class UploadController {
     } catch (error) {
       handleUploadError(error);
     }
+  }
+
+  // ── Document download → streams local file with correct Content-Type ────────
+  @Get('resource')
+  async downloadResource(
+    @Query('file') fileName: string,
+    @Query('name') displayName: string,
+    @Res() res: Response,
+  ) {
+    if (!fileName) throw new BadRequestException('file is required');
+
+    // Prevent path traversal
+    const safe = path.basename(fileName);
+    const filePath = path.join(UPLOADS_ROOT, 'documents', safe);
+
+    if (!fs.existsSync(filePath)) {
+      throw new HttpException('File not found', HttpStatus.NOT_FOUND);
+    }
+
+    const ext = path.extname(safe).slice(1).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      pdf: 'application/pdf',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ppt: 'application/vnd.ms-powerpoint',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      csv: 'text/csv',
+      txt: 'text/plain',
+      zip: 'application/zip',
+    };
+
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+    const download = displayName ? decodeURIComponent(displayName) : safe;
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${download}"`);
+    fs.createReadStream(filePath).pipe(res);
   }
 }
