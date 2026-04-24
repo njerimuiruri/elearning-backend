@@ -464,6 +464,10 @@ export class CreateModuleDto {
   @IsBoolean()
   isContentFinalized?: boolean;
 
+  @IsOptional()
+  @IsBoolean()
+  isOptional?: boolean;
+
   // ── Admin-only: instructor assignment ─────────────────────────────────────
   /** ID of an existing instructor to assign as module owner (admin use only) */
   @IsOptional()

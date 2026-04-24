@@ -205,6 +205,14 @@ export class ModuleEnrollmentsController {
     return await this.enrollmentsService.adminResetStudentEnrollments(studentId);
   }
 
+  // ── Admin: unblock stuck students (clear cooldown + reset attempts) ─────────
+  @Post('admin/reset-assessment/:enrollmentId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminResetAssessment(@Param('enrollmentId') enrollmentId: string) {
+    return await this.enrollmentsService.adminResetAssessment(enrollmentId);
+  }
+
   // Grade essay assessment (instructor only)
   @Post(':enrollmentId/grade-essay')
   @UseGuards(JwtAuthGuard, RolesGuard)

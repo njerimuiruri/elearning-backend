@@ -3160,8 +3160,13 @@ export class AdminService {
     enrolledModules: number;
     completedModules: number;
     inProgressModules: number;
+    notStartedModules: number;
     overallProgressPct: number;
     lastAccessedAt: Date | null;
+    currentModuleTitle: string | null;
+    currentModuleProgress: number;
+    currentLessonIndex: number;
+    isSuspended: boolean;
     categories: Array<{
       categoryId: string;
       categoryName: string;
@@ -3173,17 +3178,16 @@ export class AdminService {
     const assignedCategoryIds: Types.ObjectId[] =
       fellow.fellowData?.assignedCategories || [];
 
-    if (assignedCategoryIds.length === 0) {
-      return {
-        totalModules: 0,
-        enrolledModules: 0,
-        completedModules: 0,
-        inProgressModules: 0,
-        overallProgressPct: 0,
-        lastAccessedAt: null,
-        categories: [],
-      };
-    }
+    const isSuspended = !!(fellow.fellowData?.isSuspended);
+
+    const emptyResult = {
+      totalModules: 0, enrolledModules: 0, completedModules: 0,
+      inProgressModules: 0, notStartedModules: 0, overallProgressPct: 0,
+      lastAccessedAt: null, currentModuleTitle: null, currentModuleProgress: 0,
+      currentLessonIndex: 0, isSuspended, categories: [],
+    };
+
+    if (assignedCategoryIds.length === 0) return emptyResult;
 
     // Fetch all modules in assigned categories
     const modules = await this.moduleModel
@@ -3191,17 +3195,7 @@ export class AdminService {
       .select('_id title level categoryId')
       .lean();
 
-    if (modules.length === 0) {
-      return {
-        totalModules: 0,
-        enrolledModules: 0,
-        completedModules: 0,
-        inProgressModules: 0,
-        overallProgressPct: 0,
-        lastAccessedAt: null,
-        categories: [],
-      };
-    }
+    if (modules.length === 0) return emptyResult;
 
     const moduleIds = modules.map((m) => m._id);
 
@@ -3211,47 +3205,57 @@ export class AdminService {
         studentId: new Types.ObjectId(fellow._id.toString()),
         moduleId: { $in: moduleIds },
       })
-      .select('moduleId progress isCompleted lastAccessedAt')
+      .select('moduleId progress isCompleted lastAccessedAt lastAccessedLesson')
       .lean();
 
     const enrollmentMap = new Map(
       enrollments.map((e) => [(e.moduleId as any).toString(), e]),
     );
 
-    let totalProgress = 0;
     let completedCount = 0;
     let inProgressCount = 0;
     let latestAccess: Date | null = null;
+    let currentEnrollment: any = null;
 
     for (const enr of enrollments) {
       if (enr.isCompleted) completedCount++;
-      else if (enr.progress > 0) inProgressCount++;
-      totalProgress += enr.progress || 0;
+      else if ((enr.progress || 0) > 0) inProgressCount++;
       if (enr.lastAccessedAt) {
         if (!latestAccess || enr.lastAccessedAt > latestAccess) {
           latestAccess = enr.lastAccessedAt;
+          if (!enr.isCompleted) currentEnrollment = enr;
         }
       }
     }
 
-    const overallProgressPct =
-      modules.length > 0
-        ? Math.round(
-            (completedCount / modules.length) * 100,
-          )
-        : 0;
+    // If no in-progress found, pick the most recently accessed incomplete one
+    if (!currentEnrollment) {
+      const incomplete = enrollments
+        .filter((e) => !e.isCompleted)
+        .sort((a, b) => ((b.lastAccessedAt as any) || 0) - ((a.lastAccessedAt as any) || 0));
+      currentEnrollment = incomplete[0] || null;
+    }
+
+    let currentModuleTitle: string | null = null;
+    let currentModuleProgress = 0;
+    let currentLessonIndex = 0;
+    if (currentEnrollment) {
+      const mod = modules.find((m) => (m._id as any).toString() === (currentEnrollment.moduleId as any).toString());
+      currentModuleTitle = (mod as any)?.title || null;
+      currentModuleProgress = currentEnrollment.progress || 0;
+      currentLessonIndex = (currentEnrollment.lastAccessedLesson || 0) + 1;
+    }
+
+    const notStartedCount = modules.length - enrollments.length;
+    const overallProgressPct = modules.length > 0
+      ? Math.round((completedCount / modules.length) * 100)
+      : 0;
 
     // Category-level breakdown
     const categoryMap = new Map<string, any>();
     for (const cat of assignedCategoryIds) {
       const catId = cat.toString();
-      categoryMap.set(catId, {
-        categoryId: catId,
-        categoryName: '',
-        totalModules: 0,
-        completedModules: 0,
-        progressPct: 0,
-      });
+      categoryMap.set(catId, { categoryId: catId, categoryName: '', totalModules: 0, completedModules: 0, progressPct: 0 });
     }
 
     for (const mod of modules) {
@@ -3263,7 +3267,6 @@ export class AdminService {
       if (enr?.isCompleted) entry.completedModules++;
     }
 
-    // Resolve category names
     const categories = await this.categoryModel
       .find({ _id: { $in: assignedCategoryIds } })
       .select('_id name')
@@ -3273,10 +3276,9 @@ export class AdminService {
       const entry = categoryMap.get((cat._id as any).toString());
       if (entry) {
         entry.categoryName = (cat as any).name;
-        entry.progressPct =
-          entry.totalModules > 0
-            ? Math.round((entry.completedModules / entry.totalModules) * 100)
-            : 0;
+        entry.progressPct = entry.totalModules > 0
+          ? Math.round((entry.completedModules / entry.totalModules) * 100)
+          : 0;
       }
     }
 
@@ -3285,8 +3287,13 @@ export class AdminService {
       enrolledModules: enrollments.length,
       completedModules: completedCount,
       inProgressModules: inProgressCount,
+      notStartedModules: notStartedCount < 0 ? 0 : notStartedCount,
       overallProgressPct,
       lastAccessedAt: latestAccess,
+      currentModuleTitle,
+      currentModuleProgress,
+      currentLessonIndex,
+      isSuspended,
       categories: Array.from(categoryMap.values()),
     };
   }
@@ -3574,12 +3581,12 @@ export class AdminService {
 
   /**
    * PUT /admin/fellows/:id/progress-action
-   * Admin actions: allow_proceed | deactivate | mark_completed
+   * Admin actions: allow_proceed | suspend | unsuspend | deactivate | mark_completed
    */
   async updateFellowProgressAction(
     adminId: string,
     fellowId: string,
-    action: 'allow_proceed' | 'deactivate' | 'mark_completed',
+    action: 'allow_proceed' | 'suspend' | 'unsuspend' | 'deactivate' | 'mark_completed',
     note?: string,
   ) {
     const fellow = await this.userModel.findOne({
@@ -3598,13 +3605,25 @@ export class AdminService {
 
     switch (action) {
       case 'allow_proceed':
-        updateFields = { isActive: true };
+        updateFields = { isActive: true, 'fellowData.isSuspended': false };
         activityMessage = `Fellow ${name} marked as eligible to proceed`;
         emailSubject = 'You are eligible to proceed — ARIN Fellowship';
         emailBody = `Dear ${fellow.firstName},\n\nGreat news! The admin has reviewed your progress and confirmed you are eligible to continue to the next stage of your fellowship.\n\n${note ? `Note from admin: ${note}\n\n` : ''}Keep up the excellent work!\n\nARIN eLearning Team`;
         break;
+      case 'suspend':
+        updateFields = { 'fellowData.isSuspended': true };
+        activityMessage = `Fellow ${name} suspended`;
+        emailSubject = 'Your Fellowship Access Has Been Suspended — ARIN Academy';
+        emailBody = `Dear ${fellow.firstName},\n\nYour access to the fellowship modules has been temporarily suspended by an administrator.\n\n${note ? `Reason: ${note}\n\n` : ''}Please contact us if you have any questions.\n\nARIN eLearning Team`;
+        break;
+      case 'unsuspend':
+        updateFields = { 'fellowData.isSuspended': false };
+        activityMessage = `Fellow ${name} unsuspended (access restored)`;
+        emailSubject = 'Your Fellowship Access Has Been Restored — ARIN Academy';
+        emailBody = `Dear ${fellow.firstName},\n\nYour access to the fellowship modules has been restored. You may now continue your learning journey.\n\n${note ? `Note from admin: ${note}\n\n` : ''}Welcome back!\n\nARIN eLearning Team`;
+        break;
       case 'deactivate':
-        updateFields = { isActive: false };
+        updateFields = { isActive: false, 'fellowData.isSuspended': true };
         activityMessage = `Fellow ${name} deactivated due to insufficient progress`;
         emailSubject = 'Fellowship Status Update — ARIN Academy';
         emailBody = `Dear ${fellow.firstName},\n\nAfter reviewing your progress, we regret to inform you that your access to the fellowship programme has been deactivated.\n\n${note ? `Reason: ${note}\n\n` : ''}If you believe this is an error or would like to discuss this decision, please contact us.\n\nARIN eLearning Team`;
@@ -3712,6 +3731,70 @@ export class AdminService {
           : 0,
       recentCompletions,
       cohorts: cohorts.filter(Boolean),
+    };
+  }
+
+  /**
+   * GET /admin/fellows/learning-analytics
+   * Aggregate module enrollment lastAccessedAt timestamps into hour-of-day
+   * and day-of-week buckets so the admin can see WHEN fellows are learning.
+   */
+  async getLearningAnalytics(filters: { categoryId?: string; days?: number } = {}) {
+    const { categoryId, days = 90 } = filters;
+    const since = new Date(Date.now() - days * 86400000);
+
+    // Build list of fellow student IDs
+    const fellowIds = await this.userModel.distinct('_id', {
+      'fellowData.fellowId': { $exists: true },
+      ...(categoryId ? { 'fellowData.assignedCategories': new Types.ObjectId(categoryId) } : {}),
+    });
+
+    // Gather all enrollment lastAccessedAt within the window
+    const enrollments = await this.moduleEnrollmentModel
+      .find({
+        studentId: { $in: fellowIds },
+        lastAccessedAt: { $gte: since },
+      })
+      .select('lastAccessedAt studentId')
+      .lean();
+
+    // Bucket by hour-of-day (0–23) and day-of-week (0=Sun … 6=Sat)
+    const hourCounts = new Array(24).fill(0);
+    const dayCounts  = new Array(7).fill(0);
+    const dailyMap   = new Map<string, number>(); // ISO date → count
+
+    for (const enr of enrollments) {
+      if (!enr.lastAccessedAt) continue;
+      const d = new Date(enr.lastAccessedAt);
+      hourCounts[d.getHours()]++;
+      dayCounts[d.getDay()]++;
+      const key = d.toISOString().slice(0, 10);
+      dailyMap.set(key, (dailyMap.get(key) || 0) + 1);
+    }
+
+    const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    // Build a 30-day rolling daily series (last 30 days for the chart)
+    const dailySeries: { date: string; count: number }[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      const key = d.toISOString().slice(0, 10);
+      dailySeries.push({ date: key, count: dailyMap.get(key) || 0 });
+    }
+
+    // Peak hour / peak day
+    const peakHour = hourCounts.indexOf(Math.max(...hourCounts));
+    const peakDay  = dayCounts.indexOf(Math.max(...dayCounts));
+
+    return {
+      totalSessions: enrollments.length,
+      activeFellows: new Set(enrollments.map((e) => (e.studentId as any).toString())).size,
+      hourOfDay: hourCounts.map((count, hour) => ({ hour, label: `${hour}:00`, count })),
+      dayOfWeek: dayCounts.map((count, day) => ({ day, label: DAY_LABELS[day], count })),
+      dailySeries,
+      peakHour: { hour: peakHour, label: `${peakHour}:00` },
+      peakDay:  { day: peakDay,  label: DAY_LABELS[peakDay] },
+      windowDays: days,
     };
   }
 }

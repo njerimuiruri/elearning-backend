@@ -548,6 +548,10 @@ export class Module extends Document {
   @Prop({ default: false })
   isContentFinalized?: boolean;
 
+  // When true: module is supplementary; excluded from required completion % and sequential gate.
+  @Prop({ default: false })
+  isOptional?: boolean;
+
   // ── Assessment review workflow ─────────────────────────────────────────
   @Prop({ enum: AssessmentReviewStatus, default: AssessmentReviewStatus.NONE })
   declare assessmentReviewStatus: AssessmentReviewStatus;

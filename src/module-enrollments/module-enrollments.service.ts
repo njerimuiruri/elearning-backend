@@ -415,6 +415,7 @@ export class ModuleEnrollmentsService {
       moduleRepeatGeneration: generation,
       finalAssessmentPassed: enrollment.finalAssessmentPassed,
       finalAssessmentAttempts: enrollment.finalAssessmentAttempts,
+      assessmentCooldownUntil: enrollment.assessmentCooldownUntil ?? null,
       isCompleted: enrollment.isCompleted,
       certificateEarned: enrollment.certificateEarned,
       certificatePublicId: enrollment.certificatePublicId ?? null,
@@ -514,6 +515,21 @@ export class ModuleEnrollmentsService {
       if (enrollment.requiresModuleRepeat && completedCount >= totalLessons) {
         atomicUpdate.$set.requiresModuleRepeat = false;
         atomicUpdate.$set.finalAssessmentAttempts = 0;
+      }
+
+      // Auto-complete: if all lessons done and the module has no final assessment
+      // (or the assessment has no questions), mark enrollment as completed now.
+      if (completedCount >= totalLessons) {
+        const mod = enrollment.moduleId as any;
+        const hasAssessment =
+          mod?.finalAssessment?.questions?.length > 0 &&
+          (mod?.isContentFinalized ?? false);
+        if (!hasAssessment && !enrollment.isCompleted) {
+          atomicUpdate.$set.isCompleted = true;
+          atomicUpdate.$set.completedAt = new Date();
+          atomicUpdate.$set.certificateEarned = false; // no cert without final assessment
+          console.log(`[markLessonCompleted] Auto-completing enrollment ${enrollmentId} — no final assessment`);
+        }
       }
 
       await this.enrollmentModel.updateOne({ _id: enrollmentId }, atomicUpdate);
@@ -1087,25 +1103,40 @@ export class ModuleEnrollmentsService {
       throw new BadRequestException('Module has no final assessment');
     }
 
-    // Block if student must repeat the module before retaking
-    if (enrollment.requiresModuleRepeat) {
-      throw new BadRequestException(
-        'You have reached the maximum number of attempts. You must review and complete the module again before reattempting the final assessment.',
+    // Check if all lessons are completed — recompute from lessonProgress to avoid
+    // stale stored-counter issues (e.g. counter not updated if lessons were added
+    // after enrolment, or a save race condition).
+    const freshCompleted = enrollment.lessonProgress.filter((lp) => lp.isCompleted).length;
+    const freshTotal = enrollment.totalLessons > 0 ? enrollment.totalLessons : enrollment.lessonProgress.length;
+    if (freshCompleted < freshTotal) {
+      console.warn(
+        `[submitFinalAssessment] Lessons incomplete for enrollment ${enrollment._id}: ${freshCompleted}/${freshTotal} (stored counter: ${enrollment.completedLessons}/${enrollment.totalLessons})`,
       );
-    }
-
-    // Check if all lessons are completed
-    if (enrollment.completedLessons < enrollment.totalLessons) {
       throw new BadRequestException(
         'Complete all lessons before taking the final assessment.',
       );
     }
 
-    // Block if already at max attempts (should be reset after module repeat, but guard anyway)
     const maxAttempts = module.finalAssessment.maxAttempts ?? 3;
-    if (maxAttempts > 0 && enrollment.finalAssessmentAttempts >= maxAttempts) {
+
+    // Cooldown guard — active after exhausting a round of attempts
+    if (enrollment.assessmentCooldownUntil && enrollment.assessmentCooldownUntil > new Date()) {
+      const remainingMs = enrollment.assessmentCooldownUntil.getTime() - Date.now();
+      const remainingMins = Math.ceil(remainingMs / 60000);
+      console.log(
+        `[submitFinalAssessment] Cooldown active for enrollment ${enrollment._id} — ${remainingMins} min(s) remaining`,
+      );
       throw new BadRequestException(
-        'You have reached the maximum number of attempts. You must review and complete the module again before reattempting the final assessment.',
+        `Please review the lessons before retrying. Cooldown expires in ${remainingMins} minute(s).`,
+      );
+    }
+
+    // If attempts are at max and cooldown already passed, reset for a fresh round
+    if (maxAttempts > 0 && enrollment.finalAssessmentAttempts >= maxAttempts) {
+      enrollment.finalAssessmentAttempts = 0;
+      enrollment.assessmentCooldownUntil = undefined;
+      console.log(
+        `[submitFinalAssessment] Cooldown passed — resetting attempt counter for enrollment ${enrollment._id}`,
       );
     }
 
@@ -1186,11 +1217,30 @@ export class ModuleEnrollmentsService {
     }
 
     // Auto-grade (no essay questions)
+    console.log('[submitFinalAssessment] Submitted answers:', JSON.stringify(submitDto.answers));
+    console.log('[submitFinalAssessment] Correct answers:', JSON.stringify(
+      module.finalAssessment.questions.map((q: any, i: number) => ({
+        index: i,
+        text: q.text,
+        correctAnswer: q.correctAnswer,
+        options: q.options,
+      }))
+    ));
+
     const { score, results, passed } = this.gradeAssessment(
       module.finalAssessment.questions,
       submitDto.answers,
       module.finalAssessment.passingScore,
     );
+
+    console.log('[submitFinalAssessment] Comparison results:', JSON.stringify(results.map(r => ({
+      q: r.questionIndex,
+      student: r.studentAnswer,
+      correct: r.correctAnswer,
+      isCorrect: r.isCorrect,
+      points: r.pointsEarned,
+    }))));
+    console.log(`[submitFinalAssessment] Score: ${score}% | Passed: ${passed} | Attempts used: ${enrollment.finalAssessmentAttempts + 1}/${module.finalAssessment.maxAttempts || 3}`);
 
     enrollment.finalAssessmentAttempts++;
     enrollment.finalAssessmentScore = score;
@@ -1210,6 +1260,9 @@ export class ModuleEnrollmentsService {
       enrollment.completedAt = new Date();
       enrollment.certificateEarned = true;
       enrollment.certificateIssuedAt = new Date();
+      // Recompute completedLessons in case counter drifted, then force progress to 100
+      enrollment.completedLessons = enrollment.lessonProgress.filter((lp) => lp.isCompleted).length;
+      enrollment.progress = 100;
 
       // Update level progression
       const progressionResult = await this.progressionService.onModuleCompleted(
@@ -1246,23 +1299,17 @@ export class ModuleEnrollmentsService {
       const attemptsUsed = enrollment.finalAssessmentAttempts;
 
       if (maxAttempts > 0 && attemptsUsed >= maxAttempts) {
-        // ── Max attempts exhausted → force module repeat ───────────────────
-        requiresModuleRepeat = true;
-        enrollment.requiresModuleRepeat = true;
-        enrollment.moduleRepeatCount = (enrollment.moduleRepeatCount || 0) + 1;
-
-        // NEW: Increment the generation counter so the next pass of lesson
-        // completions are written as fresh LessonCompletion records.
-        // Old completion records are PRESERVED in the DB — nothing is deleted.
-        // The student's history is intact; only the current generation changes.
-        enrollment.moduleRepeatGeneration = (enrollment.moduleRepeatGeneration ?? 0) + 1;
-        enrollment.completedLessons = 0;
-        enrollment.progress = 0;
-        // Reset attempts — they get a fresh set after completing the module
+        // ── Max attempts exhausted → reset counter + set 20-min cooldown ──
         enrollment.finalAssessmentAttempts = 0;
+        enrollment.moduleRepeatCount = (enrollment.moduleRepeatCount || 0) + 1;
+        enrollment.assessmentCooldownUntil = new Date(Date.now() + 20 * 60 * 1000);
+        remainingAttempts = maxAttempts;
 
-        message =
-          'You have reached the maximum number of attempts. You must review and complete the module again before reattempting the final assessment.';
+        message = `You have used all ${maxAttempts} attempts. Please review the lessons and try again in 20 minutes.`;
+
+        console.log(
+          `[submitFinalAssessment] Cooldown set until ${enrollment.assessmentCooldownUntil.toISOString()} for enrollment ${enrollment._id}`,
+        );
       } else {
         // ── Still has attempts remaining ───────────────────────────────────
         remainingAttempts =
@@ -1277,16 +1324,23 @@ export class ModuleEnrollmentsService {
 
     await enrollment.save();
 
+    // Strip correct answers from results when the student did not pass —
+    // prevents answer harvesting by inspecting the network response.
+    const sanitizedResults = passed
+      ? results
+      : results.map((r) => ({ ...r, correctAnswer: undefined, explanation: undefined }));
+
     return {
       enrollment,
       passed,
       score,
-      results,
+      results: sanitizedResults,
       levelUnlocked,
       certificate,
       requiresModuleRepeat,
       remainingAttempts,
       message,
+      assessmentCooldownUntil: (enrollment.assessmentCooldownUntil as any) ?? null,
     } as any;
   }
 
@@ -1402,6 +1456,8 @@ export class ModuleEnrollmentsService {
       enrollment.completedAt = new Date();
       enrollment.certificateEarned = true;
       enrollment.certificateIssuedAt = new Date();
+      enrollment.completedLessons = enrollment.lessonProgress.filter((lp) => lp.isCompleted).length;
+      enrollment.progress = 100;
 
       // Update level progression
       const progressionResult = await this.progressionService.onModuleCompleted(
@@ -1671,22 +1727,31 @@ export class ModuleEnrollmentsService {
           ? question.options
           : ['True', 'False'];
 
-        // Correct answer may be stored as an index ("0") or as the full option text.
-        const correctIdx = Number(rawCorrect);
+        // Correct answer may be stored as:
+        //   "Option X"  (1-indexed label) → options[X-1]  e.g. "Option 3" → options[2]
+        //   numeric index  "0"/"1"/"2"/"3"  → resolve to options[n]
+        //   letter label   "A"/"B"/"C"/"D"  → resolve to options[0/1/2/3]
+        //   full option text               → use as-is (case-insensitive compare)
+        const optionLabelMatch = rawCorrect.match(/^[Oo]ption\s*(\d+)$/);
+        const correctIdx = optionLabelMatch
+          ? parseInt(optionLabelMatch[1], 10) - 1  // 1-indexed → 0-indexed
+          : Number(rawCorrect);
+        const letterIdx =
+          !optionLabelMatch && rawCorrect.length === 1 && rawCorrect >= 'A' && rawCorrect <= 'Z'
+            ? rawCorrect.charCodeAt(0) - 65 // A→0, B→1, C→2, D→3
+            : -1;
         const resolvedCorrect =
-          !isNaN(correctIdx) &&
-          Number.isInteger(correctIdx) &&
-          correctIdx >= 0 &&
-          correctIdx < options.length
+          !isNaN(correctIdx) && Number.isInteger(correctIdx) && correctIdx >= 0 && correctIdx < options.length
             ? options[correctIdx]
-            : rawCorrect;
+            : letterIdx >= 0 && letterIdx < options.length
+              ? options[letterIdx]
+              : rawCorrect;
 
         const studentAnswer = (answer?.answer ?? '').trim().toLowerCase();
-        const isCorrect =
-          studentAnswer === resolvedCorrect.trim().toLowerCase();
+        const isCorrect = studentAnswer === resolvedCorrect.trim().toLowerCase();
 
         console.log(
-          `[gradeAssessment] Q${i} | type="${question.type ?? 'no-type'}" | student="${answer?.answer}" | correct="${resolvedCorrect}" | raw="${rawCorrect}" | isCorrect=${isCorrect}`,
+          `[gradeAssessment] Q${i} | type="${question.type ?? 'no-type'}" | student="${answer?.answer}" | correct="${resolvedCorrect}" | raw="${rawCorrect}" | letterIdx=${letterIdx} | correctIdx=${correctIdx} | isCorrect=${isCorrect}`,
         );
 
         result.correctAnswer = resolvedCorrect;
@@ -1758,6 +1823,25 @@ export class ModuleEnrollmentsService {
     return {
       message: `Reset complete — ${result.deletedCount} enrollment(s) removed for student ${studentId}`,
       deletedCount: result.deletedCount,
+    };
+  }
+
+  /** Unblock a stuck student: clear cooldown, reset attempt counter, clear requiresModuleRepeat. */
+  async adminResetAssessment(enrollmentId: string) {
+    if (!Types.ObjectId.isValid(enrollmentId)) {
+      throw new BadRequestException('Invalid enrollment ID');
+    }
+    const enrollment = await this.enrollmentModel.findById(enrollmentId);
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+
+    enrollment.finalAssessmentAttempts = 0;
+    enrollment.assessmentCooldownUntil = undefined;
+    enrollment.requiresModuleRepeat = false;
+    await enrollment.save();
+
+    return {
+      message: 'Assessment reset: cooldown cleared, attempts reset, requiresModuleRepeat cleared.',
+      enrollmentId,
     };
   }
 }

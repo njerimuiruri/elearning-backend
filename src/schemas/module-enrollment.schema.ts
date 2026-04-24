@@ -173,15 +173,18 @@ export class ModuleEnrollment extends Document {
   @Prop({ type: Date, default: null })
   essaySubmittedAt?: Date;
 
-  // Module repeat enforcement
-  // Set to true when max assessment attempts are exhausted.
-  // Student must redo all lessons before assessment unlocks again.
+  // Module repeat enforcement (legacy — no longer triggered, kept for DB compat)
   @Prop({ default: false })
   requiresModuleRepeat: boolean;
 
-  // How many times the student has been forced to repeat the module
+  // How many times the student has exhausted their attempts (for analytics)
   @Prop({ default: 0 })
   moduleRepeatCount: number;
+
+  // Cooldown: set after exhausting all attempts in a round.
+  // Student cannot submit again until this timestamp passes.
+  @Prop({ type: Date, default: null })
+  assessmentCooldownUntil?: Date | null;
 
   /**
    * Incremented each time a module repeat is triggered (final assessment
