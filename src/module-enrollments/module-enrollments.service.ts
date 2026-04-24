@@ -223,15 +223,37 @@ export class ModuleEnrollmentsService {
 
   // Get student's enrollments
   async getStudentEnrollments(studentId: string) {
-    return await this.enrollmentModel
+    const enrollments = await this.enrollmentModel
       .find({ studentId: new Types.ObjectId(studentId) })
       .populate({
         path: 'moduleId',
-        select: 'title description level bannerUrl categoryId duration lessons',
+        select:
+          'title description level bannerUrl categoryId duration lessons topics isContentFinalized finalAssessment order',
         populate: { path: 'categoryId', select: 'name' },
       })
       .sort({ createdAt: -1 })
       .lean();
+
+    const certificates = await this.certificateModel
+      .find({ studentId: new Types.ObjectId(studentId) })
+      .select('enrollmentId publicId')
+      .lean();
+
+    const certificatePublicIdByEnrollmentId = new Map<string, string>(
+      certificates
+        .filter((certificate: any) => certificate?.enrollmentId)
+        .map((certificate: any) => [
+          certificate.enrollmentId.toString(),
+          certificate.publicId,
+        ]),
+    );
+
+    return enrollments.map((enrollment: any) =>
+      this.normalizeEnrollmentSummary(
+        enrollment,
+        certificatePublicIdByEnrollmentId,
+      ),
+    );
   }
 
   // Get enrollment details
@@ -281,6 +303,48 @@ export class ModuleEnrollmentsService {
       return [...module.lessons].sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
     }
     return (module.topics || []).flatMap((t: any) => t.lessons || []);
+  }
+
+  private normalizeEnrollmentSummary(
+    enrollment: any,
+    certificatePublicIdByEnrollmentId: Map<string, string>,
+  ) {
+    const module = enrollment.moduleId as any;
+    const sortedLessons = this.getSortedLessons(module);
+
+    // Derive total lessons from the actual module structure instead of the enrollment snapshot
+    const totalLessons = sortedLessons.length > 0 ? sortedLessons.length : (enrollment.totalLessons || 0);
+
+    const completedLessonsBase = Array.isArray(enrollment.lessonProgress)
+      ? enrollment.lessonProgress.filter((lp: any) => lp?.isCompleted).length
+      : enrollment.completedLessons || 0;
+
+    const certificatePublicId =
+      certificatePublicIdByEnrollmentId.get(enrollment._id.toString()) ?? null;
+
+    // Ground truth: Use the isCompleted flag set during assessment passing
+    const isCompleted = !!enrollment.isCompleted;
+
+    const completedLessons =
+      isCompleted && totalLessons > 0
+        ? totalLessons
+        : Math.min(completedLessonsBase, totalLessons);
+
+    const progress = isCompleted
+      ? 100
+      : totalLessons > 0
+        ? Math.min(100, Math.round((completedLessons / totalLessons) * 100))
+        : 0;
+
+    return {
+      ...enrollment,
+      totalLessons,
+      completedLessons,
+      progress,
+      isCompleted,
+      certificateEarned: !!certificatePublicId,
+      certificatePublicId,
+    };
   }
 
   // ── NEW: Get fresh, server-derived enrollment progress ────────────────────
@@ -366,8 +430,12 @@ export class ModuleEnrollmentsService {
     });
 
     const completedLessons = lessonStates.filter((ls) => ls.isCompleted).length;
-    const progress =
-      totalLessons > 0 ? Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
+
+    // Force 100% progress if the module is marked as completed
+    const isCompleted = !!enrollment.isCompleted;
+    const progress = isCompleted
+      ? 100
+      : totalLessons > 0 ? Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
 
     // Next lesson = lowest-index that is accessible but not yet completed
     let nextLessonIndex: number | null = null;
@@ -416,7 +484,7 @@ export class ModuleEnrollmentsService {
       finalAssessmentPassed: enrollment.finalAssessmentPassed,
       finalAssessmentAttempts: enrollment.finalAssessmentAttempts,
       assessmentCooldownUntil: enrollment.assessmentCooldownUntil ?? null,
-      isCompleted: enrollment.isCompleted,
+      isCompleted,
       certificateEarned: enrollment.certificateEarned,
       certificatePublicId: enrollment.certificatePublicId ?? null,
       // true = instructor finished adding all lessons; Final Assessment is now unlockable
