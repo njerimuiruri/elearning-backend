@@ -68,14 +68,11 @@ import { EmailQueueModule } from './email-queue/email-queue.module';
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const isProd = config.get<string>('NODE_ENV') === 'production';
         return {
           connection: {
             host: config.get<string>('REDIS_HOST', 'localhost'),
             port: config.get<number>('REDIS_PORT', 6379),
             password: config.get<string>('REDIS_PASSWORD') || undefined,
-            // Upstash requires TLS in production
-            tls: isProd ? {} : undefined,
           },
         };
       },
