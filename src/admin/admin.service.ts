@@ -1261,6 +1261,25 @@ export class AdminService {
     };
   }
 
+  async resetFellowPassword(id: string) {
+    const fellow = await this.userModel.findById(id).select('email firstName');
+    if (!fellow) throw new NotFoundException('Fellow not found');
+
+    const temporaryPassword = crypto.randomBytes(8).toString('hex');
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+
+    await this.userModel.findByIdAndUpdate(id, {
+      password: hashedPassword,
+      mustSetPassword: true,
+    });
+
+    return {
+      message: 'Temporary password reset successfully.',
+      email: fellow.email,
+      temporaryPassword,
+    };
+  }
+
   async sendFellowInvitations(fellowIds: string[]) {
     const fellows = await this.userModel
       .find({ _id: { $in: fellowIds } })

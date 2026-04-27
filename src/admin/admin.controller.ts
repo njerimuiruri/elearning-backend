@@ -357,6 +357,11 @@ export class AdminController {
     return this.adminService.deleteFellow(id);
   }
 
+  @Post('fellows/:id/reset-password')
+  async resetFellowPassword(@Param('id') id: string) {
+    return this.adminService.resetFellowPassword(id);
+  }
+
   @Post('fellows/:id/send-reminder')
   async sendFellowReminder(
     @Param('id') id: string,
