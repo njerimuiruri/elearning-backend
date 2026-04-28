@@ -520,10 +520,11 @@ export class AuthService {
       throw new BadRequestException('Invalid or expired reset token');
     }
 
-    // Update password
+    // Update password and clear any forced-reset flag
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.userModel.findByIdAndUpdate(resetRecord.userId, {
       password: hashedPassword,
+      mustSetPassword: false,
     });
 
     // Delete reset token
