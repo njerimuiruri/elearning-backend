@@ -430,9 +430,34 @@ export class ModuleEnrollmentsService {
     });
 
     const completedLessons = lessonStates.filter((ls) => ls.isCompleted).length;
+    const allLessonsCompleted =
+      totalLessons > 0 && completedLessons >= totalLessons && !enrollment.requiresModuleRepeat;
+    const hasFinalAssessment = ((module as any)?.finalAssessment?.questions?.length ?? 0) > 0;
+
+    // Modules without a final assessment are complete when all lessons are complete.
+    // This also repairs older enrollments that reached 100% before this rule existed.
+    let isCompleted = !!enrollment.isCompleted;
+    if (allLessonsCompleted && !hasFinalAssessment && !isCompleted) {
+      await this.enrollmentModel.updateOne(
+        { _id: enrollment._id },
+        {
+          $set: {
+            isCompleted: true,
+            completedAt: new Date(),
+            completedLessons,
+            progress: 100,
+            certificateEarned: false,
+          },
+        },
+      );
+      await this.progressionService.onModuleCompleted(
+        enrollment.studentId.toString(),
+        module._id.toString(),
+      );
+      isCompleted = true;
+    }
 
     // Force 100% progress if the module is marked as completed
-    const isCompleted = !!enrollment.isCompleted;
     const progress = isCompleted
       ? 100
       : totalLessons > 0 ? Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
@@ -460,9 +485,6 @@ export class ModuleEnrollmentsService {
       currentLessonIndex !== null
         ? lessonStates[currentLessonIndex]?.lastAccessedSlide ?? 0
         : 0;
-
-    const allLessonsCompleted =
-      totalLessons > 0 && completedLessons >= totalLessons && !enrollment.requiresModuleRepeat;
 
     console.log(
       `[getProgress] Returning resume position | enrollmentId=${enrollmentId} | lastAccessedLesson=${enrollment.lastAccessedLesson} | currentLessonIndex=${currentLessonIndex} | currentSlideIndex=${currentSlideIndex} | nextLessonIndex=${nextLessonIndex} | completedLessons=${completedLessons}/${totalLessons}`,
@@ -551,6 +573,7 @@ export class ModuleEnrollmentsService {
     const lpIndex = enrollment.lessonProgress.findIndex(
       (lp) => lp.lessonIndex === lessonIndex,
     );
+    let shouldUpdateProgressionForModuleCompletion = false;
 
     if (wasNewlyCompleted) {
       // Count completions for this generation to get the authoritative number
@@ -589,18 +612,24 @@ export class ModuleEnrollmentsService {
       // (or the assessment has no questions), mark enrollment as completed now.
       if (completedCount >= totalLessons) {
         const mod = enrollment.moduleId as any;
-        const hasAssessment =
-          mod?.finalAssessment?.questions?.length > 0 &&
-          (mod?.isContentFinalized ?? false);
+        const hasAssessment = (mod?.finalAssessment?.questions?.length ?? 0) > 0;
         if (!hasAssessment && !enrollment.isCompleted) {
           atomicUpdate.$set.isCompleted = true;
           atomicUpdate.$set.completedAt = new Date();
           atomicUpdate.$set.certificateEarned = false; // no cert without final assessment
+          shouldUpdateProgressionForModuleCompletion = true;
           console.log(`[markLessonCompleted] Auto-completing enrollment ${enrollmentId} — no final assessment`);
         }
       }
 
       await this.enrollmentModel.updateOne({ _id: enrollmentId }, atomicUpdate);
+
+      if (shouldUpdateProgressionForModuleCompletion) {
+        await this.progressionService.onModuleCompleted(
+          enrollment.studentId.toString(),
+          ((enrollment.moduleId as any)._id ?? enrollment.moduleId).toString(),
+        );
+      }
     } else if (lpIndex >= 0) {
       // Backfill/sync for old enrollments where completion doc exists but
       // lessonProgress flag was not previously updated.
@@ -1115,9 +1144,20 @@ export class ModuleEnrollmentsService {
       const allLessonsDone =
         enrollment.completedLessons >= enrollment.totalLessons &&
         !enrollment.requiresModuleRepeat;
+      const hasFinalAssessment = (module?.finalAssessment?.questions?.length ?? 0) > 0;
 
-      if (allLessonsDone && module?.finalAssessment) {
+      if (allLessonsDone && hasFinalAssessment) {
         navigateTo = 'final_assessment';
+      } else if (allLessonsDone && !hasFinalAssessment && !enrollment.isCompleted) {
+        enrollment.isCompleted = true;
+        enrollment.completedAt = new Date();
+        enrollment.progress = 100;
+        enrollment.certificateEarned = false;
+        await enrollment.save();
+        await this.progressionService.onModuleCompleted(
+          enrollment.studentId.toString(),
+          module._id.toString(),
+        );
       } else {
         const nextIncomplete = enrollment.lessonProgress
           .filter((lp) => !lp.isCompleted && lp.lessonIndex > lessonIndex)
@@ -1152,7 +1192,6 @@ export class ModuleEnrollmentsService {
     score: number;
     results: any[];
     levelUnlocked?: string;
-    certificate?: any;
   }> {
     if (!Types.ObjectId.isValid(enrollmentId)) {
       throw new BadRequestException('Invalid enrollment ID');
@@ -1316,7 +1355,6 @@ export class ModuleEnrollmentsService {
     enrollment.finalAssessmentResults = results;
 
     let levelUnlocked: string | undefined;
-    let certificate: any;
     let requiresModuleRepeat = false;
     let remainingAttempts: number | undefined;
     let message: string;
@@ -1326,8 +1364,6 @@ export class ModuleEnrollmentsService {
       message = 'Congratulations! You passed the final assessment.';
       enrollment.isCompleted = true;
       enrollment.completedAt = new Date();
-      enrollment.certificateEarned = true;
-      enrollment.certificateIssuedAt = new Date();
       // Recompute completedLessons in case counter drifted, then force progress to 100
       enrollment.completedLessons = enrollment.lessonProgress.filter((lp) => lp.isCompleted).length;
       enrollment.progress = 100;
@@ -1339,19 +1375,14 @@ export class ModuleEnrollmentsService {
       );
       levelUnlocked = progressionResult.levelUnlocked;
 
-      // Generate certificate record
-      certificate = await this.generateCertificate(enrollment, module, score);
-
       // Dashboard notifications
       const student = await this.userModel.findById(enrollment.studentId);
       if (student) {
         await this.notificationsService.createNotification(
           student._id.toString(),
-          NotificationType.CERTIFICATE_EARNED,
-          'Certificate Earned!',
-          `Congratulations! You passed "${module.title}" and earned your certificate.`,
-          undefined,
-          certificate?._id?.toString(),
+          NotificationType.LEVEL_UNLOCKED,
+          'Module Completed!',
+          `Congratulations! You passed the final assessment for "${module.title}".`,
         );
       }
       if (levelUnlocked && student) {
@@ -1404,7 +1435,6 @@ export class ModuleEnrollmentsService {
       score,
       results: sanitizedResults,
       levelUnlocked,
-      certificate,
       requiresModuleRepeat,
       remainingAttempts,
       message,
@@ -1463,7 +1493,6 @@ export class ModuleEnrollmentsService {
     enrollment: ModuleEnrollment;
     passed: boolean;
     levelUnlocked?: string;
-    certificate?: any;
   }> {
     const enrollment = await this.enrollmentModel
       .findById(enrollmentId)
@@ -1510,7 +1539,6 @@ export class ModuleEnrollmentsService {
     }
 
     let levelUnlocked: string | undefined;
-    let certificate: any;
 
     const student = await this.userModel.findById(enrollment.studentId);
     const studentName = student
@@ -1522,8 +1550,6 @@ export class ModuleEnrollmentsService {
     if (pass) {
       enrollment.isCompleted = true;
       enrollment.completedAt = new Date();
-      enrollment.certificateEarned = true;
-      enrollment.certificateIssuedAt = new Date();
       enrollment.completedLessons = enrollment.lessonProgress.filter((lp) => lp.isCompleted).length;
       enrollment.progress = 100;
 
@@ -1534,16 +1560,7 @@ export class ModuleEnrollmentsService {
       );
       levelUnlocked = progressionResult.levelUnlocked;
 
-      // Generate certificate
-      certificate = await this.generateCertificate(
-        enrollment,
-        module,
-        finalScore,
-      );
-
-      const certUrl = certificate?.publicId
-        ? `${frontendUrl}/certificates/${certificate.publicId}`
-        : `${frontendUrl}/student/certificates`;
+      const certUrl = `${frontendUrl}/student`;
 
       // Email student — passed
       if (student?.email) {
@@ -1565,18 +1582,15 @@ export class ModuleEnrollmentsService {
           student._id.toString(),
           NotificationType.ESSAY_GRADED,
           'Essay Assessment Passed!',
-          `Your essay for "${module.title}" has been reviewed. You passed! Your certificate is ready.`,
+          `Your essay for "${module.title}" has been reviewed. You passed!`,
           certUrl,
-          certificate?._id?.toString(),
         );
 
         await this.notificationsService.createNotification(
           student._id.toString(),
-          NotificationType.CERTIFICATE_EARNED,
-          'Certificate Earned!',
-          `Congratulations! You earned a certificate for completing "${module.title}".`,
-          certUrl,
-          certificate?._id?.toString(),
+          NotificationType.LEVEL_UNLOCKED,
+          'Module Completed!',
+          `Congratulations! You completed "${module.title}". Keep going!`,
         );
       }
 
@@ -1646,7 +1660,7 @@ export class ModuleEnrollmentsService {
 
     await enrollment.save();
 
-    return { enrollment, passed: pass, levelUnlocked, certificate };
+    return { enrollment, passed: pass, levelUnlocked };
   }
 
   // ---------------------------------------------------------------------------
