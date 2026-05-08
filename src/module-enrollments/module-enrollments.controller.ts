@@ -99,6 +99,24 @@ export class ModuleEnrollmentsController {
     return { success: true, data };
   }
 
+  // ---------------------------------------------------------------------------
+  // Instructor: list all students enrolled in their modules (searchable)
+  // GET /module-enrollments/instructor/students?search=&limit=
+  // ---------------------------------------------------------------------------
+  @Get('instructor/students')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async getInstructorStudents(
+    @Request() req,
+    @Query('search') search?: string,
+  ) {
+    const data = await this.enrollmentsService.getInstructorEnrolledStudents(
+      this.getUserId(req),
+      search,
+    );
+    return { success: true, data };
+  }
+
   // Get enrollment details
   @Get(':enrollmentId')
   @UseGuards(JwtAuthGuard)

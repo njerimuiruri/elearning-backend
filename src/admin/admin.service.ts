@@ -3322,7 +3322,125 @@ export class AdminService {
    * Supports filters: status, category, cohort, risk, search, page, limit.
    */
   async getFellowsProgress(filters: {
+    search?: string;
+    module?: string;
     status?: string;
+    categoryId?: string;
+    cohort?: string;
+    risk?: string;
+    page?: number;
+    limit?: number;
+  } = {}) {
+    const { search, module, status } = filters;
+    const pipeline: any[] = [];
+
+    if (module && module !== 'all' && Types.ObjectId.isValid(module)) {
+      pipeline.push({
+        $match: {
+          moduleId: new Types.ObjectId(module),
+        },
+      });
+    }
+
+    pipeline.push(
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'studentId',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      {
+        $lookup: {
+          from: 'modules',
+          localField: 'moduleId',
+          foreignField: '_id',
+          as: 'module',
+        },
+      },
+      {
+        $match: {
+          'user.0.role': UserRole.STUDENT,
+          'user.0.userType': 'fellow',
+        },
+      },
+      {
+        $project: {
+          progress: 1,
+          isCompleted: 1,
+          completedLessons: 1,
+          totalLessons: 1,
+          finalAssessmentPassed: 1,
+          fullName: { $arrayElemAt: ['$user.fullName', 0] },
+          email: { $arrayElemAt: ['$user.email', 0] },
+          fellowId: { $arrayElemAt: ['$user.fellowData.fellowId', 0] },
+          cohort: { $arrayElemAt: ['$user.fellowData.cohort', 0] },
+          region: { $arrayElemAt: ['$user.fellowData.region', 0] },
+          track: { $arrayElemAt: ['$user.fellowData.track', 0] },
+          moduleId: { $arrayElemAt: ['$module._id', 0] },
+          moduleTitle: { $arrayElemAt: ['$module.title', 0] },
+          moduleOrder: { $arrayElemAt: ['$module.order', 0] },
+        },
+      },
+    );
+
+    if (search) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { fullName: { $regex: search, $options: 'i' } },
+            { email: { $regex: search, $options: 'i' } },
+          ],
+        },
+      });
+    }
+
+    if (status && status !== 'all') {
+      const statusMatch: Record<string, any> = {
+        completed: { $or: [{ isCompleted: true }, { progress: 100 }] },
+        inprogress: { progress: { $gt: 0, $lt: 100 } },
+        notstarted: { $or: [{ progress: 0 }, { progress: { $exists: false } }] },
+      };
+
+      if (statusMatch[status]) {
+        pipeline.push({ $match: statusMatch[status] });
+      }
+    }
+
+    pipeline.push(
+      {
+        $group: {
+          _id: '$email',
+          fullName: { $first: '$fullName' },
+          email: { $first: '$email' },
+          fellowId: { $first: '$fellowId' },
+          cohort: { $first: '$cohort' },
+          region: { $first: '$region' },
+          track: { $first: '$track' },
+          modules: {
+            $push: {
+              moduleId: '$moduleId',
+              title: '$moduleTitle',
+              order: '$moduleOrder',
+              progress: '$progress',
+              isCompleted: '$isCompleted',
+              completedLessons: '$completedLessons',
+              totalLessons: '$totalLessons',
+              finalAssessmentPassed: '$finalAssessmentPassed',
+            },
+          },
+        },
+      },
+      { $sort: { fullName: 1 } },
+    );
+
+    return this.moduleEnrollmentModel.aggregate(pipeline);
+  }
+
+  async getFellowsProgressLegacy(filters: {
+    status?: string;
+    module?: string;
     categoryId?: string;
     cohort?: string;
     risk?: string;

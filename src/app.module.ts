@@ -30,6 +30,7 @@ import { ModuleRatingsModule } from './module-ratings/module-ratings.module';
 import { DraftsModule } from './drafts/drafts.module';
 import { AdmissionLettersModule } from './admission-letters/admission-letters.module';
 import { EmailQueueModule } from './email-queue/email-queue.module';
+import { ProjectsModule } from './projects/projects.module';
 
 @Module({
   imports: [
@@ -105,6 +106,7 @@ import { EmailQueueModule } from './email-queue/email-queue.module';
     DraftsModule,
     AdmissionLettersModule,
     EmailQueueModule,
+    ProjectsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -140,4 +140,21 @@ export class MessagesController {
       data: conversations,
     };
   }
+
+  // Admin: read all messages between two specific users (oversight)
+  @Get('admin/conversation')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminGetConversationBetween(
+    @Query('user1Id') user1Id: string,
+    @Query('user2Id') user2Id: string,
+    @Query('limit') limit?: string,
+  ) {
+    const messages = await this.messagesService.getConversation(
+      user1Id,
+      user2Id,
+      limit ? parseInt(limit) : 100,
+    );
+    return { success: true, data: messages };
+  }
 }

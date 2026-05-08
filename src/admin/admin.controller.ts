@@ -266,31 +266,19 @@ export class AdminController {
   }
 
   @Get('fellows/progress')
-  @ApiOperation({ summary: 'List all fellows with real-time progress data' })
+  @ApiOperation({ summary: 'List all fellows with module completion progress' })
   @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'categoryId', required: false })
-  @ApiQuery({ name: 'cohort', required: false })
-  @ApiQuery({ name: 'risk', required: false, description: 'ON_TRACK|AT_RISK|CRITICAL|INACTIVE|COMPLETED' })
+  @ApiQuery({ name: 'module', required: false, description: 'Module ObjectId' })
   @ApiQuery({ name: 'search', required: false })
-  @ApiQuery({ name: 'page', required: false })
-  @ApiQuery({ name: 'limit', required: false })
   async getFellowsProgress(
     @Query('status') status?: string,
-    @Query('categoryId') categoryId?: string,
-    @Query('cohort') cohort?: string,
-    @Query('risk') risk?: string,
+    @Query('module') module?: string,
     @Query('search') search?: string,
-    @Query('page') page?: string,
-    @Query('limit') limit?: string,
   ) {
     return this.adminService.getFellowsProgress({
       status,
-      categoryId,
-      cohort,
-      risk,
+      module,
       search,
-      page: page ? parseInt(page, 10) : 1,
-      limit: limit ? parseInt(limit, 10) : 30,
     });
   }
 

@@ -1766,6 +1766,54 @@ export class ModuleEnrollmentsService {
       .lean();
   }
 
+  // ---------------------------------------------------------------------------
+  // Get all students enrolled in any of this instructor's modules (searchable)
+  // ---------------------------------------------------------------------------
+  async getInstructorEnrolledStudents(
+    instructorId: string,
+    search?: string,
+  ): Promise<any[]> {
+    const modules = await this.moduleModel
+      .find({ instructorIds: new Types.ObjectId(instructorId) })
+      .select('_id')
+      .lean();
+    if (modules.length === 0) return [];
+
+    const moduleIds = modules.map((m) => m._id);
+    const enrollments = await this.enrollmentModel
+      .find({ moduleId: { $in: moduleIds } })
+      .populate('studentId', 'firstName lastName email _id')
+      .select('studentId')
+      .lean();
+
+    const seen = new Set<string>();
+    const students: any[] = [];
+    for (const enrollment of enrollments) {
+      const student = enrollment.studentId as any;
+      if (!student?._id) continue;
+      const id = student._id.toString();
+      if (seen.has(id)) continue;
+      seen.add(id);
+      students.push({
+        _id: id,
+        firstName: student.firstName || '',
+        lastName: student.lastName || '',
+        email: student.email || '',
+        role: 'student',
+      });
+    }
+
+    if (search) {
+      const q = search.toLowerCase();
+      return students.filter(
+        (s) =>
+          `${s.firstName} ${s.lastName}`.toLowerCase().includes(q) ||
+          s.email.toLowerCase().includes(q),
+      );
+    }
+    return students;
+  }
+
   // Grade assessment (auto-grade MC and TF)
   private gradeAssessment(
     questions: any[],

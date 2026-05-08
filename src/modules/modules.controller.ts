@@ -371,6 +371,21 @@ export class ModulesController {
   // WORKFLOW ENDPOINTS
   // ══════════════════════════════════════════════════════════════════════════
 
+  @Get('admin/fellows/progress')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getFellowsProgress(
+    @Query('search') search?: string,
+    @Query('module') module?: string,
+    @Query('status') status?: string,
+  ) {
+    return await this.modulesService.getFellowsProgress({
+      search,
+      module,
+      status,
+    });
+  }
+
   @Post(':id/submit')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.INSTRUCTOR)

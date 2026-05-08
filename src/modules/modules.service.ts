@@ -144,7 +144,7 @@ export class ModulesService {
     // Visible to students: published/approved modules AND admin-created drafts
     const statusFilter = {
       $or: [
-        { status: { $in: [ModuleStatus.PUBLISHED, ModuleStatus.APPROVED] } },
+        { status: { $in: [ModuleStatus.PUBLISHED, ModuleStatus.APPROVED, ModuleStatus.SUBMITTED] } },
         { status: ModuleStatus.DRAFT, createdByRole: 'admin' },
       ],
     };
@@ -161,13 +161,21 @@ export class ModulesService {
     }
     if (filters?.level) baseQuery.level = filters.level;
     if (filters?.search) {
+      const searchAsNumber = parseInt(filters.search);
+      const orConditions: any[] = [
+        { title: { $regex: filters.search, $options: 'i' } },
+        { description: { $regex: filters.search, $options: 'i' } },
+      ];
+
+      // If the search term is a number, also check the order field
+      if (!isNaN(searchAsNumber)) {
+        orConditions.push({ order: searchAsNumber });
+      }
+
       baseQuery.$and = [
         statusFilter,
         {
-          $or: [
-            { title: { $regex: filters.search, $options: 'i' } },
-            { description: { $regex: filters.search, $options: 'i' } },
-          ],
+          $or: orConditions,
         },
       ];
       delete baseQuery.$or;
@@ -905,7 +913,7 @@ export class ModulesService {
       throw new UnauthorizedException('Not authorized');
     }
 
-    module.isActive = false;''
+    module.isActive = false;
     await module.save();
   }
 
@@ -1876,5 +1884,132 @@ export class ModulesService {
     }
 
     await archive.finalize();
+  }
+
+  // ── Admin: Get Fellows Progress (Aggregation) ─────────────────────────────
+  async getFellowsProgress(filters: { search?: string; module?: string; status?: string }): Promise<any[]> {
+    const pipeline: any[] = [];
+
+    // 1. Initial Match (Filter by Module ID if provided)
+    if (filters.module) {
+      try {
+        pipeline.push({ $match: { moduleId: new Types.ObjectId(filters.module) } });
+      } catch (e) {
+        return [];
+      }
+    }
+
+    pipeline.push(
+      // Join Users
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'studentId',
+          foreignField: '_id',
+          as: 'user',
+        },
+      },
+      { $unwind: '$user' },
+      // Filter for fellows or students
+      {
+        $match: {
+          $or: [
+            { 'user.userType': 'fellow' },
+            { 'user.role': 'student' },
+          ],
+        },
+      },
+      {
+        $lookup: {
+          from: 'modules',
+          localField: 'moduleId',
+          foreignField: '_id',
+          as: 'module',
+        },
+      },
+      { $unwind: '$module' },
+    );
+
+    // 2. Search Filter (Name or Email)
+    if (filters.search) {
+      pipeline.push({
+        $match: {
+          $or: [
+            { 'user.fullName': { $regex: filters.search, $options: 'i' } },
+            { 'user.email': { $regex: filters.search, $options: 'i' } },
+          ],
+        },
+      });
+    }
+
+    pipeline.push(
+      {
+        $project: {
+          progress: 1,
+          isCompleted: 1,
+          completedLessons: 1,
+          totalLessons: 1,
+          finalAssessmentPassed: 1,
+          fullName: '$user.fullName',
+          email: '$user.email',
+          fellowId: '$user.fellowData.fellowId',
+          cohort: '$user.fellowData.cohort',
+          region: '$user.fellowData.region',
+          track: '$user.fellowData.track',
+          moduleTitle: '$module.title',
+          moduleOrder: '$module.order',
+        },
+      },
+      {
+        $group: {
+          _id: '$email',
+          fullName: { $first: '$fullName' },
+          email: { $first: '$email' },
+          fellowId: { $first: '$fellowId' },
+          cohort: { $first: '$cohort' },
+          region: { $first: '$region' },
+          track: { $first: '$track' },
+          modules: {
+            $push: {
+              title: '$moduleTitle',
+              order: '$moduleOrder',
+              progress: '$progress',
+              isCompleted: '$isCompleted',
+              completedLessons: '$completedLessons',
+              totalLessons: '$totalLessons',
+              finalAssessmentPassed: '$finalAssessmentPassed',
+            },
+          },
+        },
+      },
+      { $sort: { fullName: 1 } },
+    );
+
+    // 3. Status Filter (Post-Grouping)
+    if (filters.status) {
+      pipeline.push({
+        $match: {
+          $expr: {
+            $let: {
+              vars: {
+                allCompleted: { $allElementsTrue: { $map: { input: '$modules', as: 'm', in: '$m.isCompleted' } } },
+                anyStarted: { $gt: [{ $size: { $filter: { input: '$modules', as: 'm', cond: { $gt: ['$$m.progress', 0] } } } }, 0] },
+              },
+              in: {
+                $cond: [
+                  { $eq: [filters.status, 'completed'] }, '$$allCompleted',
+                  { $cond: [
+                    { $eq: [filters.status, 'inprogress'] }, { $and: ['$$anyStarted', { $not: '$$allCompleted' }] },
+                    { $cond: [{ $eq: [filters.status, 'notstarted'] }, { $not: '$$anyStarted' }, true] }
+                  ]}
+                ]
+              }
+            }
+          }
+        }
+      });
+    }
+
+    return await this.moduleEnrollmentModel.aggregate(pipeline);
   }
 }
