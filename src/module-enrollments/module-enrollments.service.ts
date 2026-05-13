@@ -147,9 +147,15 @@ export class ModuleEnrollmentsService {
     }
 
     // ── Sequential order gate ─────────────────────────────────────────────────
-    // If a module has order > 1, the student must have completed the previous
-    // module (same category, order - 1) before enrolling.
-    if (category && (module as any).order && (module as any).order > 1) {
+    // Beginner modules are sequential: order N requires order N-1 to be completed.
+    // Intermediate and advanced modules are self-paced — students who have
+    // unlocked the level can enroll in any module within it freely.
+    // Optional modules are also exempt from sequential gating.
+    const isSequentiallyGated =
+      module.level === 'beginner' &&
+      !(module as any).isOptional;
+
+    if (category && isSequentiallyGated && (module as any).order && (module as any).order > 1) {
       const prevModule = await this.moduleModel
         .findOne({
           categoryId: category._id,

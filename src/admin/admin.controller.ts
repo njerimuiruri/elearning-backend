@@ -431,6 +431,31 @@ export class AdminController {
     return this.adminService.getRevenueAnalytics({ startDate, endDate });
   }
 
+  @Get('analytics/assessment-insights')
+  @ApiOperation({ summary: 'Get assessment performance analytics' })
+  async getAssessmentInsights() {
+    return this.adminService.getAssessmentInsights();
+  }
+
+  @Get('analytics/learning-behavior')
+  @ApiOperation({ summary: 'Get peak hours and day-of-week learning behaviour' })
+  @ApiQuery({ name: 'period', required: false, type: 'string', description: 'daily | weekly | monthly | quarterly | yearly' })
+  async getLearningBehaviorAnalytics(@Query('period') period?: string) {
+    return this.adminService.getLearningBehaviorAnalytics(period);
+  }
+
+  @Get('analytics/engagement')
+  @ApiOperation({ summary: 'Get student engagement and at-risk analytics' })
+  async getEngagementAnalytics() {
+    return this.adminService.getEngagementAnalytics();
+  }
+
+  @Get('analytics/demographics')
+  @ApiOperation({ summary: 'Get demographic and geographic analytics' })
+  async getDemographicAnalytics() {
+    return this.adminService.getDemographicAnalytics();
+  }
+
   // Course Management
   @Get('courses/pending')
   async getPendingCourses(

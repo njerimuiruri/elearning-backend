@@ -15,7 +15,10 @@ import {
   ModuleEnrollment,
   ModuleEnrollmentSchema,
 } from '../schemas/module-enrollment.schema';
+import { User, UserSchema } from '../schemas/user.schema';
 import { ModulesModule } from '../modules/modules.module';
+import { CommonModule } from '../common/common.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -23,8 +26,11 @@ import { ModulesModule } from '../modules/modules.module';
       { name: StudentProgression.name, schema: StudentProgressionSchema },
       { name: ModuleSchema.name, schema: ModuleSchemaDefinition },
       { name: ModuleEnrollment.name, schema: ModuleEnrollmentSchema },
+      { name: User.name, schema: UserSchema },
     ]),
     ModulesModule,
+    CommonModule,
+    NotificationsModule,
   ],
   controllers: [ProgressionController],
   providers: [ProgressionService, LevelAccessGuard],

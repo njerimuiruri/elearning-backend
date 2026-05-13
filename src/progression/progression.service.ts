@@ -4,6 +4,10 @@ import { Model, Types } from 'mongoose';
 import { StudentProgression } from '../schemas/student-progression.schema';
 import { Module, ModuleLevel, ModuleStatus } from '../schemas/module.schema';
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
+import { User } from '../schemas/user.schema';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../schemas/notification.schema';
+import { EmailService } from '../common/services/email.service';
 
 @Injectable()
 export class ProgressionService {
@@ -14,6 +18,10 @@ export class ProgressionService {
     private moduleModel: Model<Module>,
     @InjectModel(ModuleEnrollment.name)
     private enrollmentModel: Model<ModuleEnrollment>,
+    @InjectModel(User.name)
+    private userModel: Model<User>,
+    private notificationsService: NotificationsService,
+    private emailService: EmailService,
   ) {}
 
   // Initialize progression for student in category
@@ -92,17 +100,93 @@ export class ProgressionService {
     // Beginner is always accessible
     if (level === ModuleLevel.BEGINNER) return true;
 
+    const requiredLevel =
+      level === ModuleLevel.INTERMEDIATE
+        ? ModuleLevel.BEGINNER
+        : ModuleLevel.INTERMEDIATE;
+
+    // Use actual completed enrollments as ground truth instead of the stored
+    // counter, which can drift when onModuleCompleted calls are missed or the
+    // totalModules snapshot becomes stale after module publish/unpublish actions.
+    const requiredModules = await this.moduleModel
+      .find({
+        categoryId: new Types.ObjectId(categoryId),
+        level: requiredLevel,
+        status: ModuleStatus.PUBLISHED,
+        isActive: true,
+      })
+      .select('_id')
+      .lean();
+
+    // No prerequisite modules published → open access
+    if (requiredModules.length === 0) return true;
+
+    const completedCount = await this.enrollmentModel.countDocuments({
+      studentId: new Types.ObjectId(studentId),
+      moduleId: { $in: requiredModules.map((m) => m._id) },
+      isCompleted: true,
+    });
+
+    const allCompleted = completedCount >= requiredModules.length;
+
+    if (allCompleted) {
+      // Eagerly repair the progression document so the frontend also reflects
+      // the correct state on the next data fetch.
+      await this.repairLevelUnlock(studentId, categoryId, requiredLevel);
+    }
+
+    return allCompleted;
+  }
+
+  private async repairLevelUnlock(
+    studentId: string,
+    categoryId: string,
+    completedLevel: ModuleLevel,
+  ): Promise<void> {
     const progression = await this.progressionModel.findOne({
       studentId: new Types.ObjectId(studentId),
       categoryId: new Types.ObjectId(categoryId),
     });
+    if (!progression) return;
 
-    if (!progression) return false;
+    const nextLevel =
+      completedLevel === ModuleLevel.BEGINNER
+        ? ModuleLevel.INTERMEDIATE
+        : ModuleLevel.ADVANCED;
 
     const levelProgress = progression.levelProgress.find(
-      (lp) => lp.level === level,
+      (lp) => lp.level === completedLevel,
     );
-    return levelProgress?.isUnlocked || false;
+    const nextLevelProgress = progression.levelProgress.find(
+      (lp) => lp.level === nextLevel,
+    );
+
+    let needsSave = false;
+
+    if (levelProgress && !levelProgress.isCompleted) {
+      levelProgress.isCompleted = true;
+      levelProgress.completedAt = new Date();
+      needsSave = true;
+    }
+
+    let justUnlocked = false;
+    if (nextLevelProgress && !nextLevelProgress.isUnlocked) {
+      nextLevelProgress.isUnlocked = true;
+      nextLevelProgress.unlockedAt = new Date();
+      if (progression.currentLevel === completedLevel) {
+        progression.currentLevel = nextLevel;
+      }
+      needsSave = true;
+      justUnlocked = true;
+    }
+
+    if (needsSave) {
+      await progression.save();
+    }
+
+    if (justUnlocked) {
+      this.notifyLevelUnlocked(studentId, nextLevel).catch(() => {});
+    }
   }
 
   /**
@@ -188,10 +272,11 @@ export class ProgressionService {
       );
     }
 
-    // Add to completed modules if not already there
-    if (
-      !progression.completedModuleIds.some((id) => id.toString() === moduleId)
-    ) {
+    const isNewCompletion = !progression.completedModuleIds.some(
+      (id) => id.toString() === moduleId,
+    );
+
+    if (isNewCompletion) {
       progression.completedModuleIds.push(new Types.ObjectId(moduleId));
       progression.totalModulesCompleted++;
     }
@@ -204,7 +289,25 @@ export class ProgressionService {
     let levelUnlocked: string | undefined;
 
     if (levelProgress) {
-      levelProgress.completedModules++;
+      // Only increment when this is the first completion of this module.
+      // Without this guard the counter inflates on repeated calls (e.g. when a
+      // student retakes and passes the final assessment) and can permanently
+      // exceed totalModules, making further completions appear already done.
+      if (isNewCompletion) {
+        levelProgress.completedModules++;
+      }
+
+      // Refresh totalModules from the DB so that modules published/unpublished
+      // after the progression was initialised are correctly accounted for.
+      const currentTotal = await this.moduleModel.countDocuments({
+        categoryId: module.categoryId,
+        level: module.level,
+        status: ModuleStatus.PUBLISHED,
+        isActive: true,
+      });
+      if (currentTotal > 0) {
+        levelProgress.totalModules = currentTotal;
+      }
 
       // Check if level is complete
       if (levelProgress.completedModules >= levelProgress.totalModules) {
@@ -214,6 +317,10 @@ export class ProgressionService {
         // Unlock next level
         levelUnlocked = this.unlockNextLevel(progression, module.level);
       }
+    }
+
+    if (levelUnlocked) {
+      this.notifyLevelUnlocked(studentId, levelUnlocked).catch(() => {});
     }
 
     progression.overallProgress =
@@ -228,6 +335,46 @@ export class ProgressionService {
     await progression.save();
 
     return { levelUnlocked, progression };
+  }
+
+  private async notifyLevelUnlocked(
+    studentId: string,
+    unlockedLevel: string,
+  ): Promise<void> {
+    const levelLabel =
+      unlockedLevel.charAt(0).toUpperCase() + unlockedLevel.slice(1);
+
+    const student = await this.userModel
+      .findById(studentId)
+      .select('firstName lastName email')
+      .lean();
+
+    if (!student) return;
+
+    const studentName =
+      `${(student as any).firstName || ''} ${(student as any).lastName || ''}`.trim() ||
+      'Fellow';
+
+    // Dashboard notification
+    await this.notificationsService
+      .createNotification(
+        studentId,
+        NotificationType.LEVEL_UNLOCKED,
+        `${levelLabel} Level Unlocked!`,
+        `Congratulations! You've completed all Beginner modules and unlocked the ${levelLabel} Level. You can now enrol in any ${levelLabel} module.`,
+      )
+      .catch(() => {});
+
+    // Email
+    if ((student as any).email) {
+      await this.emailService
+        .sendLevelUnlockedEmail(
+          (student as any).email,
+          studentName,
+          unlockedLevel,
+        )
+        .catch(() => {});
+    }
   }
 
   private unlockNextLevel(

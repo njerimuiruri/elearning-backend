@@ -2531,6 +2531,89 @@ The Arin Publishing Academy Team
     }
   }
 
+  /**
+   * Congratulate a student on unlocking the next level (e.g. Intermediate).
+   */
+  async sendLevelUnlockedEmail(
+    studentEmail: string,
+    studentName: string,
+    unlockedLevel: string,
+  ): Promise<void> {
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+
+    const levelLabel =
+      unlockedLevel.charAt(0).toUpperCase() + unlockedLevel.slice(1);
+
+    const subject = `You've unlocked the ${levelLabel} Level! 🎉`;
+
+    const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden">
+
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#021d49 0%,#1d4ed8 100%);padding:36px 32px;text-align:center">
+        <div style="background:rgba(255,255,255,0.15);width:72px;height:72px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px">
+          <span style="font-size:36px">🏆</span>
+        </div>
+        <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:800">Congratulations, ${studentName}!</h1>
+        <p style="color:#bfdbfe;margin:8px 0 0;font-size:15px">You've unlocked the <strong style="color:#fde68a">${levelLabel} Level</strong></p>
+      </div>
+
+      <!-- Body -->
+      <div style="background:#f9fafb;padding:32px">
+        <p style="color:#374151;font-size:15px;line-height:1.7;margin-top:0">
+          You've successfully completed all <strong>Beginner modules</strong> in your programme.
+          This is a major milestone — well done!
+        </p>
+
+        <!-- Achievement box -->
+        <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:20px;margin:24px 0">
+          <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.05em">What's unlocked</p>
+          <p style="margin:0;font-size:16px;font-weight:700;color:#78350f">
+            🔓 ${levelLabel} Level modules
+          </p>
+          <p style="margin:8px 0 0;font-size:13px;color:#92400e;line-height:1.5">
+            You can now enrol in any ${levelLabel} module at your own pace.
+            No set order — pick what interests you most and dive in.
+          </p>
+        </div>
+
+        <p style="color:#374151;font-size:15px;line-height:1.7">
+          Head back to your dashboard to explore the new modules available to you.
+        </p>
+
+        <!-- CTA -->
+        <div style="text-align:center;margin:32px 0 16px">
+          <a href="${frontendUrl}/student/modules"
+             style="display:inline-block;background:#021d49;color:#ffffff;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700">
+            Explore ${levelLabel} Modules →
+          </a>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f3f4f6;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center">
+        <p style="margin:0;font-size:12px;color:#9ca3af">
+          ARIN E-Learning Platform · You're receiving this because you completed a level milestone.
+        </p>
+      </div>
+    </div>`;
+
+    const text = `Congratulations ${studentName}!\n\nYou have unlocked the ${levelLabel} Level.\n\nYou can now enrol in any ${levelLabel} module at your own pace.\n\nVisit your dashboard: ${frontendUrl}/student/modules\n\nARIN E-Learning Platform`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: studentEmail,
+        subject,
+        html,
+        text,
+      });
+    } catch (error: any) {
+      console.error('[EmailService] sendLevelUnlockedEmail FAILED:', error.message);
+    }
+  }
+
   /** Strip HTML tags to produce a plain-text fallback for email clients. */
   private htmlToPlainText(html: string): string {
     return html

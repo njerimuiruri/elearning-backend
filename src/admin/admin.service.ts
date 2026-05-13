@@ -2371,6 +2371,556 @@ export class AdminService {
     };
   }
 
+  // ── Assessment Insights ────────────────────────────────────────────────────
+  async getAssessmentInsights() {
+    const Enrollment = this.userModel.db.model('Enrollment');
+
+    const [finalStats, moduleStats, coursePerformance, scoreDistRaw] =
+      await Promise.all([
+        // Overall final-assessment stats
+        Enrollment.aggregate([
+          { $match: { finalAssessmentAttempts: { $gt: 0 } } },
+          {
+            $group: {
+              _id: null,
+              avgScore: { $avg: '$finalAssessmentScore' },
+              passedCount: {
+                $sum: { $cond: ['$finalAssessmentPassed', 1, 0] },
+              },
+              totalAttempted: { $sum: 1 },
+              avgAttempts: { $avg: '$finalAssessmentAttempts' },
+              retakers: {
+                $sum: {
+                  $cond: [{ $gt: ['$finalAssessmentAttempts', 1] }, 1, 0],
+                },
+              },
+            },
+          },
+        ]),
+
+        // Module-level assessment stats
+        Enrollment.aggregate([
+          { $unwind: '$moduleProgress' },
+          { $match: { 'moduleProgress.assessmentAttempts': { $gt: 0 } } },
+          {
+            $group: {
+              _id: null,
+              avgScore: { $avg: '$moduleProgress.lastScore' },
+              passedCount: {
+                $sum: {
+                  $cond: ['$moduleProgress.assessmentPassed', 1, 0],
+                },
+              },
+              totalAttempted: { $sum: 1 },
+              avgAttempts: { $avg: '$moduleProgress.assessmentAttempts' },
+              retakers: {
+                $sum: {
+                  $cond: [
+                    { $gt: ['$moduleProgress.assessmentAttempts', 1] },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        ]),
+
+        // Per-course assessment performance
+        Enrollment.aggregate([
+          { $match: { finalAssessmentAttempts: { $gt: 0 } } },
+          {
+            $group: {
+              _id: '$courseId',
+              avgScore: { $avg: '$finalAssessmentScore' },
+              passedCount: {
+                $sum: { $cond: ['$finalAssessmentPassed', 1, 0] },
+              },
+              totalAttempted: { $sum: 1 },
+              avgAttempts: { $avg: '$finalAssessmentAttempts' },
+            },
+          },
+          {
+            $lookup: {
+              from: 'courses',
+              localField: '_id',
+              foreignField: '_id',
+              as: 'course',
+            },
+          },
+          { $unwind: { path: '$course', preserveNullAndEmptyArrays: false } },
+          {
+            $project: {
+              courseId: '$_id',
+              courseName: '$course.title',
+              avgScore: { $round: ['$avgScore', 1] },
+              passRate: {
+                $round: [
+                  {
+                    $multiply: [
+                      { $divide: ['$passedCount', '$totalAttempted'] },
+                      100,
+                    ],
+                  },
+                  1,
+                ],
+              },
+              avgAttempts: { $round: ['$avgAttempts', 1] },
+              totalAttempted: 1,
+            },
+          },
+          { $sort: { avgScore: 1 } },
+        ]),
+
+        // Score distribution buckets
+        Enrollment.aggregate([
+          { $match: { finalAssessmentAttempts: { $gt: 0 } } },
+          {
+            $addFields: {
+              scoreBucket: {
+                $switch: {
+                  branches: [
+                    {
+                      case: { $lte: ['$finalAssessmentScore', 20] },
+                      then: '0-20',
+                    },
+                    {
+                      case: { $lte: ['$finalAssessmentScore', 40] },
+                      then: '21-40',
+                    },
+                    {
+                      case: { $lte: ['$finalAssessmentScore', 60] },
+                      then: '41-60',
+                    },
+                    {
+                      case: { $lte: ['$finalAssessmentScore', 80] },
+                      then: '61-80',
+                    },
+                    {
+                      case: { $lte: ['$finalAssessmentScore', 100] },
+                      then: '81-100',
+                    },
+                  ],
+                  default: '0-20',
+                },
+              },
+            },
+          },
+          { $group: { _id: '$scoreBucket', count: { $sum: 1 } } },
+        ]),
+      ]);
+
+    const fs = finalStats[0] || {};
+    const ms = moduleStats[0] || {};
+    const ORDER = ['0-20', '21-40', '41-60', '61-80', '81-100'];
+
+    return {
+      finalAssessment: {
+        avgScore: Math.round(fs.avgScore || 0),
+        passedCount: fs.passedCount || 0,
+        totalAttempted: fs.totalAttempted || 0,
+        passRate:
+          fs.totalAttempted > 0
+            ? +((fs.passedCount / fs.totalAttempted) * 100).toFixed(1)
+            : 0,
+        avgAttempts: +(fs.avgAttempts || 1).toFixed(1),
+        retakeRate:
+          fs.totalAttempted > 0
+            ? +((fs.retakers / fs.totalAttempted) * 100).toFixed(1)
+            : 0,
+      },
+      moduleAssessment: {
+        avgScore: Math.round(ms.avgScore || 0),
+        totalAttempted: ms.totalAttempted || 0,
+        passRate:
+          ms.totalAttempted > 0
+            ? +((ms.passedCount / ms.totalAttempted) * 100).toFixed(1)
+            : 0,
+        avgAttempts: +(ms.avgAttempts || 1).toFixed(1),
+        retakeRate:
+          ms.totalAttempted > 0
+            ? +((ms.retakers / ms.totalAttempted) * 100).toFixed(1)
+            : 0,
+      },
+      scoreDistribution: ORDER.map((range) => ({
+        range: `${range}%`,
+        count: scoreDistRaw.find((b: any) => b._id === range)?.count || 0,
+      })),
+      coursePerformance,
+    };
+  }
+
+  // ── Learning Behaviour (peak hours / day-of-week) ──────────────────────────
+  async getLearningBehaviorAnalytics(period = 'weekly') {
+    const LessonCompletion = this.userModel.db.model('LessonCompletion');
+
+    const now = new Date();
+    const MS = {
+      daily: 24 * 3600 * 1000,
+      weekly: 7 * 24 * 3600 * 1000,
+      monthly: 30 * 24 * 3600 * 1000,
+      quarterly: 90 * 24 * 3600 * 1000,
+      yearly: 365 * 24 * 3600 * 1000,
+    };
+    const startDate = new Date(
+      now.getTime() - (MS[period] ?? MS.weekly),
+    );
+
+    const [hourlyRaw, dayRaw] = await Promise.all([
+      LessonCompletion.aggregate([
+        { $match: { completedAt: { $gte: startDate, $lte: now } } },
+        {
+          $group: {
+            _id: { $hour: '$completedAt' },
+            completions: { $sum: 1 },
+            uniqueStudents: { $addToSet: '$studentId' },
+          },
+        },
+        {
+          $project: {
+            hour: '$_id',
+            completions: 1,
+            students: { $size: '$uniqueStudents' },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+      LessonCompletion.aggregate([
+        { $match: { completedAt: { $gte: startDate, $lte: now } } },
+        {
+          $group: {
+            _id: { $dayOfWeek: '$completedAt' },
+            completions: { $sum: 1 },
+            uniqueStudents: { $addToSet: '$studentId' },
+          },
+        },
+        {
+          $project: {
+            dow: '$_id',
+            completions: 1,
+            students: { $size: '$uniqueStudents' },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+    ]);
+
+    // Full 24-hour array
+    const hourMap = new Map(hourlyRaw.map((h: any) => [h.hour, h]));
+    const peakHours = Array.from({ length: 24 }, (_, h) => {
+      const d = hourMap.get(h) as any;
+      const label =
+        h === 0 ? '12AM' : h < 12 ? `${h}AM` : h === 12 ? '12PM' : `${h - 12}PM`;
+      return {
+        hour: h,
+        label,
+        completions: d?.completions || 0,
+        students: d?.students || 0,
+      };
+    });
+
+    // Monday→Sunday (MongoDB: 1=Sun 2=Mon … 7=Sat)
+    const DOW_NAMES = ['', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayMap = new Map(dayRaw.map((d: any) => [d.dow, d]));
+    const weekdays = [2, 3, 4, 5, 6, 7, 1].map((dow) => {
+      const d = dayMap.get(dow) as any;
+      return {
+        day: DOW_NAMES[dow],
+        completions: d?.completions || 0,
+        students: d?.students || 0,
+      };
+    });
+
+    const totalCompletions = peakHours.reduce(
+      (s, h) => s + h.completions,
+      0,
+    );
+    const peakHour = peakHours.reduce(
+      (mx, h) => (h.completions > mx.completions ? h : mx),
+      peakHours[0],
+    );
+    const peakDay = weekdays.reduce(
+      (mx, d) => (d.completions > mx.completions ? d : mx),
+      weekdays[0],
+    );
+
+    return {
+      period,
+      peakHours,
+      weekdays,
+      totalCompletions,
+      peakHour: peakHour?.label ?? 'N/A',
+      peakDay: peakDay?.day ?? 'N/A',
+    };
+  }
+
+  // ── Engagement Analytics ────────────────────────────────────────────────────
+  async getEngagementAnalytics() {
+    const Enrollment = this.userModel.db.model('Enrollment');
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+
+    const [active, atRisk, dormant, total, topStudents, atRiskList] =
+      await Promise.all([
+        this.userModel.countDocuments({
+          role: UserRole.STUDENT,
+          lastLogin: { $gte: sevenDaysAgo },
+        }),
+        this.userModel.countDocuments({
+          role: UserRole.STUDENT,
+          lastLogin: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo },
+        }),
+        this.userModel.countDocuments({
+          role: UserRole.STUDENT,
+          $or: [
+            { lastLogin: { $lt: thirtyDaysAgo } },
+            { lastLogin: null },
+          ],
+        }),
+        this.userModel.countDocuments({ role: UserRole.STUDENT }),
+
+        // Top students by engagement score
+        Enrollment.aggregate([
+          {
+            $group: {
+              _id: '$studentId',
+              avgProgress: { $avg: '$progress' },
+              completedCourses: {
+                $sum: { $cond: ['$isCompleted', 1, 0] },
+              },
+              totalEnrollments: { $sum: 1 },
+              lastActive: { $max: '$lastAccessedAt' },
+            },
+          },
+          {
+            $addFields: {
+              engagementScore: {
+                $add: [
+                  { $multiply: ['$avgProgress', 0.5] },
+                  {
+                    $multiply: [
+                      { $min: ['$totalEnrollments', 5] },
+                      10,
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+          { $sort: { engagementScore: -1 } },
+          { $limit: 10 },
+          {
+            $lookup: {
+              from: 'users',
+              localField: '_id',
+              foreignField: '_id',
+              as: 'student',
+            },
+          },
+          {
+            $unwind: {
+              path: '$student',
+              preserveNullAndEmptyArrays: false,
+            },
+          },
+          {
+            $project: {
+              name: {
+                $concat: [
+                  '$student.firstName',
+                  ' ',
+                  '$student.lastName',
+                ],
+              },
+              email: '$student.email',
+              country: '$student.country',
+              avgProgress: { $round: ['$avgProgress', 1] },
+              completedCourses: 1,
+              totalEnrollments: 1,
+              lastActive: 1,
+              engagementScore: { $round: ['$engagementScore', 0] },
+            },
+          },
+        ]),
+
+        // At-risk students
+        Enrollment.aggregate([
+          {
+            $match: {
+              isCompleted: false,
+              progress: { $lt: 50 },
+              $or: [
+                { lastAccessedAt: { $lt: sevenDaysAgo } },
+                { lastAccessedAt: null },
+              ],
+            },
+          },
+          {
+            $group: {
+              _id: '$studentId',
+              avgProgress: { $avg: '$progress' },
+              coursesAtRisk: { $sum: 1 },
+              lastActive: { $max: '$lastAccessedAt' },
+              daysInactive: {
+                $max: {
+                  $divide: [
+                    {
+                      $subtract: [
+                        now,
+                        { $ifNull: ['$lastAccessedAt', new Date(0)] },
+                      ],
+                    },
+                    86400000,
+                  ],
+                },
+              },
+            },
+          },
+          { $sort: { avgProgress: 1 } },
+          { $limit: 10 },
+          {
+            $lookup: {
+              from: 'users',
+              localField: '_id',
+              foreignField: '_id',
+              as: 'student',
+            },
+          },
+          {
+            $unwind: {
+              path: '$student',
+              preserveNullAndEmptyArrays: false,
+            },
+          },
+          {
+            $project: {
+              name: {
+                $concat: [
+                  '$student.firstName',
+                  ' ',
+                  '$student.lastName',
+                ],
+              },
+              email: '$student.email',
+              country: '$student.country',
+              avgProgress: { $round: ['$avgProgress', 1] },
+              coursesAtRisk: 1,
+              lastActive: 1,
+              daysInactive: { $round: ['$daysInactive', 0] },
+            },
+          },
+        ]),
+      ]);
+
+    return {
+      summary: {
+        totalStudents: total,
+        activeStudents: active,
+        atRiskStudents: atRisk,
+        dormantStudents: dormant,
+        activeRate:
+          total > 0 ? +((active / total) * 100).toFixed(1) : 0,
+      },
+      topStudents,
+      atRiskList,
+    };
+  }
+
+  // ── Demographic Analytics ──────────────────────────────────────────────────
+  async getDemographicAnalytics() {
+    const now = new Date();
+    const twelveMonthsAgo = new Date(
+      now.getFullYear(),
+      now.getMonth() - 11,
+      1,
+    );
+    const MONTHS = [
+      'Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec',
+    ];
+
+    const [genderRaw, countryRaw, cohortRaw, regTrendRaw] =
+      await Promise.all([
+        this.userModel.aggregate([
+          {
+            $match: {
+              role: UserRole.STUDENT,
+              gender: { $nin: [null, ''] },
+            },
+          },
+          { $group: { _id: '$gender', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+        ]),
+        this.userModel.aggregate([
+          {
+            $match: {
+              role: UserRole.STUDENT,
+              country: { $nin: [null, ''] },
+            },
+          },
+          { $group: { _id: '$country', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 15 },
+        ]),
+        this.userModel.aggregate([
+          {
+            $match: {
+              role: UserRole.STUDENT,
+              'fellowData.cohort': { $nin: [null, ''] },
+            },
+          },
+          {
+            $group: {
+              _id: '$fellowData.cohort',
+              count: { $sum: 1 },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ]),
+        this.userModel.aggregate([
+          {
+            $match: {
+              role: UserRole.STUDENT,
+              createdAt: { $gte: twelveMonthsAgo },
+            },
+          },
+          {
+            $group: {
+              _id: {
+                year: { $year: '$createdAt' },
+                month: { $month: '$createdAt' },
+              },
+              count: { $sum: 1 },
+            },
+          },
+          { $sort: { '_id.year': 1, '_id.month': 1 } },
+        ]),
+      ]);
+
+    return {
+      genderDistribution: genderRaw.map((g: any) => ({
+        gender: g._id,
+        count: g.count,
+      })),
+      countryDistribution: countryRaw.map((c: any) => ({
+        country: c._id,
+        count: c.count,
+      })),
+      cohortDistribution: cohortRaw.map((c: any) => ({
+        cohort: c._id,
+        count: c.count,
+      })),
+      registrationTrend: regTrendRaw.map((r: any) => ({
+        month: MONTHS[r._id.month - 1],
+        year: r._id.year,
+        label: `${MONTHS[r._id.month - 1]} ${r._id.year}`,
+        count: r.count,
+      })),
+    };
+  }
+
   async deleteInstructor(id: string) {
     const instructor = await this.userModel.findOne({
       _id: id,
@@ -3381,6 +3931,7 @@ export class AdminService {
           moduleId: { $arrayElemAt: ['$module._id', 0] },
           moduleTitle: { $arrayElemAt: ['$module.title', 0] },
           moduleOrder: { $arrayElemAt: ['$module.order', 0] },
+          moduleLevel: { $arrayElemAt: ['$module.level', 0] },
         },
       },
     );
@@ -3423,6 +3974,7 @@ export class AdminService {
               moduleId: '$moduleId',
               title: '$moduleTitle',
               order: '$moduleOrder',
+              level: '$moduleLevel',
               progress: '$progress',
               isCompleted: '$isCompleted',
               completedLessons: '$completedLessons',
