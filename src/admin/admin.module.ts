@@ -26,6 +26,10 @@ import {
   ModuleEnrollment,
   ModuleEnrollmentSchema,
 } from '../schemas/module-enrollment.schema';
+import {
+  ModuleCertificate,
+  ModuleCertificateSchema,
+} from '../schemas/module-certificate.schema';
 import { Category, CategorySchema } from '../schemas/category.schema';
 import { EmailService } from '../common/services/email.service';
 import { ReminderService } from '../services/reminder.service';
@@ -44,6 +48,7 @@ import { EmailQueueModule } from '../email-queue/email-queue.module';
       { name: ActivityLog.name, schema: ActivityLogSchema },
       { name: ModuleSchema.name, schema: ModuleSchemaDefinition },
       { name: ModuleEnrollment.name, schema: ModuleEnrollmentSchema },
+      { name: ModuleCertificate.name, schema: ModuleCertificateSchema },
       { name: Category.name, schema: CategorySchema },
     ]),
     NotificationsModule,

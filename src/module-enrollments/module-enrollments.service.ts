@@ -1566,8 +1566,6 @@ export class ModuleEnrollmentsService {
       );
       levelUnlocked = progressionResult.levelUnlocked;
 
-      const certUrl = `${frontendUrl}/student`;
-
       // Email student — passed
       if (student?.email) {
         await this.emailService
@@ -1577,7 +1575,6 @@ export class ModuleEnrollmentsService {
             module.title,
             true,
             feedback,
-            certUrl,
           )
           .catch(() => {});
       }
@@ -1589,7 +1586,6 @@ export class ModuleEnrollmentsService {
           NotificationType.ESSAY_GRADED,
           'Essay Assessment Passed!',
           `Your essay for "${module.title}" has been reviewed. You passed!`,
-          certUrl,
         );
 
         await this.notificationsService.createNotification(

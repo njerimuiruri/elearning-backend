@@ -775,6 +775,32 @@ export class AdminController {
     return this.adminService.deleteModuleAsAdmin(id, admin._id?.toString());
   }
 
+  // ===================== CERTIFICATE MANAGEMENT =====================
+
+  @Get('certificates')
+  @ApiOperation({ summary: 'List students who completed modules (all levels or filtered by level)' })
+  async getCertificates(@Query('level') level?: string) {
+    return this.adminService.getModuleCertificates(level);
+  }
+
+  @Post('certificates/:enrollmentId/issue')
+  @ApiOperation({ summary: 'Issue certificate to a student who completed the beginner module' })
+  async issueCertificate(@Param('enrollmentId') enrollmentId: string) {
+    return this.adminService.issueBeginnerCertificate(enrollmentId);
+  }
+
+  @Post('certificates/issue-all')
+  @ApiOperation({ summary: 'Issue certificates for all pending students at a given level' })
+  async issueAllCertificates(@Body() body: { level: string }) {
+    return this.adminService.issueAllCertificates(body.level || 'beginner');
+  }
+
+  @Post('certificates/reset')
+  @ApiOperation({ summary: 'Reset an issued certificate back to pending for a student' })
+  async resetCertificate(@Body() body: { studentId: string; level: string }) {
+    return this.adminService.resetCertificate(body.studentId, body.level);
+  }
+
   @Put('modules/:id/approve-assessment')
   @ApiOperation({ summary: 'Approve a pending assessment update' })
   async approveAssessment(@Param('id') id: string, @CurrentUser() admin: any) {

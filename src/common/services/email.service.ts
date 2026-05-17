@@ -1537,15 +1537,6 @@ E-Learning Platform Team
           <h3 style="color: #16a34a; margin-top: 0;">Instructor Feedback</h3>
           <p>${feedback}</p>
         </div>
-        ${
-          certificateUrl
-            ? `
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${certificateUrl}" style="display: inline-block; background-color: #16a34a; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Your Certificate</a>
-        </div>
-        `
-            : ''
-        }
         <p>Keep up the excellent work!</p>
         <p>Best regards,<br/><strong>Arin Publishing Academy</strong></p>
       </div>
@@ -1567,7 +1558,7 @@ E-Learning Platform Team
       `;
 
     const plainTextContent = passed
-      ? `Essay Passed!\n\nDear ${studentName},\n\nYour essay for "${moduleName}" has been reviewed and you PASSED!\n\nInstructor Feedback:\n${feedback}\n\n${certificateUrl ? `View Certificate: ${certificateUrl}` : ''}\n\nBest regards,\nArin Publishing Academy`
+      ? `Essay Passed!\n\nDear ${studentName},\n\nYour essay for "${moduleName}" has been reviewed and you PASSED!\n\nInstructor Feedback:\n${feedback}\n\nBest regards,\nArin Publishing Academy`
       : `Essay Reviewed\n\nDear ${studentName},\n\nYour essay for "${moduleName}" has been reviewed. Please check the feedback below and try again.\n\nInstructor Feedback:\n${feedback}\n\nBest regards,\nArin Publishing Academy`;
 
     try {

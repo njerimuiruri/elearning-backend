@@ -25,6 +25,7 @@ import {
   AssessmentReviewStatus,
 } from '../schemas/module.schema';
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
+import { ModuleCertificate } from '../schemas/module-certificate.schema';
 import { Category } from '../schemas/category.schema';
 import { EmailService } from '../common/services/email.service';
 import { EmailQueueService } from '../email-queue/email-queue.service';
@@ -68,6 +69,8 @@ export class AdminService {
     @InjectModel(ModuleEntity.name) private moduleModel: Model<ModuleEntity>,
     @InjectModel(ModuleEnrollment.name)
     private moduleEnrollmentModel: Model<ModuleEnrollment>,
+    @InjectModel(ModuleCertificate.name)
+    private moduleCertificateModel: Model<ModuleCertificate>,
     @InjectModel(Category.name) private categoryModel: Model<Category>,
     private emailService: EmailService,
     private emailQueueService: EmailQueueService,
@@ -4485,5 +4488,206 @@ export class AdminService {
       peakDay:  { day: peakDay,  label: DAY_LABELS[peakDay] },
       windowDays: days,
     };
+  }
+
+  // ===================== CERTIFICATE MANAGEMENT =====================
+
+  async getModuleCertificates(level?: string) {
+    const moduleQuery: any = {};
+    if (level) moduleQuery.level = level;
+
+    // Only count published + active modules as the completion threshold
+    moduleQuery.status = ModuleStatus.PUBLISHED;
+    moduleQuery.isActive = { $ne: false };
+
+    const modules = await this.moduleModel.find(moduleQuery).select('_id title level').lean();
+    const moduleIds = modules.map((m) => m._id);
+
+    if (moduleIds.length === 0) return { success: true, data: [] };
+
+    // Count required modules per level and map moduleId → level
+    const modulesPerLevel = new Map<string, number>();
+    const moduleIdToLevel = new Map<string, string>();
+    for (const m of modules) {
+      const lvl = (m.level as string) || 'beginner';
+      modulesPerLevel.set(lvl, (modulesPerLevel.get(lvl) || 0) + 1);
+      moduleIdToLevel.set((m._id as any).toString(), lvl);
+    }
+
+    const enrollments = await this.moduleEnrollmentModel
+      .find({
+        moduleId: { $in: moduleIds },
+        $or: [{ isCompleted: true }, { progress: 100 }],
+      })
+      .populate('studentId', 'fullName firstName lastName email profileImage')
+      .populate('moduleId', 'title level')
+      .lean();
+
+    // Group by (studentId + level) so each tab gets accurate completion counts
+    const studentLevelMap = new Map<string, any>();
+    for (const e of enrollments) {
+      const sid = (e.studentId as any)?._id?.toString() || (e.studentId as any)?.toString();
+      if (!sid) continue;
+
+      const modLevel: string =
+        (e.moduleId as any)?.level ||
+        moduleIdToLevel.get((e.moduleId as any)?._id?.toString() || (e.moduleId as any)?.toString() || '') ||
+        'beginner';
+      const key = `${sid}_${modLevel}`;
+
+      if (!studentLevelMap.has(key)) {
+        studentLevelMap.set(key, {
+          studentId: sid,
+          level: modLevel,
+          student: e.studentId,
+          enrollments: [],
+          latestEnrollmentId: (e._id as any).toString(),
+          latestCompletedDate: e.completedAt,
+          certificateEarned: false,
+          certificatePublicId: null,
+          certificateIssuedAt: null,
+          totalScore: 0,
+        });
+      }
+
+      const entry = studentLevelMap.get(key);
+      entry.enrollments.push(e);
+      entry.totalScore += e.finalAssessmentScore || 0;
+
+      if (e.certificateEarned && !entry.certificateEarned) {
+        entry.certificateEarned = true;
+        entry.certificatePublicId = e.certificatePublicId;
+        entry.certificateIssuedAt = (e as any).certificateIssuedAt;
+      }
+
+      if (e.completedAt && (!entry.latestCompletedDate || e.completedAt > entry.latestCompletedDate)) {
+        entry.latestCompletedDate = e.completedAt;
+        entry.latestEnrollmentId = (e._id as any).toString();
+      }
+    }
+
+    const result: any[] = [];
+    for (const [, entry] of studentLevelMap) {
+      const requiredCount = modulesPerLevel.get(entry.level) || 0;
+      // Only include students who completed ALL modules at their level
+      if (entry.enrollments.length < requiredCount) continue;
+
+      const student = entry.student as any;
+      const avgScore = Math.round(entry.totalScore / entry.enrollments.length);
+      const name =
+        student?.fullName ||
+        `${student?.firstName || ''} ${student?.lastName || ''}`.trim() ||
+        'Unknown Student';
+
+      result.push({
+        id: `${entry.studentId}_${entry.level}`,
+        studentId: entry.studentId,
+        enrollmentId: entry.latestEnrollmentId,
+        name,
+        email: student?.email || '',
+        avatar: student?.profileImage || '',
+        level: entry.level,
+        completedModules: entry.enrollments.length,
+        totalModules: requiredCount,
+        completedDate: entry.latestCompletedDate,
+        score: avgScore,
+        grade: avgScore >= 90 ? 'A' : avgScore >= 80 ? 'B' : avgScore >= 70 ? 'C' : avgScore >= 60 ? 'D' : 'F',
+        status: entry.certificateEarned ? 'issued' : 'pending',
+        certificatePublicId: entry.certificatePublicId || null,
+        issuedDate: entry.certificateIssuedAt || null,
+        certificateId: entry.certificatePublicId
+          ? `CERT-${entry.certificatePublicId.slice(0, 8).toUpperCase()}`
+          : null,
+      });
+    }
+
+    return { success: true, data: result };
+  }
+
+  async issueBeginnerCertificate(enrollmentId: string) {
+    const enrollment = await this.moduleEnrollmentModel
+      .findById(enrollmentId)
+      .populate('moduleId')
+      .populate('studentId', 'fullName firstName lastName email');
+
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+    if (!enrollment.isCompleted && (enrollment as any).progress !== 100) throw new BadRequestException('Module not yet completed by student');
+    if (enrollment.certificateEarned) throw new BadRequestException('Certificate already issued');
+
+    const mod = enrollment.moduleId as any;
+    const student = enrollment.studentId as any;
+    const studentName =
+      student?.fullName ||
+      `${student?.firstName || ''} ${student?.lastName || ''}`.trim() ||
+      'Student';
+
+    const certificateNumber = `MC-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const publicId = crypto.randomUUID();
+
+    await this.moduleCertificateModel.create({
+      studentId: enrollment.studentId,
+      moduleId: mod._id,
+      enrollmentId: enrollment._id,
+      studentName,
+      moduleName: `${mod.level ? mod.level.charAt(0).toUpperCase() + mod.level.slice(1) : 'Beginner'} Level Certificate`,
+      moduleLevel: mod.level || 'beginner',
+      categoryName: 'ARIN Academy',
+      scoreAchieved: enrollment.finalAssessmentScore || 0,
+      instructorName: 'ARIN Academy',
+      issuedDate: new Date(),
+      certificateNumber,
+      publicId,
+    });
+
+    // Mark ALL same-level enrollments for this student as certificateEarned
+    const sameLevelModules = await this.moduleModel.find({ level: mod.level }).select('_id').lean();
+    const sameLevelModuleIds = sameLevelModules.map((m) => m._id);
+    await this.moduleEnrollmentModel.updateMany(
+      { studentId: enrollment.studentId, moduleId: { $in: sameLevelModuleIds }, isCompleted: true },
+      { $set: { certificateEarned: true, certificatePublicId: publicId, certificateIssuedAt: new Date() } },
+    );
+
+    return { success: true, message: 'Certificate issued successfully', publicId };
+  }
+
+  async resetCertificate(studentId: string, level: string) {
+    // Remove the ModuleCertificate record(s) for this student+level
+    await this.moduleCertificateModel.deleteMany({
+      studentId: new Types.ObjectId(studentId),
+      moduleLevel: level,
+    });
+
+    // Reset all same-level enrollments back to not earned
+    const sameLevelModules = await this.moduleModel
+      .find({ level })
+      .select('_id')
+      .lean();
+    const sameLevelModuleIds = sameLevelModules.map((m) => m._id);
+
+    await this.moduleEnrollmentModel.updateMany(
+      { studentId: new Types.ObjectId(studentId), moduleId: { $in: sameLevelModuleIds } },
+      { $set: { certificateEarned: false, certificatePublicId: null, certificateIssuedAt: null } },
+    );
+
+    return { success: true, message: 'Certificate reset to pending' };
+  }
+
+  async issueAllCertificates(level: string) {
+    const result = await this.getModuleCertificates(level);
+    const pending = (result.data || []).filter((s: any) => s.status === 'pending');
+    let issued = 0;
+    let failed = 0;
+    const details: any[] = [];
+    for (const student of pending) {
+      try {
+        await this.issueBeginnerCertificate(student.enrollmentId);
+        issued++;
+        details.push({ name: student.name, success: true });
+      } catch (err) {
+        failed++;
+        details.push({ name: student.name, success: false, error: err?.message });
+      }
+    }
+    return { success: true, issued, failed, total: pending.length, details };
   }
 }

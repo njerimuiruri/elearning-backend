@@ -32,6 +32,29 @@ export class CertificateController {
     return this.moduleCertificateService.getStudentCertificates(userId);
   }
 
+  @Get('module/student/transcript/:level')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('jwt-auth')
+  @ApiOperation({ summary: 'Download transcript PDF for authenticated student at a level' })
+  async downloadMyTranscript(
+    @Param('level') level: string,
+    @Req() req: any,
+    @Res() res: Response,
+  ) {
+    try {
+      const userId = req.user?.userId || req.user?.id;
+      const pdfBuffer = await this.moduleCertificateService.generateStudentTranscriptPDF(userId, level);
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename=ARIN_Transcript_${level}.pdf`,
+        'Content-Length': pdfBuffer.length,
+      });
+      res.send(pdfBuffer);
+    } catch (error) {
+      res.status(error.status || 500).json({ message: error.message || 'Failed to generate transcript' });
+    }
+  }
+
   @Get('module/public/:publicId')
   @ApiOperation({ summary: 'Get module certificate by public ID (no auth)' })
   async getModuleCertificatePublic(@Param('publicId') publicId: string) {

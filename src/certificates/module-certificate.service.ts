@@ -94,6 +94,133 @@ export class ModuleCertificateService {
     return this.createPDFBuffer(certificate);
   }
 
+  // Generate transcript PDF for a student at a given level
+  async generateStudentTranscriptPDF(studentId: string, level: string): Promise<Buffer> {
+    const student = await this.userModel
+      .findById(studentId)
+      .select('fullName firstName lastName email')
+      .lean();
+    const studentName =
+      (student as any)?.fullName ||
+      `${(student as any)?.firstName || ''} ${(student as any)?.lastName || ''}`.trim() ||
+      'Student';
+
+    const modules = await this.moduleModel
+      .find({ level, status: 'published', isActive: { $ne: false } })
+      .select('_id title lessons')
+      .lean();
+
+    const moduleMap = new Map(modules.map((m) => [(m._id as any).toString(), m]));
+    const moduleIds = modules.map((m) => m._id);
+
+    const enrollments = await this.enrollmentModel
+      .find({
+        studentId: new Types.ObjectId(studentId),
+        moduleId: { $in: moduleIds },
+        $or: [{ isCompleted: true }, { progress: 100 }],
+      })
+      .lean();
+
+    const moduleData = enrollments.map((e) => {
+      const mod = moduleMap.get((e.moduleId as any).toString()) as any;
+      const rawLessons: any[] = mod?.lessons || [];
+      const lessons = rawLessons.map((lesson: any, idx: number) => {
+        const lp = ((e as any).lessonProgress || []).find((p: any) => p.lessonIndex === idx);
+        return { title: lesson.title || `Lesson ${idx + 1}`, isCompleted: lp?.isCompleted || false };
+      });
+      return { title: mod?.title || 'Unknown Module', completedDate: (e as any).completedAt, lessons };
+    });
+
+    return this.buildTranscriptPDF(studentName, level, new Date(), moduleData);
+  }
+
+  private buildTranscriptPDF(
+    studentName: string,
+    level: string,
+    issuedDate: Date,
+    modules: { title: string; completedDate?: Date; lessons: { title: string; isCompleted: boolean }[] }[],
+  ): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ size: 'A4', margins: { top: 55, bottom: 55, left: 55, right: 55 } });
+      const buffers: Buffer[] = [];
+      doc.on('data', buffers.push.bind(buffers));
+      doc.on('end', () => resolve(Buffer.concat(buffers)));
+      doc.on('error', reject);
+
+      const primary = '#021d49';
+      const teal = '#00c4b3';
+      const W = doc.page.width - 110;
+
+      // Header bar
+      doc.rect(0, 0, doc.page.width, 80).fill(primary);
+      doc.fontSize(22).font('Helvetica-Bold').fillColor('#ffffff')
+        .text('ARIN PUBLISHING ACADEMY', 55, 22, { width: W });
+      doc.fontSize(11).font('Helvetica').fillColor(teal)
+        .text('Academic Transcript', 55, 50);
+
+      // Title
+      doc.moveDown(2);
+      doc.fontSize(18).font('Helvetica-Bold').fillColor(primary)
+        .text('TRANSCRIPT OF ACHIEVEMENT', { align: 'center' });
+      doc.moveDown(0.4);
+      doc.moveTo(55, doc.y).lineTo(55 + W, doc.y).lineWidth(2).strokeColor(teal).stroke();
+      doc.moveDown(0.6);
+
+      // Student info box
+      const boxY = doc.y;
+      doc.rect(55, boxY, W, 56).fill('#f0f9ff');
+      doc.fontSize(10).font('Helvetica').fillColor('#6b7280').text('Student Name', 70, boxY + 10);
+      doc.fontSize(14).font('Helvetica-Bold').fillColor(primary).text(studentName, 70, boxY + 24);
+      const lvlLabel = level.charAt(0).toUpperCase() + level.slice(1);
+      doc.fontSize(10).font('Helvetica').fillColor('#6b7280')
+        .text(`Level: ${lvlLabel}   |   Issued: ${issuedDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}`, 70, boxY + 44);
+      doc.y = boxY + 66;
+      doc.moveDown(0.8);
+
+      // Modules
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(primary).text('MODULES COMPLETED');
+      doc.moveDown(0.4);
+
+      modules.forEach((mod, mi) => {
+        if (doc.y > doc.page.height - 120) doc.addPage();
+
+        // Module row
+        const mY = doc.y;
+        doc.rect(55, mY, W, 26).fill(mi % 2 === 0 ? '#f8fafc' : '#ffffff');
+        doc.circle(66, mY + 13, 7).fill(teal);
+        doc.fontSize(9).font('Helvetica-Bold').fillColor('#ffffff')
+          .text(String(mi + 1), 62, mY + 8, { width: 8, align: 'center' });
+        doc.fontSize(11).font('Helvetica-Bold').fillColor(primary)
+          .text(mod.title, 80, mY + 8, { width: W - 30 });
+        if (mod.completedDate) {
+          doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
+            .text(new Date(mod.completedDate).toLocaleDateString('en-GB'), 55, mY + 8, { width: W, align: 'right' });
+        }
+        doc.y = mY + 30;
+
+        // Lessons
+        mod.lessons.forEach((ls) => {
+          if (doc.y > doc.page.height - 80) doc.addPage();
+          const lY = doc.y;
+          const checkColor = ls.isCompleted ? '#16a34a' : '#d1d5db';
+          doc.circle(76, lY + 7, 4).fill(checkColor);
+          doc.fontSize(9).font('Helvetica').fillColor(ls.isCompleted ? '#374151' : '#9ca3af')
+            .text(ls.title, 86, lY + 2, { width: W - 40 });
+          doc.y = lY + 16;
+        });
+        doc.moveDown(0.3);
+      });
+
+      // Footer
+      const fY = doc.page.height - 50;
+      doc.moveTo(55, fY - 10).lineTo(55 + W, fY - 10).lineWidth(1).strokeColor('#e5e7eb').stroke();
+      doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
+        .text('This transcript is an official record issued by Arin Publishing Academy.', 55, fY, { width: W, align: 'center' });
+
+      doc.end();
+    });
+  }
+
   // Create PDF buffer
   async createPDFBuffer(certificate: any): Promise<Buffer> {
     return new Promise((resolve, reject) => {
