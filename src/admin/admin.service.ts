@@ -3935,6 +3935,7 @@ export class AdminService {
           moduleTitle: { $arrayElemAt: ['$module.title', 0] },
           moduleOrder: { $arrayElemAt: ['$module.order', 0] },
           moduleLevel: { $arrayElemAt: ['$module.level', 0] },
+          certificateEarned: 1,
         },
       },
     );
@@ -3985,6 +3986,8 @@ export class AdminService {
               finalAssessmentPassed: '$finalAssessmentPassed',
             },
           },
+          // true if ANY beginner enrollment for this fellow has certificateEarned set
+          certificateEarned: { $max: '$certificateEarned' },
         },
       },
       { $sort: { fullName: 1 } },
@@ -4566,6 +4569,31 @@ export class AdminService {
       }
     }
 
+    // ── Cross-reference the ModuleCertificate collection as the authoritative source ──
+    // The certificateEarned flag on enrollments can fall out of sync; the
+    // ModuleCertificate document is always created when a cert is issued, so it is
+    // the definitive record.
+    const studentIdsToCheck = [...studentLevelMap.keys()]
+      .map((key) => key.split('_')[0])
+      .filter((sid) => Types.ObjectId.isValid(sid))
+      .map((sid) => new Types.ObjectId(sid));
+
+    if (studentIdsToCheck.length > 0) {
+      const issuedCerts = await this.moduleCertificateModel
+        .find({ studentId: { $in: studentIdsToCheck } })
+        .lean();
+
+      for (const cert of issuedCerts) {
+        const key = `${(cert.studentId as any).toString()}_${cert.moduleLevel}`;
+        if (studentLevelMap.has(key)) {
+          const entry = studentLevelMap.get(key);
+          entry.certificateEarned = true;
+          entry.certificatePublicId = entry.certificatePublicId || cert.publicId;
+          entry.certificateIssuedAt = entry.certificateIssuedAt || cert.issuedDate;
+        }
+      }
+    }
+
     const result: any[] = [];
     for (const [, entry] of studentLevelMap) {
       const requiredCount = modulesPerLevel.get(entry.level) || 0;
@@ -4612,9 +4640,18 @@ export class AdminService {
 
     if (!enrollment) throw new NotFoundException('Enrollment not found');
     if (!enrollment.isCompleted && (enrollment as any).progress !== 100) throw new BadRequestException('Module not yet completed by student');
-    if (enrollment.certificateEarned) throw new BadRequestException('Certificate already issued');
 
     const mod = enrollment.moduleId as any;
+    const modLevel = mod?.level || 'beginner';
+
+    // Check ModuleCertificate collection (authoritative) — also catches cases where
+    // the certificateEarned flag on enrollment fell out of sync
+    const existingCert = await this.moduleCertificateModel.findOne({
+      studentId: enrollment.studentId,
+      moduleLevel: modLevel,
+    });
+    if (existingCert || enrollment.certificateEarned) throw new BadRequestException('Certificate already issued');
+
     const student = enrollment.studentId as any;
     const studentName =
       student?.fullName ||
