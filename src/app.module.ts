@@ -31,6 +31,7 @@ import { DraftsModule } from './drafts/drafts.module';
 import { AdmissionLettersModule } from './admission-letters/admission-letters.module';
 import { EmailQueueModule } from './email-queue/email-queue.module';
 import { ProjectsModule } from './projects/projects.module';
+import { CapstoneModule } from './capstone/capstone.module';
 
 @Module({
   imports: [
@@ -107,6 +108,7 @@ import { ProjectsModule } from './projects/projects.module';
     AdmissionLettersModule,
     EmailQueueModule,
     ProjectsModule,
+    CapstoneModule,
   ],
   controllers: [AppController],
   providers: [AppService],

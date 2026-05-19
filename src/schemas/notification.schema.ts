@@ -14,6 +14,8 @@ export enum NotificationType {
   INSTRUCTOR_REMINDER = 'instructor_reminder',
   ADMIN_REMINDER = 'admin_reminder',
   NEW_MESSAGE = 'new_message',
+  CAPSTONE_SUBMITTED = 'capstone_submitted',
+  CAPSTONE_STATUS_UPDATED = 'capstone_status_updated',
 }
 
 @Schema({ timestamps: true })
