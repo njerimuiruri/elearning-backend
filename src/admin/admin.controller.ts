@@ -456,6 +456,24 @@ export class AdminController {
     return this.adminService.getDemographicAnalytics();
   }
 
+  @Get('analytics/extended')
+  @ApiOperation({ summary: 'Get extended analytics: levels, certificates, ratings, streaks, grading' })
+  async getExtendedAnalytics() {
+    return this.adminService.getExtendedAnalytics();
+  }
+
+  @Get('analytics/debug-counts')
+  @ApiOperation({ summary: 'Raw collection counts for debugging' })
+  async getDebugCounts() {
+    return this.adminService.getDebugCounts();
+  }
+
+  @Get('analytics/top-performers')
+  @ApiOperation({ summary: 'Top performers leaderboards' })
+  async getTopPerformers() {
+    return this.adminService.getTopPerformers();
+  }
+
   // Course Management
   @Get('courses/pending')
   async getPendingCourses(
@@ -799,6 +817,37 @@ export class AdminController {
   @ApiOperation({ summary: 'Reset an issued certificate back to pending for a student' })
   async resetCertificate(@Body() body: { studentId: string; level: string }) {
     return this.adminService.resetCertificate(body.studentId, body.level);
+  }
+
+  // ===================== MICROGRANTS =====================
+
+  @Get('microgrants/eligible')
+  @ApiOperation({ summary: 'Get AI-category fellows eligible for mini-grants, ranked by composite score' })
+  @ApiQuery({ name: 'minScore', required: false, type: Number, description: 'Minimum composite score (0–100)' })
+  async getEligibleFellows(@Query('minScore') minScore?: number) {
+    return this.adminService.getEligibleFellows(minScore ? Number(minScore) : 0);
+  }
+
+  @Post('microgrants/issue')
+  @ApiOperation({ summary: 'Issue a financial mini-grant to selected fellows' })
+  async issueMicrogrants(
+    @Body() body: { studentIds: string[]; amount: number; currency?: string; categoryId: string; notes?: string },
+    @CurrentUser() admin: any,
+  ) {
+    return this.adminService.issueMicrogrants(admin._id?.toString(), body);
+  }
+
+  @Get('microgrants/history')
+  @ApiOperation({ summary: 'List all issued mini-grants with fellow details' })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  async getMicrograntHistory(
+    @Query('status') status?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getMicrograntHistory({ status, page: Number(page) || 1, limit: Number(limit) || 30 });
   }
 
   @Put('modules/:id/approve-assessment')

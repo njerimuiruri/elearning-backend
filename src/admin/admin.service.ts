@@ -27,6 +27,7 @@ import {
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
 import { ModuleCertificate } from '../schemas/module-certificate.schema';
 import { Category } from '../schemas/category.schema';
+import { Microgrant, MicrograntStatus } from '../schemas/microgrant.schema';
 import { EmailService } from '../common/services/email.service';
 import { EmailQueueService } from '../email-queue/email-queue.service';
 import { CreateModuleDto } from '../modules/dto/create-module.dto';
@@ -72,6 +73,7 @@ export class AdminService {
     @InjectModel(ModuleCertificate.name)
     private moduleCertificateModel: Model<ModuleCertificate>,
     @InjectModel(Category.name) private categoryModel: Model<Category>,
+    @InjectModel(Microgrant.name) private micrograntModel: Model<Microgrant>,
     private emailService: EmailService,
     private emailQueueService: EmailQueueService,
   ) {}
@@ -1961,7 +1963,7 @@ export class AdminService {
       };
     } catch (error) {
       console.error('Migration error:', error);
-      throw new BadRequestException(`Migration failed: ${error.message}`);
+      throw new BadRequestException(`Migration failed: ${(error as any).message}`);
     }
   }
 
@@ -2112,8 +2114,6 @@ export class AdminService {
     enrollmentIds: string[],
     message?: string,
   ) {
-    const Enrollment = this.userModel.db.model('Enrollment');
-
     const results: Array<{ message: string; student: any; course: any }> = [];
     const failed: Array<{ enrollmentId: string; error: string }> = [];
 
@@ -2122,7 +2122,7 @@ export class AdminService {
         const result = await this.sendReminderToStudent(enrollmentId, message);
         results.push(result);
       } catch (error) {
-        failed.push({ enrollmentId, error: error.message });
+        failed.push({ enrollmentId, error: (error as any).message });
       }
     }
 
@@ -2149,7 +2149,7 @@ export class AdminService {
 
   // Analytics Methods
   async getAnalyticsOverview() {
-    const Enrollment = this.userModel.db.model('Enrollment');
+    try {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
@@ -2157,19 +2157,19 @@ export class AdminService {
       totalEnrollments,
       completedEnrollments,
       activeEnrollments,
-      totalCourses,
-      publishedCourses,
+      totalModules,
+      publishedModules,
       totalStudents,
       approvedInstructors,
     ] = await Promise.all([
-      Enrollment.countDocuments(),
-      Enrollment.countDocuments({ isCompleted: true }),
-      Enrollment.countDocuments({
+      this.moduleEnrollmentModel.countDocuments(),
+      this.moduleEnrollmentModel.countDocuments({ $or: [{ isCompleted: true }, { progress: { $gte: 100 } }] }),
+      this.moduleEnrollmentModel.countDocuments({
         isCompleted: false,
         lastAccessedAt: { $gte: thirtyDaysAgo },
       }),
-      this.courseModel.countDocuments(),
-      this.courseModel.countDocuments({ status: CourseStatus.PUBLISHED }),
+      this.moduleModel.countDocuments({ isActive: { $ne: false } }),
+      this.moduleModel.countDocuments({ status: ModuleStatus.PUBLISHED, isActive: { $ne: false } }),
       this.userModel.countDocuments({ role: UserRole.STUDENT }),
       this.userModel.countDocuments({
         role: UserRole.INSTRUCTOR,
@@ -2190,46 +2190,58 @@ export class AdminService {
         completionRate: `${completionRate}%`,
       },
       courses: {
-        total: totalCourses,
-        published: publishedCourses,
+        total: totalModules,
+        published: publishedModules,
       },
       users: {
         students: totalStudents,
         instructors: approvedInstructors,
       },
     };
+    } catch (err) {
+      console.error('getAnalyticsOverview error:', (err as any).message);
+      const [students, instructors] = await Promise.all([
+        this.userModel.countDocuments({ role: UserRole.STUDENT }).catch(() => 0),
+        this.userModel.countDocuments({ role: UserRole.INSTRUCTOR, instructorStatus: InstructorStatus.APPROVED }).catch(() => 0),
+      ]);
+      return {
+        enrollments: { total: 0, completed: 0, active: 0, completionRate: '0%' },
+        courses: { total: 0, published: 0 },
+        users: { students, instructors },
+      };
+    }
   }
 
   async getStudentProgressAnalytics(
     limit = 50,
     status: 'in-progress' | 'completed' | 'all' = 'all',
   ) {
-    const Enrollment = this.userModel.db.model('Enrollment');
-
     const filter: any = {};
     if (status === 'in-progress') filter.isCompleted = false;
     if (status === 'completed') filter.isCompleted = true;
 
-    const progressData = await Enrollment.find(filter)
+    const progressData = await this.moduleEnrollmentModel
+      .find(filter)
       .populate('studentId', 'firstName lastName email')
-      .populate('courseId', 'title')
+      .populate('moduleId', 'title level')
       .sort({ lastAccessedAt: -1 })
       .limit(limit)
       .lean();
 
-    const students = progressData.map((enrollment) => ({
+    const students = progressData.map((enrollment: any) => ({
       enrollmentId: enrollment._id,
       status: enrollment.isCompleted ? 'completed' : 'in-progress',
       studentId: enrollment.studentId?._id,
-      studentName: `${enrollment.studentId?.firstName} ${enrollment.studentId?.lastName}`,
+      studentName: `${enrollment.studentId?.firstName ?? ''} ${enrollment.studentId?.lastName ?? ''}`.trim(),
       studentEmail: enrollment.studentId?.email,
-      courseId: enrollment.courseId?._id,
-      courseName: enrollment.courseId?.title,
+      courseId: enrollment.moduleId?._id,
+      courseName: enrollment.moduleId?.title,
+      level: enrollment.moduleId?.level,
       progress: enrollment.progress || 0,
       lastAccessed: enrollment.lastAccessedAt,
-      enrolledAt: enrollment.enrolledAt,
+      enrolledAt: enrollment.createdAt,
       daysEnrolled: Math.floor(
-        (new Date().getTime() - new Date(enrollment.enrolledAt).getTime()) /
+        (new Date().getTime() - new Date(enrollment.createdAt ?? Date.now()).getTime()) /
           (1000 * 60 * 60 * 24),
       ),
     }));
@@ -2241,10 +2253,7 @@ export class AdminService {
 
     return {
       students,
-      summary: {
-        totalActive: students.length,
-        averageProgress: avgProgress.toFixed(1),
-      },
+      summary: { totalActive: students.length, averageProgress: avgProgress.toFixed(1) },
     };
   }
 
@@ -2300,38 +2309,35 @@ export class AdminService {
   }
 
   async getCourseCompletionAnalytics() {
-    const Enrollment = this.userModel.db.model('Enrollment');
-
-    const completionStats = await Enrollment.aggregate([
+    const completionStats = await this.moduleEnrollmentModel.aggregate([
       {
         $group: {
-          _id: '$courseId',
+          _id: '$moduleId',
           totalEnrollments: { $sum: 1 },
-          completedCount: {
-            $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] },
-          },
+          completedCount: { $sum: { $cond: [{ $or: [{ $eq: ['$isCompleted', true] }, { $gte: ['$progress', 100] }] }, 1, 0] } },
           avgProgress: { $avg: '$progress' },
         },
       },
       {
         $lookup: {
-          from: 'courses',
+          from: 'modules',
           localField: '_id',
           foreignField: '_id',
-          as: 'course',
+          as: 'module',
         },
       },
-      { $unwind: '$course' },
+      { $unwind: { path: '$module', preserveNullAndEmptyArrays: false } },
       {
         $project: {
           courseId: '$_id',
-          courseName: '$course.title',
+          courseName: '$module.title',
+          level: '$module.level',
           totalEnrollments: 1,
           completedCount: 1,
           completionRate: {
-            $multiply: [
-              { $divide: ['$completedCount', '$totalEnrollments'] },
-              100,
+            $round: [
+              { $multiply: [{ $divide: ['$completedCount', '$totalEnrollments'] }, 100] },
+              1,
             ],
           },
           avgProgress: { $round: ['$avgProgress', 1] },
@@ -2340,28 +2346,20 @@ export class AdminService {
       { $sort: { completionRate: -1 } },
     ]);
 
-    const overallStats = await Enrollment.aggregate([
+    const overallStats = await this.moduleEnrollmentModel.aggregate([
       {
         $group: {
           _id: null,
           total: { $sum: 1 },
-          completed: {
-            $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] },
-          },
+          completed: { $sum: { $cond: ['$isCompleted', 1, 0] } },
           avgProgress: { $avg: '$progress' },
         },
       },
     ]);
 
-    const overall = overallStats[0] || {
-      total: 0,
-      completed: 0,
-      avgProgress: 0,
-    };
+    const overall = overallStats[0] || { total: 0, completed: 0, avgProgress: 0 };
     const overallCompletionRate =
-      overall.total > 0
-        ? ((overall.completed / overall.total) * 100).toFixed(1)
-        : 0;
+      overall.total > 0 ? ((overall.completed / overall.total) * 100).toFixed(1) : 0;
 
     return {
       courses: completionStats,
@@ -2376,97 +2374,60 @@ export class AdminService {
 
   // ── Assessment Insights ────────────────────────────────────────────────────
   async getAssessmentInsights() {
-    const Enrollment = this.userModel.db.model('Enrollment');
-
     const [finalStats, moduleStats, coursePerformance, scoreDistRaw] =
       await Promise.all([
-        // Overall final-assessment stats
-        Enrollment.aggregate([
+        // Overall final-assessment stats from ModuleEnrollment
+        this.moduleEnrollmentModel.aggregate([
           { $match: { finalAssessmentAttempts: { $gt: 0 } } },
           {
             $group: {
               _id: null,
               avgScore: { $avg: '$finalAssessmentScore' },
-              passedCount: {
-                $sum: { $cond: ['$finalAssessmentPassed', 1, 0] },
-              },
+              passedCount: { $sum: { $cond: ['$finalAssessmentPassed', 1, 0] } },
               totalAttempted: { $sum: 1 },
               avgAttempts: { $avg: '$finalAssessmentAttempts' },
-              retakers: {
-                $sum: {
-                  $cond: [{ $gt: ['$finalAssessmentAttempts', 1] }, 1, 0],
-                },
-              },
+              retakers: { $sum: { $cond: [{ $gt: ['$finalAssessmentAttempts', 1] }, 1, 0] } },
             },
           },
         ]),
 
-        // Module-level assessment stats
-        Enrollment.aggregate([
-          { $unwind: '$moduleProgress' },
-          { $match: { 'moduleProgress.assessmentAttempts': { $gt: 0 } } },
+        // Module-level lesson assessment stats
+        this.moduleEnrollmentModel.aggregate([
+          { $unwind: { path: '$lessonProgress', preserveNullAndEmptyArrays: false } },
+          { $match: { 'lessonProgress.assessmentAttempts': { $gt: 0 } } },
           {
             $group: {
               _id: null,
-              avgScore: { $avg: '$moduleProgress.lastScore' },
-              passedCount: {
-                $sum: {
-                  $cond: ['$moduleProgress.assessmentPassed', 1, 0],
-                },
-              },
+              avgScore: { $avg: '$lessonProgress.lastScore' },
+              passedCount: { $sum: { $cond: [{ $gt: ['$lessonProgress.lastScore', 60] }, 1, 0] } },
               totalAttempted: { $sum: 1 },
-              avgAttempts: { $avg: '$moduleProgress.assessmentAttempts' },
-              retakers: {
-                $sum: {
-                  $cond: [
-                    { $gt: ['$moduleProgress.assessmentAttempts', 1] },
-                    1,
-                    0,
-                  ],
-                },
-              },
+              avgAttempts: { $avg: '$lessonProgress.assessmentAttempts' },
+              retakers: { $sum: { $cond: [{ $gt: ['$lessonProgress.assessmentAttempts', 1] }, 1, 0] } },
             },
           },
         ]),
 
-        // Per-course assessment performance
-        Enrollment.aggregate([
+        // Per-module assessment performance
+        this.moduleEnrollmentModel.aggregate([
           { $match: { finalAssessmentAttempts: { $gt: 0 } } },
           {
             $group: {
-              _id: '$courseId',
+              _id: '$moduleId',
               avgScore: { $avg: '$finalAssessmentScore' },
-              passedCount: {
-                $sum: { $cond: ['$finalAssessmentPassed', 1, 0] },
-              },
+              passedCount: { $sum: { $cond: ['$finalAssessmentPassed', 1, 0] } },
               totalAttempted: { $sum: 1 },
               avgAttempts: { $avg: '$finalAssessmentAttempts' },
             },
           },
-          {
-            $lookup: {
-              from: 'courses',
-              localField: '_id',
-              foreignField: '_id',
-              as: 'course',
-            },
-          },
-          { $unwind: { path: '$course', preserveNullAndEmptyArrays: false } },
+          { $lookup: { from: 'modules', localField: '_id', foreignField: '_id', as: 'module' } },
+          { $unwind: { path: '$module', preserveNullAndEmptyArrays: false } },
           {
             $project: {
               courseId: '$_id',
-              courseName: '$course.title',
+              courseName: '$module.title',
               avgScore: { $round: ['$avgScore', 1] },
               passRate: {
-                $round: [
-                  {
-                    $multiply: [
-                      { $divide: ['$passedCount', '$totalAttempted'] },
-                      100,
-                    ],
-                  },
-                  1,
-                ],
+                $round: [{ $multiply: [{ $divide: ['$passedCount', '$totalAttempted'] }, 100] }, 1],
               },
               avgAttempts: { $round: ['$avgAttempts', 1] },
               totalAttempted: 1,
@@ -2476,33 +2437,18 @@ export class AdminService {
         ]),
 
         // Score distribution buckets
-        Enrollment.aggregate([
+        this.moduleEnrollmentModel.aggregate([
           { $match: { finalAssessmentAttempts: { $gt: 0 } } },
           {
             $addFields: {
               scoreBucket: {
                 $switch: {
                   branches: [
-                    {
-                      case: { $lte: ['$finalAssessmentScore', 20] },
-                      then: '0-20',
-                    },
-                    {
-                      case: { $lte: ['$finalAssessmentScore', 40] },
-                      then: '21-40',
-                    },
-                    {
-                      case: { $lte: ['$finalAssessmentScore', 60] },
-                      then: '41-60',
-                    },
-                    {
-                      case: { $lte: ['$finalAssessmentScore', 80] },
-                      then: '61-80',
-                    },
-                    {
-                      case: { $lte: ['$finalAssessmentScore', 100] },
-                      then: '81-100',
-                    },
+                    { case: { $lte: ['$finalAssessmentScore', 20] }, then: '0-20' },
+                    { case: { $lte: ['$finalAssessmentScore', 40] }, then: '21-40' },
+                    { case: { $lte: ['$finalAssessmentScore', 60] }, then: '41-60' },
+                    { case: { $lte: ['$finalAssessmentScore', 80] }, then: '61-80' },
+                    { case: { $lte: ['$finalAssessmentScore', 100] }, then: '81-100' },
                   ],
                   default: '0-20',
                 },
@@ -2659,7 +2605,6 @@ export class AdminService {
 
   // ── Engagement Analytics ────────────────────────────────────────────────────
   async getEngagementAnalytics() {
-    const Enrollment = this.userModel.db.model('Enrollment');
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
@@ -2684,15 +2629,13 @@ export class AdminService {
         }),
         this.userModel.countDocuments({ role: UserRole.STUDENT }),
 
-        // Top students by engagement score
-        Enrollment.aggregate([
+        // Top students by engagement score — uses ModuleEnrollment
+        this.moduleEnrollmentModel.aggregate([
           {
             $group: {
               _id: '$studentId',
               avgProgress: { $avg: '$progress' },
-              completedCourses: {
-                $sum: { $cond: ['$isCompleted', 1, 0] },
-              },
+              completedCourses: { $sum: { $cond: ['$isCompleted', 1, 0] } },
               totalEnrollments: { $sum: 1 },
               lastActive: { $max: '$lastAccessedAt' },
             },
@@ -2702,12 +2645,7 @@ export class AdminService {
               engagementScore: {
                 $add: [
                   { $multiply: ['$avgProgress', 0.5] },
-                  {
-                    $multiply: [
-                      { $min: ['$totalEnrollments', 5] },
-                      10,
-                    ],
-                  },
+                  { $multiply: [{ $min: ['$totalEnrollments', 5] }, 10] },
                 ],
               },
             },
@@ -2715,30 +2653,15 @@ export class AdminService {
           { $sort: { engagementScore: -1 } },
           { $limit: 10 },
           {
-            $lookup: {
-              from: 'users',
-              localField: '_id',
-              foreignField: '_id',
-              as: 'student',
-            },
+            $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'student' },
           },
-          {
-            $unwind: {
-              path: '$student',
-              preserveNullAndEmptyArrays: false,
-            },
-          },
+          { $unwind: { path: '$student', preserveNullAndEmptyArrays: false } },
           {
             $project: {
-              name: {
-                $concat: [
-                  '$student.firstName',
-                  ' ',
-                  '$student.lastName',
-                ],
-              },
+              name: { $concat: ['$student.firstName', ' ', '$student.lastName'] },
               email: '$student.email',
               country: '$student.country',
+              level: '$student.fellowData.track',
               avgProgress: { $round: ['$avgProgress', 1] },
               completedCourses: 1,
               totalEnrollments: 1,
@@ -2748,8 +2671,8 @@ export class AdminService {
           },
         ]),
 
-        // At-risk students
-        Enrollment.aggregate([
+        // At-risk students — uses ModuleEnrollment
+        this.moduleEnrollmentModel.aggregate([
           {
             $match: {
               isCompleted: false,
@@ -2769,12 +2692,7 @@ export class AdminService {
               daysInactive: {
                 $max: {
                   $divide: [
-                    {
-                      $subtract: [
-                        now,
-                        { $ifNull: ['$lastAccessedAt', new Date(0)] },
-                      ],
-                    },
+                    { $subtract: [now, { $ifNull: ['$lastAccessedAt', new Date(0)] }] },
                     86400000,
                   ],
                 },
@@ -2784,28 +2702,12 @@ export class AdminService {
           { $sort: { avgProgress: 1 } },
           { $limit: 10 },
           {
-            $lookup: {
-              from: 'users',
-              localField: '_id',
-              foreignField: '_id',
-              as: 'student',
-            },
+            $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'student' },
           },
-          {
-            $unwind: {
-              path: '$student',
-              preserveNullAndEmptyArrays: false,
-            },
-          },
+          { $unwind: { path: '$student', preserveNullAndEmptyArrays: false } },
           {
             $project: {
-              name: {
-                $concat: [
-                  '$student.firstName',
-                  ' ',
-                  '$student.lastName',
-                ],
-              },
+              name: { $concat: ['$student.firstName', ' ', '$student.lastName'] },
               email: '$student.email',
               country: '$student.country',
               avgProgress: { $round: ['$avgProgress', 1] },
@@ -3104,7 +3006,7 @@ export class AdminService {
       };
     } catch (error) {
       throw new BadRequestException(
-        error.message || 'Failed to upload course format',
+        (error as any).message || 'Failed to upload course format',
       );
     }
   }
@@ -3129,7 +3031,7 @@ export class AdminService {
       };
     } catch (error) {
       throw new BadRequestException(
-        error.message || 'Failed to fetch course format',
+        (error as any).message || 'Failed to fetch course format',
       );
     }
   }
@@ -3167,7 +3069,7 @@ export class AdminService {
       };
     } catch (error) {
       throw new BadRequestException(
-        error.message || 'Failed to delete course format',
+        (error as any).message || 'Failed to delete course format',
       );
     }
   }
@@ -3657,7 +3559,7 @@ export class AdminService {
         isActive: { $ne: false },
       }),
       this.moduleEnrollmentModel.countDocuments(),
-      this.moduleEnrollmentModel.countDocuments({ isCompleted: true }),
+      this.moduleEnrollmentModel.countDocuments({ $or: [{ isCompleted: true }, { progress: { $gte: 100 } }] }),
     ]);
 
     const moduleCompletionRate =
@@ -4385,7 +4287,7 @@ export class AdminService {
     // Module completion stats across all fellows
     const [totalEnrollments, completedEnrollments] = await Promise.all([
       this.moduleEnrollmentModel.countDocuments(),
-      this.moduleEnrollmentModel.countDocuments({ isCompleted: true }),
+      this.moduleEnrollmentModel.countDocuments({ $or: [{ isCompleted: true }, { progress: { $gte: 100 } }] }),
     ]);
 
     // Recent completions (last 7 days)
@@ -4722,9 +4624,807 @@ export class AdminService {
         details.push({ name: student.name, success: true });
       } catch (err) {
         failed++;
-        details.push({ name: student.name, success: false, error: err?.message });
+        details.push({ name: student.name, success: false, error: (err as any)?.message });
       }
     }
     return { success: true, issued, failed, total: pending.length, details };
+  }
+
+  // ===================== MICROGRANTS =====================
+
+  /**
+   * Score a single fellow for microgrant eligibility.
+   * Weights: assessment 40%, engagement 35%, activity 25%.
+   */
+  private scoreFellow(fellow: any, enrollments: any[]): {
+    assessmentScore: number;
+    engagementScore: number;
+    activityScore: number;
+    compositeScore: number;
+    completedModules: number;
+    totalModules: number;
+    daysSinceLastLogin: number;
+  } {
+    const completedModules = enrollments.filter((e) => e.isCompleted).length;
+    const totalModules = enrollments.length || 1;
+
+    // Assessment score — average of all module finalAssessmentScore values
+    const scored = enrollments.filter((e) => (e.finalAssessmentScore ?? 0) > 0);
+    const assessmentScore = scored.length > 0
+      ? Math.round(scored.reduce((s, e) => s + (e.finalAssessmentScore || 0), 0) / scored.length)
+      : 0;
+
+    // Engagement — % of modules completed
+    const engagementScore = Math.round((completedModules / totalModules) * 100);
+
+    // Activity — recency of last login (100 = today, 0 = 90+ days)
+    const lastLogin = fellow.lastLogin ? new Date(fellow.lastLogin) : null;
+    const daysSinceLastLogin = lastLogin
+      ? Math.floor((Date.now() - lastLogin.getTime()) / 86400000)
+      : 999;
+    const activityScore = Math.max(0, Math.round(100 - (daysSinceLastLogin / 90) * 100));
+
+    const compositeScore = Math.round(
+      assessmentScore * 0.40 +
+      engagementScore * 0.35 +
+      activityScore   * 0.25,
+    );
+
+    return {
+      assessmentScore,
+      engagementScore,
+      activityScore,
+      compositeScore,
+      completedModules,
+      totalModules,
+      daysSinceLastLogin,
+    };
+  }
+
+  /**
+   * GET /admin/microgrants/eligible
+   * Returns AI for Climate Resilience fellows ranked by composite score.
+   * Optionally filters by minimum composite score threshold.
+   */
+  async getEligibleFellows(minScore = 0) {
+    // Find the AI for Climate Resilience category
+    const aiCategory = await this.categoryModel.findOne({
+      name: { $regex: 'AI', $options: 'i' },
+    }).lean();
+
+    if (!aiCategory) {
+      throw new NotFoundException('AI for Climate Resilience category not found');
+    }
+
+    const categoryId = (aiCategory._id as any).toString();
+
+    // Fetch all fellows in this category
+    const fellows = await this.userModel
+      .find({
+        'fellowData.fellowId': { $exists: true },
+        'fellowData.assignedCategories': new Types.ObjectId(categoryId),
+      })
+      .select('firstName lastName email lastLogin fellowData profileImage')
+      .lean();
+
+    // Get all modules in this category
+    const modules = await this.moduleModel
+      .find({ categoryId: new Types.ObjectId(categoryId), isActive: { $ne: false } })
+      .select('_id title level')
+      .lean();
+
+    const moduleIds = modules.map((m) => m._id);
+
+    // Fetch all enrollments for these fellows in these modules
+    const fellowIds = fellows.map((f) => (f._id as any));
+    const enrollments = await this.moduleEnrollmentModel
+      .find({
+        studentId: { $in: fellowIds },
+        moduleId: { $in: moduleIds },
+      })
+      .select('studentId moduleId isCompleted finalAssessmentScore progress lastAccessedAt')
+      .lean();
+
+    // Group enrollments per fellow
+    const enrollmentMap = new Map<string, any[]>();
+    for (const enr of enrollments) {
+      const sid = (enr.studentId as any).toString();
+      if (!enrollmentMap.has(sid)) enrollmentMap.set(sid, []);
+      enrollmentMap.get(sid)!.push(enr);
+    }
+
+    // Fetch already-issued grants for this category to flag them
+    const existingGrants = await this.micrograntModel
+      .find({ categoryId: new Types.ObjectId(categoryId), status: { $in: [MicrograntStatus.APPROVED, MicrograntStatus.ISSUED] } })
+      .select('studentId status amount issuedAt')
+      .lean();
+    const grantMap = new Map(existingGrants.map((g) => [(g.studentId as any).toString(), g]));
+
+    // Score each fellow
+    const scored = fellows.map((fellow) => {
+      const sid = (fellow._id as any).toString();
+      const fellowEnrollments = enrollmentMap.get(sid) || [];
+      const scores = this.scoreFellow(fellow, fellowEnrollments);
+      const existingGrant = grantMap.get(sid);
+
+      return {
+        studentId: sid,
+        name: `${fellow.firstName || ''} ${fellow.lastName || ''}`.trim() || 'Unknown',
+        email: fellow.email,
+        cohort: fellow.fellowData?.cohort || '—',
+        track: fellow.fellowData?.track || '—',
+        profileImage: (fellow as any).profileImage || null,
+        lastLogin: fellow.lastLogin || null,
+        ...scores,
+        alreadyGranted: !!existingGrant,
+        existingGrant: existingGrant
+          ? { status: existingGrant.status, amount: existingGrant.amount, issuedAt: existingGrant.issuedAt }
+          : null,
+      };
+    });
+
+    // Sort by composite score descending, filter by threshold
+    const filtered = scored
+      .filter((f) => f.compositeScore >= minScore)
+      .sort((a, b) => b.compositeScore - a.compositeScore);
+
+    return {
+      categoryId,
+      categoryName: (aiCategory as any).name,
+      totalFellows: filtered.length,
+      fellows: filtered,
+    };
+  }
+
+  /**
+   * POST /admin/microgrants/issue
+   * Issue a financial mini-grant to one or more fellows.
+   */
+  async issueMicrogrants(
+    adminId: string,
+    payload: {
+      studentIds: string[];
+      amount: number;
+      currency?: string;
+      categoryId: string;
+      notes?: string;
+    },
+  ) {
+    const { studentIds, amount, currency = 'KES', categoryId, notes } = payload;
+
+    if (!studentIds?.length) throw new BadRequestException('No students selected');
+    if (!amount || amount <= 0) throw new BadRequestException('Amount must be positive');
+
+    const results: Array<{ studentId: string; name: string; success: boolean; error?: string }> = [];
+
+    for (const sid of studentIds) {
+      try {
+        const fellow = await this.userModel.findById(sid).select('firstName lastName email').lean();
+        if (!fellow) throw new Error('Fellow not found');
+
+        // Get fresh score snapshot
+        const modules = await this.moduleModel
+          .find({ categoryId: new Types.ObjectId(categoryId), isActive: { $ne: false } })
+          .select('_id')
+          .lean();
+        const enrollments = await this.moduleEnrollmentModel
+          .find({ studentId: new Types.ObjectId(sid), moduleId: { $in: modules.map((m) => m._id) } })
+          .select('isCompleted finalAssessmentScore progress lastAccessedAt')
+          .lean();
+        const snapshot = this.scoreFellow(fellow, enrollments);
+
+        await this.micrograntModel.create({
+          studentId: new Types.ObjectId(sid),
+          categoryId: new Types.ObjectId(categoryId),
+          amount,
+          currency,
+          status: MicrograntStatus.ISSUED,
+          criteriaSnapshot: snapshot,
+          issuedBy: new Types.ObjectId(adminId),
+          issuedAt: new Date(),
+          notes,
+        });
+
+        // Notify the fellow
+        const name = `${(fellow as any).firstName || ''} ${(fellow as any).lastName || ''}`.trim();
+        this.emailService.sendCustomEmail(
+          (fellow as any).email,
+          'Congratulations — You Have Been Awarded a Mini-Grant!',
+          `Dear ${(fellow as any).firstName || 'Fellow'},\n\nWe are pleased to inform you that you have been awarded a mini-grant of ${currency} ${amount.toLocaleString()} in recognition of your outstanding performance, engagement, and commitment to the ARIN Fellowship programme.\n\nKeep up the excellent work!\n\nARIN eLearning Team`,
+        ).catch((e) => console.error('Mini-grant email failed:', e.message));
+
+        results.push({ studentId: sid, name, success: true });
+      } catch (err) {
+        results.push({ studentId: sid, name: sid, success: false, error: (err as any)?.message });
+      }
+    }
+
+    const issued = results.filter((r) => r.success).length;
+    await this.logActivity(
+      ActivityType.USER_UPDATED,
+      `Mini-grant of ${currency} ${payload.amount} issued to ${issued} fellow(s)`,
+      adminId,
+      undefined,
+      undefined,
+      { amount, currency, studentIds, issued },
+      'Award',
+    );
+
+    return { issued, failed: results.filter((r) => !r.success).length, results };
+  }
+
+  /**
+   * GET /admin/microgrants/history
+   * List all issued microgrants with fellow details.
+   */
+  async getMicrograntHistory(filters: { status?: string; page?: number; limit?: number } = {}) {
+    const { status, page = 1, limit = 30 } = filters;
+    const query: any = {};
+    if (status) query.status = status;
+
+    const [grants, total] = await Promise.all([
+      this.micrograntModel
+        .find(query)
+        .populate('studentId', 'firstName lastName email fellowData')
+        .populate('categoryId', 'name')
+        .populate('issuedBy', 'firstName lastName')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      this.micrograntModel.countDocuments(query),
+    ]);
+
+    const formatted = grants.map((g: any) => ({
+      _id: (g._id as any).toString(),
+      student: {
+        id: g.studentId?._id?.toString(),
+        name: `${g.studentId?.firstName || ''} ${g.studentId?.lastName || ''}`.trim(),
+        email: g.studentId?.email,
+        cohort: g.studentId?.fellowData?.cohort || '—',
+      },
+      category: g.categoryId?.name || '—',
+      amount: g.amount,
+      currency: g.currency,
+      status: g.status,
+      criteriaSnapshot: g.criteriaSnapshot,
+      issuedBy: g.issuedBy ? `${g.issuedBy.firstName} ${g.issuedBy.lastName}` : '—',
+      issuedAt: g.issuedAt,
+      notes: g.notes,
+      createdAt: g.createdAt,
+    }));
+
+    return {
+      grants: formatted,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      summary: {
+        total,
+        totalAmount: grants.reduce((s, g: any) => s + (g.amount || 0), 0),
+      },
+    };
+  }
+
+  // ===================== TOP PERFORMERS =====================
+
+  async getTopPerformers() {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+
+    const [byCompletions, byScore, byStreak, recentStars, levelChampions] = await Promise.all([
+
+      // 1. Leaderboard: most modules completed
+      this.moduleEnrollmentModel.aggregate([
+        {
+          $group: {
+            _id: '$studentId',
+            completedModules: { $sum: { $cond: ['$isCompleted', 1, 0] } },
+            totalEnrollments: { $sum: 1 },
+            avgProgress: { $avg: '$progress' },
+            avgScore: { $avg: { $ifNull: ['$finalAssessmentScore', 0] } },
+            lastActive: { $max: '$lastAccessedAt' },
+            certificatesEarned: { $sum: { $cond: [{ $eq: ['$certificateEarned', true] }, 1, 0] } },
+          },
+        },
+        { $sort: { completedModules: -1, avgScore: -1 } },
+        { $limit: 10 },
+        { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
+        { $unwind: { path: '$user', preserveNullAndEmptyArrays: false } },
+        {
+          $project: {
+            name: { $concat: ['$user.firstName', ' ', '$user.lastName'] },
+            email: '$user.email', country: '$user.country',
+            cohort: '$user.fellowData.cohort',
+            currentStreak: { $ifNull: ['$user.currentStreakDays', 0] },
+            totalPoints: { $ifNull: ['$user.totalPoints', 0] },
+            completedModules: 1, totalEnrollments: 1,
+            avgProgress: { $round: ['$avgProgress', 1] },
+            avgScore: { $round: ['$avgScore', 1] },
+            lastActive: 1, certificatesEarned: 1,
+          },
+        },
+      ]),
+
+      // 2. Leaderboard: highest avg assessment score
+      this.moduleEnrollmentModel.aggregate([
+        { $match: { finalAssessmentAttempts: { $gt: 0 } } },
+        {
+          $group: {
+            _id: '$studentId',
+            avgScore: { $avg: '$finalAssessmentScore' },
+            completedModules: { $sum: { $cond: ['$isCompleted', 1, 0] } },
+            totalAttempts: { $sum: '$finalAssessmentAttempts' },
+            lastActive: { $max: '$lastAccessedAt' },
+          },
+        },
+        { $sort: { avgScore: -1 } },
+        { $limit: 10 },
+        { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
+        { $unwind: { path: '$user', preserveNullAndEmptyArrays: false } },
+        {
+          $project: {
+            name: { $concat: ['$user.firstName', ' ', '$user.lastName'] },
+            email: '$user.email', country: '$user.country',
+            cohort: '$user.fellowData.cohort',
+            avgScore: { $round: ['$avgScore', 1] },
+            completedModules: 1, totalAttempts: 1, lastActive: 1,
+          },
+        },
+      ]),
+
+      // 3. Leaderboard: longest current streak
+      this.userModel.aggregate([
+        { $match: { role: UserRole.STUDENT, currentStreakDays: { $gt: 0 } } },
+        { $sort: { currentStreakDays: -1, longestStreakDays: -1 } },
+        { $limit: 10 },
+        {
+          $project: {
+            name: { $concat: ['$firstName', ' ', '$lastName'] },
+            email: 1, country: 1, cohort: '$fellowData.cohort',
+            currentStreak: '$currentStreakDays',
+            longestStreak: '$longestStreakDays',
+            totalPoints: { $ifNull: ['$totalPoints', 0] },
+          },
+        },
+      ]),
+
+      // 4. Recent stars: active last 7 days with ≥50% progress
+      this.moduleEnrollmentModel.aggregate([
+        { $match: { lastAccessedAt: { $gte: sevenDaysAgo }, progress: { $gte: 50 } } },
+        {
+          $group: {
+            _id: '$studentId',
+            completedModules: { $sum: { $cond: ['$isCompleted', 1, 0] } },
+            avgProgress: { $avg: '$progress' },
+            lastActive: { $max: '$lastAccessedAt' },
+          },
+        },
+        { $sort: { completedModules: -1, avgProgress: -1 } },
+        { $limit: 8 },
+        { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
+        { $unwind: { path: '$user', preserveNullAndEmptyArrays: false } },
+        {
+          $project: {
+            name: { $concat: ['$user.firstName', ' ', '$user.lastName'] },
+            email: '$user.email', country: '$user.country',
+            cohort: '$user.fellowData.cohort',
+            completedModules: 1,
+            avgProgress: { $round: ['$avgProgress', 1] },
+            lastActive: 1,
+          },
+        },
+      ]),
+
+      // 5. Level champions — top student per level
+      this.moduleEnrollmentModel.aggregate([
+        { $lookup: { from: 'modules', localField: 'moduleId', foreignField: '_id', as: 'module' } },
+        { $unwind: { path: '$module', preserveNullAndEmptyArrays: false } },
+        {
+          $group: {
+            _id: { studentId: '$studentId', level: '$module.level' },
+            completedModules: { $sum: { $cond: ['$isCompleted', 1, 0] } },
+            avgScore: { $avg: { $ifNull: ['$finalAssessmentScore', 0] } },
+          },
+        },
+        { $sort: { '_id.level': 1, completedModules: -1, avgScore: -1 } },
+        {
+          $group: {
+            _id: '$_id.level',
+            topStudentId: { $first: '$_id.studentId' },
+            completedModules: { $first: '$completedModules' },
+            avgScore: { $first: '$avgScore' },
+          },
+        },
+        { $lookup: { from: 'users', localField: 'topStudentId', foreignField: '_id', as: 'user' } },
+        { $unwind: { path: '$user', preserveNullAndEmptyArrays: false } },
+        {
+          $project: {
+            level: '$_id',
+            name: { $concat: ['$user.firstName', ' ', '$user.lastName'] },
+            email: '$user.email', country: '$user.country',
+            completedModules: 1,
+            avgScore: { $round: ['$avgScore', 1] },
+          },
+        },
+        { $sort: { level: 1 } },
+      ]),
+    ]);
+
+    return { byCompletions, byScore, byStreak, recentStars, levelChampions };
+  }
+
+  // ===================== DEBUG =====================
+
+  async getDebugCounts() {
+    const db = this.userModel.db;
+
+    // ── List ALL collection names in the database ────────────────────────────
+    const allCollections = (await db.listCollections()).map((c: any) => c.name).sort();
+
+    // ── Count documents in every relevant collection ─────────────────────────
+    const counts: Record<string, number> = {};
+    for (const name of allCollections) {
+      try { counts[name] = await db.collection(name).countDocuments(); }
+      catch { counts[name] = -1; }
+    }
+
+    // ── Sample enrollment + module ───────────────────────────────────────────
+    const sampleEnrollment = await this.moduleEnrollmentModel
+      .findOne()
+      .select('moduleId studentId progress isCompleted certificateEarned finalAssessmentScore')
+      .lean();
+
+    const moduleSample = await this.moduleModel
+      .findOne()
+      .select('_id title level status avgRating totalRatings')
+      .lean();
+
+    // ── Certificates: check both collection and enrollment flag ──────────────
+    const [certsInCollection, enrollmentsWithCertFlag, enrollmentsProgress100, enrollmentsCompleted] = await Promise.all([
+      this.moduleCertificateModel.countDocuments(),
+      this.moduleEnrollmentModel.countDocuments({ certificateEarned: true }),
+      this.moduleEnrollmentModel.countDocuments({ progress: 100 }),
+      this.moduleEnrollmentModel.countDocuments({ isCompleted: true }),
+    ]);
+
+    // Sample a certificate if any
+    const sampleCert = await this.moduleCertificateModel.findOne().lean().catch(() => null);
+
+    // ── Ratings: check via module and try collection directly ────────────────
+    const modulesWithRatings = await this.moduleModel.countDocuments({ totalRatings: { $gt: 0 } });
+    let ratingsCollectionCount = 0;
+    let sampleRating: any = null;
+    try {
+      // try common collection name variants
+      for (const name of ['moduleratings', 'module_ratings', 'moduleRatings']) {
+        if (allCollections.includes(name)) {
+          ratingsCollectionCount = await db.collection(name).countDocuments();
+          sampleRating = await db.collection(name).findOne({});
+          break;
+        }
+      }
+    } catch { /* ignore */ }
+
+    const report = {
+      allCollections,
+      collectionCounts: counts,
+      certificates: {
+        inModuleCertificateCollection: certsInCollection,
+        enrollmentsWithCertificateEarnedTrue: enrollmentsWithCertFlag,
+        enrollmentsWithProgress100: enrollmentsProgress100,
+        enrollmentsWithIsCompletedTrue: enrollmentsCompleted,
+        sampleCert,
+      },
+      ratings: {
+        modulesWithTotalRatingsGt0: modulesWithRatings,
+        ratingsCollectionCount,
+        sampleRating,
+      },
+      sampleEnrollment,
+      moduleSample,
+    };
+
+    console.log('\n=== FULL DEBUG REPORT ===');
+    console.log('Collections:', allCollections.join(', '));
+    console.log('Cert in collection:', certsInCollection);
+    console.log('Cert flag on enrollment:', enrollmentsWithCertFlag);
+    console.log('Progress=100 enrollments:', enrollmentsProgress100);
+    console.log('isCompleted=true enrollments:', enrollmentsCompleted);
+    console.log('Modules with ratings:', modulesWithRatings);
+    console.log('Ratings collection count:', ratingsCollectionCount);
+    console.log('Sample enrollment:', JSON.stringify(sampleEnrollment, null, 2));
+    console.log('=========================\n');
+
+    return report;
+  }
+
+  // ===================== EXTENDED ANALYTICS =====================
+
+  async getExtendedAnalytics() {
+    try {
+    const now = new Date();
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    // ── 1. Students per level (based on module enrollments) ─────────────────
+    const levelEnrollmentRaw = await this.moduleEnrollmentModel.aggregate([
+      {
+        $lookup: {
+          from: 'modules',
+          localField: 'moduleId',
+          foreignField: '_id',
+          as: 'module',
+        },
+      },
+      { $unwind: '$module' },
+      {
+        $group: {
+          _id: '$module.level',
+          totalStudents: { $addToSet: '$studentId' },
+          totalEnrollments: { $sum: 1 },
+          completedEnrollments: { $sum: { $cond: [{ $or: [{ $eq: ['$isCompleted', true] }, { $gte: ['$progress', 100] }] }, 1, 0] } },
+          avgProgress: { $avg: '$progress' },
+        },
+      },
+      {
+        $project: {
+          level: '$_id',
+          totalStudents: { $size: '$totalStudents' },
+          totalEnrollments: 1,
+          completedEnrollments: 1,
+          avgProgress: { $round: ['$avgProgress', 1] },
+          completionRate: {
+            $cond: [
+              { $gt: ['$totalEnrollments', 0] },
+              { $round: [{ $multiply: [{ $divide: ['$completedEnrollments', '$totalEnrollments'] }, 100] }, 1] },
+              0,
+            ],
+          },
+        },
+      },
+    ]);
+
+    const levelOrder = ['beginner', 'intermediate', 'advanced'];
+    const levelStats = levelOrder.map((lvl) => {
+      const found = levelEnrollmentRaw.find((r: any) => r.level === lvl);
+      return {
+        level: lvl,
+        label: lvl === 'beginner' ? 'Basic' : lvl === 'intermediate' ? 'Intermediate' : 'Advanced',
+        totalStudents: found?.totalStudents ?? 0,
+        totalEnrollments: found?.totalEnrollments ?? 0,
+        completedEnrollments: found?.completedEnrollments ?? 0,
+        avgProgress: found?.avgProgress ?? 0,
+        completionRate: found?.completionRate ?? 0,
+      };
+    });
+
+    // ── 2. Module progress stats (per module breakdown) ──────────────────────
+    const moduleProgressRaw = await this.moduleEnrollmentModel.aggregate([
+      {
+        $group: {
+          _id: '$moduleId',
+          totalEnrollments: { $sum: 1 },
+          completedCount: { $sum: { $cond: [{ $or: [{ $eq: ['$isCompleted', true] }, { $gte: ['$progress', 100] }] }, 1, 0] } },
+          avgProgress: { $avg: '$progress' },
+          repeatCount: { $sum: { $cond: [{ $gt: ['$moduleRepeatCount', 0] }, 1, 0] } },
+          pendingGrading: { $sum: { $ifNull: ['$pendingManualGradingCount', 0] } },
+        },
+      },
+      {
+        $lookup: {
+          from: 'modules',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'module',
+        },
+      },
+      { $unwind: { path: '$module', preserveNullAndEmptyArrays: false } },
+      {
+        $project: {
+          moduleId: '$_id',
+          title: '$module.title',
+          level: '$module.level',
+          status: '$module.status',
+          avgRating: { $ifNull: ['$module.avgRating', 0] },
+          totalRatings: { $ifNull: ['$module.totalRatings', 0] },
+          totalEnrollments: 1,
+          completedCount: 1,
+          avgProgress: { $round: ['$avgProgress', 1] },
+          repeatCount: 1,
+          pendingGrading: 1,
+          completionRate: {
+            $cond: [
+              { $gt: ['$totalEnrollments', 0] },
+              { $round: [{ $multiply: [{ $divide: ['$completedCount', '$totalEnrollments'] }, 100] }, 1] },
+              0,
+            ],
+          },
+        },
+      },
+      { $sort: { totalEnrollments: -1 } },
+    ]);
+
+    // ── 3. Certificate stats ─────────────────────────────────────────────────
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+
+    const [certsFromCollection, certsFromEnrollment, certMonthlyRaw] = await Promise.all([
+      this.moduleCertificateModel.countDocuments(),
+      this.moduleEnrollmentModel.countDocuments({ certificateEarned: true }),
+      this.moduleCertificateModel.aggregate([
+        { $match: { issuedDate: { $gte: twelveMonthsAgo } } },
+        {
+          $group: {
+            _id: { year: { $year: '$issuedDate' }, month: { $month: '$issuedDate' } },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]),
+    ]);
+
+    // Use whichever count is higher (collection vs enrollment flag)
+    const totalCertsIssued = Math.max(certsFromCollection, certsFromEnrollment);
+    // Count completions using both flag and progress (some records use progress:100 without setting flag)
+    const totalCompleted = await this.moduleEnrollmentModel.countDocuments({
+      $or: [{ isCompleted: true }, { progress: { $gte: 100 } }],
+    });
+    const certIssuanceRate = totalCompleted > 0 ? +((totalCertsIssued / totalCompleted) * 100).toFixed(1) : 0;
+
+    const certMonthlyTrend = certMonthlyRaw.map((c: any) => ({
+      label: `${MONTHS[c._id.month - 1]} ${c._id.year}`,
+      month: MONTHS[c._id.month - 1],
+      count: c.count,
+    }));
+
+    // ── 4. Module ratings analytics ──────────────────────────────────────────
+    let ratedModules: any[] = [];
+    let unratedModulesCount = 0;
+    let overallAvgRating = 0;
+
+    try {
+      // Try querying ModuleRating collection directly (same connection)
+      const moduleRatingCollection = this.userModel.db.collection('moduleratings');
+      const ratingsPerModule = await moduleRatingCollection.aggregate([
+        { $group: { _id: '$moduleId', avgRating: { $avg: '$rating' }, totalRatings: { $sum: 1 } } },
+      ]).toArray();
+
+      const ratingMap = new Map(
+        ratingsPerModule.map((r: any) => [r._id?.toString(), { avgRating: +(r.avgRating || 0).toFixed(1), totalRatings: r.totalRatings as number }]),
+      );
+
+      const publishedModules = await this.moduleModel
+        .find({ status: 'published' })
+        .select('_id title level enrollmentCount avgRating totalRatings')
+        .lean();
+
+      const modulesWithRatings = publishedModules.map((m: any) => {
+        const id = (m._id as any).toString();
+        const fromCollection = ratingMap.get(id);
+        return {
+          ...m,
+          avgRating: fromCollection?.avgRating ?? (m.avgRating || 0),
+          totalRatings: fromCollection?.totalRatings ?? (m.totalRatings || 0),
+        };
+      });
+
+      ratedModules = modulesWithRatings.filter((m: any) => m.totalRatings > 0).sort((a: any, b: any) => b.avgRating - a.avgRating);
+      unratedModulesCount = modulesWithRatings.filter((m: any) => m.totalRatings === 0).length;
+      overallAvgRating = ratedModules.length > 0
+        ? +(ratedModules.reduce((s: number, m: any) => s + (m.avgRating || 0), 0) / ratedModules.length).toFixed(1)
+        : 0;
+    } catch (err) {
+      console.warn('Ratings query failed, using module denormalized fields:', (err as any).message);
+      // Fallback: use denormalized avgRating on module documents
+      const fallbackModules = await this.moduleModel
+        .find({ status: 'published' })
+        .select('_id title level enrollmentCount avgRating totalRatings')
+        .lean();
+      ratedModules = (fallbackModules as any[]).filter((m: any) => (m.totalRatings || 0) > 0).sort((a: any, b: any) => b.avgRating - a.avgRating);
+      unratedModulesCount = (fallbackModules as any[]).filter((m: any) => !(m.totalRatings > 0)).length;
+      overallAvgRating = ratedModules.length > 0
+        ? +(ratedModules.reduce((s: number, m: any) => s + (m.avgRating || 0), 0) / ratedModules.length).toFixed(1)
+        : 0;
+    }
+
+    // ── 5. Student streak & XP stats ────────────────────────────────────────
+    const streakStats = await this.userModel.aggregate([
+      { $match: { role: UserRole.STUDENT } },
+      {
+        $group: {
+          _id: null,
+          avgCurrentStreak: { $avg: { $ifNull: ['$currentStreakDays', 0] } },
+          maxCurrentStreak: { $max: { $ifNull: ['$currentStreakDays', 0] } },
+          maxLongestStreak: { $max: { $ifNull: ['$longestStreakDays', 0] } },
+          totalXP: { $sum: { $ifNull: ['$totalPoints', 0] } },
+          studentsWithStreak: {
+            $sum: { $cond: [{ $gt: [{ $ifNull: ['$currentStreakDays', 0] }, 0] }, 1, 0] },
+          },
+        },
+      },
+    ]);
+
+    const streak = streakStats[0] ?? {
+      avgCurrentStreak: 0,
+      maxCurrentStreak: 0,
+      maxLongestStreak: 0,
+      totalXP: 0,
+      studentsWithStreak: 0,
+    };
+
+    // ── 6. Instructor pending grading queue ──────────────────────────────────
+    const pendingGradingTotal = await this.moduleEnrollmentModel.aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $ifNull: ['$pendingManualGradingCount', 0] } },
+        },
+      },
+    ]);
+    const totalPendingGrading = pendingGradingTotal[0]?.total ?? 0;
+
+    // Instructor leaderboard (modules + students taught)
+    const instructors = await this.userModel
+      .find({ role: UserRole.INSTRUCTOR })
+      .select('firstName lastName email lastLogin')
+      .lean();
+
+    const instructorLeaderboard = await Promise.all(
+      instructors.slice(0, 20).map(async (inst) => {
+        const modules = await this.moduleModel
+          .find({ instructorIds: inst._id, status: 'published' })
+          .select('title enrollmentCount completionRate avgRating')
+          .lean();
+        const studentsTaught = modules.reduce((s: number, m: any) => s + (m.enrollmentCount || 0), 0);
+        const avgScore =
+          modules.length > 0
+            ? +(modules.reduce((s: number, m: any) => s + (m.completionRate || 0), 0) / modules.length).toFixed(1)
+            : 0;
+        return {
+          name: `${inst.firstName} ${inst.lastName}`,
+          email: inst.email,
+          publishedModules: modules.length,
+          studentsTaught,
+          avgCompletionRate: avgScore,
+          lastLogin: inst.lastLogin,
+        };
+      }),
+    );
+    instructorLeaderboard.sort((a, b) => b.studentsTaught - a.studentsTaught);
+
+    return {
+      levelStats,
+      moduleProgressStats: moduleProgressRaw,
+      certificates: {
+        totalIssued: totalCertsIssued,
+        issuanceRate: certIssuanceRate,
+        monthlyTrend: certMonthlyTrend,
+        totalCompletions: totalCompleted,
+      },
+      ratings: {
+        overallAvgRating,
+        ratedModulesCount: ratedModules.length,
+        unratedModulesCount: unratedModulesCount,
+        topRated: ratedModules.slice(0, 8),
+        bottomRated: [...ratedModules].reverse().slice(0, 5),
+      },
+      streaks: {
+        avgCurrentStreak: +streak.avgCurrentStreak.toFixed(1),
+        maxCurrentStreak: streak.maxCurrentStreak,
+        maxLongestStreak: streak.maxLongestStreak,
+        totalXP: streak.totalXP,
+        studentsWithStreak: streak.studentsWithStreak,
+      },
+      grading: {
+        totalPendingGrading,
+        instructorLeaderboard,
+      },
+    };
+    } catch (err) {
+      console.error('getExtendedAnalytics error:', (err as any).message);
+      return {
+        levelStats: [], moduleProgressStats: [],
+        certificates: { totalIssued: 0, issuanceRate: 0, monthlyTrend: [], totalCompletions: 0 },
+        ratings: { overallAvgRating: 0, ratedModulesCount: 0, unratedModulesCount: 0, topRated: [], bottomRated: [] },
+        streaks: { avgCurrentStreak: 0, maxCurrentStreak: 0, maxLongestStreak: 0, totalXP: 0, studentsWithStreak: 0 },
+        grading: { totalPendingGrading: 0, instructorLeaderboard: [] },
+      };
+    }
   }
 }

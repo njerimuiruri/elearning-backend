@@ -80,7 +80,7 @@ export class EmailService {
       : 'Your Instructor Application Rejected';
 
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const loginUrl = `${frontendUrl}/login`;
 
     const htmlContent = isApproved
@@ -348,7 +348,7 @@ The ARIN eLearning Team
     const subject =
       'Welcome to Arin Publishing Academy - Your Instructor Account Has Been Created';
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const loginUrl = `${frontendUrl}/login`;
 
     const htmlContent = `
@@ -433,7 +433,7 @@ Arin Publishing Academy Team
   async sendWelcomeEmail(email: string, firstName: string) {
     const subject = 'Welcome to Arin Publishing Academy!';
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const coursesUrl = `${frontendUrl}/student/courses`;
 
     const htmlContent = `
@@ -852,7 +852,7 @@ E-Learning Platform Team
   ) {
     const subject = `New Course Submission - ${courseTitle}`;
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const adminDashboardUrl = `${frontendUrl}/admin/courses`;
 
     const htmlContent = `
@@ -926,7 +926,7 @@ E-Learning Platform System
   ) {
     const subject = `Your Course Has Been Approved! 🎉`;
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const coursePageUrl = `${frontendUrl}/courses`;
 
     const htmlContent = `
@@ -1003,7 +1003,7 @@ E-Learning Platform Team
   ) {
     const subject = `Course Submission - Feedback Required`;
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const courseEditorUrl = `${frontendUrl}/instructor/courses`;
 
     const htmlContent = `
@@ -1099,7 +1099,7 @@ E-Learning Platform Team
    */
   async sendQuestionNotificationToInstructor(emailData: any, courseId: string) {
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const dashboardUrl = `${frontendUrl}/instructor/dashboard`;
     const questionUrl = `${frontendUrl}/instructor/questions/${courseId}`;
 
@@ -1186,7 +1186,7 @@ E-Learning Platform Team
     instructorId: string,
   ) {
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const dashboardUrl = `${frontendUrl}/student/dashboard`;
     const questionUrl = `${frontendUrl}/student/questions/${emailData.questionId}`;
 
@@ -1275,7 +1275,7 @@ E-Learning Platform Team
     flagData: any,
   ) {
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const adminDashboardUrl = `${frontendUrl}/admin/questions/${flagData.questionId}`;
 
     const htmlContent = `
@@ -1322,7 +1322,7 @@ E-Learning Platform Team
   ) {
     const subject = `Your Module Has Been Approved! 🎉`;
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const dashboardUrl = `${frontendUrl}/instructor/modules`;
 
     const htmlContent = `
@@ -1372,7 +1372,7 @@ E-Learning Platform Team
   ) {
     const subject = `Module Submission — Feedback Required`;
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const dashboardUrl = `${frontendUrl}/instructor/modules`;
 
     const htmlContent = `
@@ -1420,7 +1420,7 @@ E-Learning Platform Team
   ) {
     const subject = `New Module Submission — ${moduleTitle}`;
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const adminDashboardUrl = `${frontendUrl}/admin/modules`;
 
     const htmlContent = `
@@ -1471,7 +1471,7 @@ E-Learning Platform Team
   ) {
     const subject = `Essay Submitted for Review: ${moduleName}`;
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const reviewUrl = `${frontendUrl}/instructor/enrollments/${enrollmentId}/grade-essay`;
 
     const htmlContent = `
@@ -1525,7 +1525,7 @@ E-Learning Platform Team
       : `Essay Reviewed: ${moduleName} — Feedback Available`;
 
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
 
     const htmlContent = passed
       ? `
@@ -1688,7 +1688,7 @@ E-Learning Platform Team
   ) {
     const subject = `Don't Stop Now — Continue "${moduleName}"`;
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const moduleUrl = `${frontendUrl}/student/modules/${moduleId}`;
 
     const htmlContent = `
@@ -1742,7 +1742,7 @@ E-Learning Platform Team
   ) {
     const subject = `⏰ Complete Your Course: ${courseTitle}`;
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const courseUrl = `${frontendUrl}/courses/${courseId}`;
     const dashboardUrl = `${frontendUrl}/student`;
 
@@ -2036,7 +2036,7 @@ Go to Dashboard: ${dashboardUrl}
     const subject =
       'Welcome to the Arin Fellowship Programme — Complete Your Profile';
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const loginUrl = `${frontendUrl}/login?ref=${Buffer.from(email).toString('base64url')}`;
     const supportEmail =
       this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
@@ -2277,7 +2277,7 @@ The Arin Publishing Academy Team
     options?: { cc?: string[]; bcc?: string[]; fromName?: string },
   ) {
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const supportEmail =
       this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
     const fromEmail =
@@ -2531,7 +2531,7 @@ The Arin Publishing Academy Team
     unlockedLevel: string,
   ): Promise<void> {
     const frontendUrl =
-      this.configService.get('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
 
     const levelLabel =
       unlockedLevel.charAt(0).toUpperCase() + unlockedLevel.slice(1);

@@ -31,6 +31,7 @@ import {
   ModuleCertificateSchema,
 } from '../schemas/module-certificate.schema';
 import { Category, CategorySchema } from '../schemas/category.schema';
+import { Microgrant, MicrograntSchema } from '../schemas/microgrant.schema';
 import { EmailService } from '../common/services/email.service';
 import { ReminderService } from '../services/reminder.service';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -50,6 +51,7 @@ import { EmailQueueModule } from '../email-queue/email-queue.module';
       { name: ModuleEnrollment.name, schema: ModuleEnrollmentSchema },
       { name: ModuleCertificate.name, schema: ModuleCertificateSchema },
       { name: Category.name, schema: CategorySchema },
+      { name: Microgrant.name, schema: MicrograntSchema },
     ]),
     NotificationsModule,
     EmailQueueModule,
