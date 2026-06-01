@@ -2268,6 +2268,213 @@ The Arin Publishing Academy Team
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // FELLOWSHIP REMINDER EMAILS
+  // ─────────────────────────────────────────────────────────────────
+
+  async sendInactivityReminderEmail(
+    to: string,
+    firstName: string,
+    dashboardUrl: string,
+  ) {
+    const supportEmail =
+      this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
+    const fromEmail =
+      this.configService.get('SMTP_FROM_EMAIL') || 'noreply@arin-africa.org';
+    const subject = `We miss you, ${firstName}! Your learning journey is waiting`;
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
+            <p style="color:rgba(255,255,255,0.85);font-size:13px;margin:0 0 8px;letter-spacing:1px;text-transform:uppercase;">Arin Publishing Academy</p>
+            <h1 style="color:#fff;margin:0;font-size:26px;font-weight:700;line-height:1.3;">Your potential is still here,<br/>${firstName} 🌱</h1>
+          </td>
+        </tr>
+
+        <!-- Hero illustration strip -->
+        <tr>
+          <td style="background:#f0fdf4;padding:20px 40px;text-align:center;border-bottom:1px solid #d1fae5;">
+            <p style="margin:0;font-size:36px;letter-spacing:8px;">📖 💡 🎓</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="color:#374151;font-size:16px;line-height:1.7;margin:0 0 16px;">Hi <strong>${firstName}</strong>,</p>
+            <p style="color:#374151;font-size:16px;line-height:1.7;margin:0 0 20px;">
+              We noticed you haven't visited your fellowship modules in a while — and we genuinely miss seeing you learn!
+              Every lesson you complete brings you one step closer to the knowledge and credentials that will shape your future.
+            </p>
+
+            <!-- Motivational highlight box -->
+            <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:0 8px 8px 0;padding:18px 20px;margin:24px 0;">
+              <p style="color:#15803d;font-size:15px;font-weight:600;margin:0 0 8px;">Remember why you started 💪</p>
+              <p style="color:#374151;font-size:14px;line-height:1.6;margin:0;">
+                Your fellowship is a rare opportunity to grow, connect, and lead. The modules you complete today are investments in the version of yourself you're becoming.
+              </p>
+            </div>
+
+            <p style="color:#374151;font-size:16px;line-height:1.7;margin:0 0 28px;">
+              It only takes a few minutes to get back on track. Log in, pick up where you left off, and let's keep the momentum going!
+            </p>
+
+            <!-- CTA button -->
+            <div style="text-align:center;margin:8px 0 28px;">
+              <a href="${dashboardUrl}" style="display:inline-block;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;font-weight:700;letter-spacing:0.3px;box-shadow:0 4px 12px rgba(22,163,74,0.3);">
+                Continue My Learning Journey →
+              </a>
+            </div>
+
+            <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0;">
+              Best regards,<br/>
+              <strong style="color:#374151;">The ARIN eLearning Team</strong>
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;">
+            <p style="color:#9ca3af;font-size:12px;margin:0;">
+              © ${new Date().getFullYear()} Arin Publishing Academy &nbsp;|&nbsp;
+              Need help? <a href="mailto:${supportEmail}" style="color:#16a34a;">${supportEmail}</a>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const text = `Hi ${firstName},\n\nWe noticed you haven't visited your fellowship modules in a while — and we miss seeing you learn!\n\nEvery lesson you complete brings you one step closer to the knowledge and credentials that will shape your future.\n\nRemember why you started — your fellowship is a rare opportunity to grow, connect, and lead.\n\nLog in and continue your journey: ${dashboardUrl}\n\nBest regards,\nThe ARIN eLearning Team`;
+
+    try {
+      await this.transporter.sendMail({ from: fromEmail, to, subject, html, text });
+      return { success: true };
+    } catch (error: any) {
+      console.error(`Failed to send inactivity reminder to ${to}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async sendDeadlineReminderEmail(
+    to: string,
+    firstName: string,
+    daysLeft: number,
+    dashboardUrl: string,
+  ) {
+    const supportEmail =
+      this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
+    const fromEmail =
+      this.configService.get('SMTP_FROM_EMAIL') || 'noreply@arin-africa.org';
+    const subject = `${firstName}, you have ${daysLeft} day${daysLeft !== 1 ? 's' : ''} to finish strong 🏁`;
+
+    const urgencyColor = daysLeft <= 14 ? '#dc2626' : daysLeft <= 30 ? '#d97706' : '#16a34a';
+    const urgencyBg = daysLeft <= 14 ? '#fef2f2' : daysLeft <= 30 ? '#fffbeb' : '#f0fdf4';
+    const urgencyBorder = daysLeft <= 14 ? '#fca5a5' : daysLeft <= 30 ? '#fcd34d' : '#bbf7d0';
+    const urgencyEmoji = daysLeft <= 14 ? '🔥' : daysLeft <= 30 ? '⏳' : '🎯';
+
+    const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
+            <p style="color:rgba(255,255,255,0.85);font-size:13px;margin:0 0 8px;letter-spacing:1px;text-transform:uppercase;">Arin Publishing Academy</p>
+            <h1 style="color:#fff;margin:0;font-size:26px;font-weight:700;line-height:1.3;">You're so close, ${firstName}! ${urgencyEmoji}</h1>
+          </td>
+        </tr>
+
+        <!-- Countdown badge -->
+        <tr>
+          <td style="background:${urgencyBg};padding:24px 40px;text-align:center;border-bottom:1px solid ${urgencyBorder};">
+            <p style="color:${urgencyColor};font-size:14px;font-weight:600;margin:0 0 4px;text-transform:uppercase;letter-spacing:1px;">Fellowship deadline in</p>
+            <p style="color:${urgencyColor};font-size:48px;font-weight:800;margin:0;line-height:1;">${daysLeft}</p>
+            <p style="color:${urgencyColor};font-size:16px;font-weight:600;margin:4px 0 0;">day${daysLeft !== 1 ? 's' : ''}</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="color:#374151;font-size:16px;line-height:1.7;margin:0 0 16px;">Hi <strong>${firstName}</strong>,</p>
+            <p style="color:#374151;font-size:16px;line-height:1.7;margin:0 0 20px;">
+              Your fellowship deadline is on the horizon — but you still have time to finish strong.
+              Every module you complete now is proof of your commitment and dedication to growth.
+            </p>
+
+            <!-- Motivational highlight box -->
+            <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:0 8px 8px 0;padding:18px 20px;margin:24px 0;">
+              <p style="color:#15803d;font-size:15px;font-weight:600;margin:0 0 8px;">You've come this far — don't stop now 🚀</p>
+              <p style="color:#374151;font-size:14px;line-height:1.6;margin:0;">
+                Think about the growth you've achieved, the knowledge you've gained, and the community you've joined.
+                Completing your fellowship is a milestone worth celebrating — and it starts with your next login.
+              </p>
+            </div>
+
+            <p style="color:#374151;font-size:16px;line-height:1.7;margin:0 0 28px;">
+              Log in now, review your outstanding modules, and make the most of the time you have left.
+            </p>
+
+            <!-- CTA button -->
+            <div style="text-align:center;margin:8px 0 28px;">
+              <a href="${dashboardUrl}" style="display:inline-block;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;font-weight:700;letter-spacing:0.3px;box-shadow:0 4px 12px rgba(22,163,74,0.3);">
+                Complete My Modules Now →
+              </a>
+            </div>
+
+            <p style="color:#6b7280;font-size:14px;line-height:1.6;margin:0;">
+              We're cheering for you,<br/>
+              <strong style="color:#374151;">The ARIN eLearning Team</strong>
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 40px;text-align:center;">
+            <p style="color:#9ca3af;font-size:12px;margin:0;">
+              © ${new Date().getFullYear()} Arin Publishing Academy &nbsp;|&nbsp;
+              Need help? <a href="mailto:${supportEmail}" style="color:#16a34a;">${supportEmail}</a>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const text = `Hi ${firstName},\n\nYour fellowship deadline is in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.\n\nYou've come this far — don't stop now! Complete your outstanding modules and finish your fellowship strong.\n\nLog in and complete your modules: ${dashboardUrl}\n\nWe're cheering for you,\nThe ARIN eLearning Team`;
+
+    try {
+      await this.transporter.sendMail({ from: fromEmail, to, subject, html, text });
+      return { success: true };
+    } catch (error: any) {
+      console.error(`Failed to send deadline reminder to ${to}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // BULK CUSTOM EMAIL — with CC / BCC support
   // ─────────────────────────────────────────────────────────────────
   async sendCustomEmail(

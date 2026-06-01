@@ -532,7 +532,8 @@ export class ReminderService {
     const now = new Date();
     const sixtyDaysFromNow = new Date(now.getTime() + 60 * 86400000);
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const rawFrontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const frontendUrl = rawFrontendUrl.split(',').pop()?.trim() || 'http://localhost:3000';
     const dashboardUrl = `${frontendUrl}/student`;
 
     // 1. Fellows approaching deadline (active, deadline within 60 days)
@@ -541,7 +542,7 @@ export class ReminderService {
         'fellowData.fellowshipStatus': FellowshipStatus.ACTIVE,
         'fellowData.deadline': { $lte: sixtyDaysFromNow, $gte: now },
       })
-      .select('_id firstName email fellowData')
+      .select('_id firstName lastName email fellowData')
       .lean();
 
     // 2. Fellows with no module activity in 14+ days
@@ -562,7 +563,7 @@ export class ReminderService {
             'fellowData.fellowId': { $exists: true },
             'fellowData.fellowshipStatus': FellowshipStatus.ACTIVE,
           })
-          .select('_id firstName email fellowData')
+          .select('_id firstName lastName email fellowData')
           .lean()
       : [];
 
@@ -582,21 +583,32 @@ export class ReminderService {
         : null;
 
       const isDeadlineApproaching = daysLeft !== null && daysLeft <= 60;
-      const subject = isDeadlineApproaching
-        ? `Action required: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left in your fellowship`
-        : 'Keep going — your fellowship progress needs attention';
-
-      const body = isDeadlineApproaching
-        ? `Dear ${fellow.firstName},\n\nYour fellowship deadline is approaching — you have ${daysLeft} day${daysLeft !== 1 ? 's' : ''} remaining.\n\nPlease log in to your dashboard and complete any outstanding modules as soon as possible.\n\nDashboard: ${dashboardUrl}\n\nBest regards,\nARIN eLearning Team`
-        : `Dear ${fellow.firstName},\n\nWe noticed you haven't accessed your fellowship modules recently. Please log in and continue your learning journey.\n\nDashboard: ${dashboardUrl}\n\nBest regards,\nARIN eLearning Team`;
+      const fullName = `${fellow.firstName} ${fellow.lastName}`.trim();
 
       try {
-        await this.emailService.sendCustomEmail(fellow.email, subject, body);
+        if (isDeadlineApproaching) {
+          await this.emailService.sendDeadlineReminderEmail(
+            fellow.email,
+            fullName,
+            daysLeft!,
+            dashboardUrl,
+          );
+        } else {
+          await this.emailService.sendInactivityReminderEmail(
+            fellow.email,
+            fullName,
+            dashboardUrl,
+          );
+        }
+
+        const notifSubject = isDeadlineApproaching
+          ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left in your fellowship`
+          : 'Keep going — your fellowship progress needs attention';
 
         await this.notificationsService.createReminderNotification(
           (fellow._id as any).toString(),
           NotificationType.INACTIVITY_REMINDER,
-          subject,
+          notifSubject,
           isDeadlineApproaching
             ? `${daysLeft} days left to complete your fellowship modules.`
             : 'You have not accessed your modules in over 14 days.',
