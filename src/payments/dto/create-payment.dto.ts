@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
 
 export class CreatePaymentIntentDto {
   @IsString()
@@ -10,6 +10,10 @@ export class CreateModulePaymentDto {
   @IsString()
   @IsNotEmpty()
   moduleId: string;
+
+  @IsOptional()
+  @IsEnum(['student', 'non-student'])
+  userTier?: 'student' | 'non-student';
 }
 
 export class VerifyPaymentDto {

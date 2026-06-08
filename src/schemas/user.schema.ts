@@ -1,6 +1,30 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
 
+export enum StudentVerificationStatus {
+  NONE = 'none',
+  PENDING = 'pending',
+  APPROVED = 'approved',
+  REJECTED = 'rejected',
+}
+
+class StudentVerificationData {
+  @Prop({ enum: StudentVerificationStatus, default: StudentVerificationStatus.NONE })
+  status: string;
+
+  @Prop({ default: null })
+  idUploadUrl: string;
+
+  @Prop({ default: null })
+  submittedAt: Date;
+
+  @Prop({ default: null })
+  reviewedAt: Date;
+
+  @Prop({ default: null })
+  rejectionReason: string;
+}
+
 export enum UserRole {
   STUDENT = 'student',
   INSTRUCTOR = 'instructor',
@@ -175,6 +199,14 @@ export class User extends Document {
   // Category access control
   @Prop([{ type: Types.ObjectId, ref: 'Category' }])
   purchasedCategories: Types.ObjectId[];
+
+  // Student verification for tiered-pricing categories (e.g. Arin Publishing Academy)
+  @Prop({ type: StudentVerificationData, default: () => ({ status: StudentVerificationStatus.NONE }) })
+  studentVerification: StudentVerificationData;
+
+  // Which category the student paid the student price for (to gate ID verification)
+  @Prop({ type: Types.ObjectId, ref: 'Category', default: null })
+  pendingStudentCategoryId: Types.ObjectId;
 
   // Password management
   @Prop({ default: false })

@@ -32,6 +32,7 @@ import { AdmissionLettersModule } from './admission-letters/admission-letters.mo
 import { EmailQueueModule } from './email-queue/email-queue.module';
 import { ProjectsModule } from './projects/projects.module';
 import { CapstoneModule } from './capstone/capstone.module';
+import { StudentVerificationModule } from './student-verification/student-verification.module';
 
 @Module({
   imports: [
@@ -109,6 +110,7 @@ import { CapstoneModule } from './capstone/capstone.module';
     EmailQueueModule,
     ProjectsModule,
     CapstoneModule,
+    StudentVerificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

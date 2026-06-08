@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Category } from '../schemas/category.schema';
-import { User, UserRole } from '../schemas/user.schema';
+import { User, UserRole, StudentVerificationStatus } from '../schemas/user.schema';
 import { Course } from '../schemas/course.schema';
 
 export interface CategoryAccessResult {
@@ -14,9 +14,13 @@ export interface CategoryAccessResult {
     | 'admin_bypass'
     | 'free_category'
     | 'fellow_access'
-    | 'purchased';
+    | 'purchased'
+    | 'verification_pending'
+    | 'verification_rejected';
   price?: number;
   categoryId?: string;
+  verificationStatus?: string;
+  rejectionReason?: string;
 }
 
 export interface CourseAccessResult {
@@ -123,6 +127,29 @@ export class CategoryAccessControlService {
       }
     }
 
+    // Check if user paid student price and is awaiting verification
+    const pendingCatId = user.pendingStudentCategoryId?.toString();
+    if (pendingCatId === categoryId.toString()) {
+      const verStatus = user.studentVerification?.status;
+      if (verStatus === StudentVerificationStatus.PENDING) {
+        return {
+          allowed: false,
+          reason: 'verification_pending',
+          categoryId,
+          verificationStatus: verStatus,
+        };
+      }
+      if (verStatus === StudentVerificationStatus.REJECTED) {
+        return {
+          allowed: false,
+          reason: 'verification_rejected',
+          categoryId,
+          verificationStatus: verStatus,
+          rejectionReason: user.studentVerification?.rejectionReason || undefined,
+        };
+      }
+    }
+
     // Check if payment is required for non-eligible users
     if (
       category.paymentRequiredForNonEligible &&
@@ -131,8 +158,17 @@ export class CategoryAccessControlService {
       return {
         allowed: false,
         reason: 'payment_required',
-        price: category.price,
+        price: category.hasTieredPricing ? undefined : category.price,
         categoryId: categoryId,
+      };
+    }
+
+    // Tiered-pricing category — not yet purchased
+    if (category.hasTieredPricing) {
+      return {
+        allowed: false,
+        reason: 'payment_required',
+        categoryId,
       };
     }
 
@@ -212,6 +248,26 @@ export class CategoryAccessControlService {
           requiresPayment: false,
           categoryId: category._id.toString(),
           reason: 'purchased',
+        };
+      }
+    }
+
+    // Check if user paid student price and awaiting ID verification
+    const pendingCatId = user.pendingStudentCategoryId?.toString();
+    if (pendingCatId === category._id.toString()) {
+      const verStatus = user.studentVerification?.status;
+      if (
+        verStatus === StudentVerificationStatus.PENDING ||
+        verStatus === StudentVerificationStatus.REJECTED ||
+        verStatus === StudentVerificationStatus.NONE
+      ) {
+        return {
+          allowed: false,
+          requiresPayment: false,
+          categoryId: category._id.toString(),
+          reason: verStatus === StudentVerificationStatus.REJECTED
+            ? 'verification_rejected'
+            : 'verification_pending',
         };
       }
     }

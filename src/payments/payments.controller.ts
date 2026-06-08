@@ -67,6 +67,7 @@ export class PaymentsController {
       dto.moduleId,
       dto.paymentType,
       dto.callbackBaseUrl,
+      dto.userTier,
     );
   }
 
@@ -114,6 +115,15 @@ export class PaymentsController {
       price: accessCheck.price,
       reason: accessCheck.reason,
     };
+  }
+
+  /**
+   * Get tiered pricing info for a category (student/non-student prices)
+   * GET /api/payments/category-pricing/:categoryId
+   */
+  @Get('category-pricing/:categoryId')
+  async getCategoryPricing(@Param('categoryId') categoryId: string) {
+    return this.paymentsService.getCategoryPricing(categoryId);
   }
 
   /**

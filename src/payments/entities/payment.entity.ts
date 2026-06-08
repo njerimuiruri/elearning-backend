@@ -58,6 +58,13 @@ export class Payment extends Document {
   @Prop()
   failureReason?: string;
 
+  // Tiered pricing — track whether student or non-student price was used
+  @Prop({ default: false })
+  isStudentPrice?: boolean;
+
+  @Prop({ type: String, enum: ['student', 'non-student'], default: null })
+  userTier?: string;
+
   @Prop()
   refundReason?: string;
 

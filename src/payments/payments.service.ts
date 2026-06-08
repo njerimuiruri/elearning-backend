@@ -199,7 +199,29 @@ export class PaymentsService {
       };
       await payment.save();
 
-      // Grant access by adding category to user's purchasedCategories
+      // For student-priced payments: do NOT grant access yet — set pending verification
+      if (payment.isStudentPrice && payment.categoryId) {
+        await this.userModel.findByIdAndUpdate(payment.userId.toString(), {
+          pendingStudentCategoryId: payment.categoryId,
+          'studentVerification.status': 'none',
+        });
+
+        this.logger.log(
+          `Student payment ${reference} verified — awaiting ID upload for user ${payment.userId}`,
+        );
+
+        return {
+          success: true,
+          requiresStudentVerification: true,
+          message: 'Payment successful. Please upload your student ID to access the content.',
+          paymentId: payment._id.toString(),
+          categoryId: payment.categoryId?.toString(),
+          moduleId: payment.moduleId?.toString(),
+          amount: this.paystackService.fromCents(transactionData.amount),
+        };
+      }
+
+      // Non-student price — grant access immediately
       if (payment.categoryId) {
         await this.categoryAccessControl.markCategoryAsPurchased(
           payment.userId.toString(),
@@ -213,6 +235,7 @@ export class PaymentsService {
 
       return {
         success: true,
+        requiresStudentVerification: false,
         message: 'Payment verified and access granted',
         paymentId: payment._id.toString(),
         categoryId: payment.categoryId?.toString(),
@@ -330,7 +353,17 @@ export class PaymentsService {
       };
       await payment.save();
 
-      // Grant access
+      // Student-priced: mark pending verification, don't grant access yet
+      if (payment.isStudentPrice && payment.categoryId) {
+        await this.userModel.findByIdAndUpdate(payment.userId.toString(), {
+          pendingStudentCategoryId: payment.categoryId,
+          'studentVerification.status': 'none',
+        });
+        this.logger.log(`Webhook: Student payment ${data.reference} completed — awaiting ID upload`);
+        return;
+      }
+
+      // Non-student: grant access immediately
       if (payment.categoryId) {
         await this.categoryAccessControl.markCategoryAsPurchased(
           payment.userId.toString(),
@@ -365,12 +398,14 @@ export class PaymentsService {
 
   /**
    * Initialize a Paystack payment for a module (pays for the module's category)
+   * Supports tiered pricing (student $100 / non-student $200) for categories with hasTieredPricing=true
    */
   async initializeModulePayment(
     userId: string,
     moduleId: string,
     paymentType?: 'local' | 'international',
     callbackBaseUrl?: string,
+    userTier?: 'student' | 'non-student',
   ) {
     const [user, moduleDoc] = await Promise.all([
       this.userModel.findById(userId),
@@ -403,7 +438,31 @@ export class PaymentsService {
       );
     }
 
-    const amount = category.price;
+    // Determine amount based on tiered pricing
+    let amount: number;
+    let isStudentPrice = false;
+
+    if (category.hasTieredPricing) {
+      if (!userTier) {
+        throw new BadRequestException(
+          'Please select your tier: student or non-student',
+        );
+      }
+      if (userTier === 'student') {
+        if (!category.studentPrice || category.studentPrice <= 0) {
+          throw new BadRequestException('Student price not configured for this category');
+        }
+        amount = category.studentPrice;
+        isStudentPrice = true;
+      } else {
+        if (!category.nonStudentPrice || category.nonStudentPrice <= 0) {
+          throw new BadRequestException('Non-student price not configured for this category');
+        }
+        amount = category.nonStudentPrice;
+      }
+    } else {
+      amount = category.price;
+    }
 
     if (!amount || amount <= 0) {
       throw new BadRequestException('Invalid category price');
@@ -429,6 +488,7 @@ export class PaymentsService {
         categoryName: category.name,
         userName: `${user.firstName} ${user.lastName}`,
         purchaseType: 'category_access',
+        userTier: userTier || 'non-student',
       },
       callbackUrl,
       this.getPaystackChannels(paymentType),
@@ -444,15 +504,18 @@ export class PaymentsService {
       paystackAccessCode: paystackResponse.data.access_code,
       paystackAuthorizationUrl: paystackResponse.data.authorization_url,
       purchaseType: 'category_access',
+      isStudentPrice,
+      userTier: userTier || 'non-student',
       metadata: {
         moduleName: moduleDoc.title,
         categoryName: category.name,
         userEmail: user.email,
+        userTier: userTier || 'non-student',
       },
     });
 
     this.logger.log(
-      `Initialized module payment ${reference} for user ${userId}, module ${moduleId}`,
+      `Initialized module payment ${reference} for user ${userId}, module ${moduleId}, tier: ${userTier || 'non-student'}`,
     );
 
     return {
@@ -463,6 +526,8 @@ export class PaymentsService {
       paymentId: payment._id.toString(),
       categoryId: category._id.toString(),
       categoryName: category.name,
+      isStudentPrice,
+      userTier: userTier || 'non-student',
     };
   }
 
@@ -492,6 +557,21 @@ export class PaymentsService {
       categoryId: category._id.toString(),
       categoryName: category.name,
       price: category.price,
+    };
+  }
+
+  /**
+   * Get tiered pricing info for a category
+   */
+  async getCategoryPricing(categoryId: string) {
+    const category = await this.categoryModel.findById(categoryId);
+    if (!category) throw new NotFoundException('Category not found');
+    return {
+      hasTieredPricing: category.hasTieredPricing || false,
+      studentPrice: category.studentPrice || 0,
+      nonStudentPrice: category.nonStudentPrice || 0,
+      price: category.price || 0,
+      name: category.name,
     };
   }
 

@@ -90,6 +90,24 @@ export class CloudinaryService {
     });
   }
 
+  async uploadStudentId(fileBuffer: Buffer, fileName: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'elearning/student-ids',
+          resource_type: 'auto',
+          public_id: `sid-${Date.now()}-${fileName.replace(/\.[^/.]+$/, '')}`,
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else if (result) resolve(result.secure_url);
+          else reject(new Error('Upload failed'));
+        },
+      );
+      uploadStream.end(fileBuffer);
+    });
+  }
+
   async deleteResource(publicId: string): Promise<void> {
     try {
       await cloudinary.uploader.destroy(publicId);

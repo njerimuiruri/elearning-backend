@@ -53,6 +53,16 @@ export class Category extends Document {
 
   @Prop({ trim: true })
   welcomeMessage?: string; // Shown to students on the category welcome/landing panel
+
+  // Tiered pricing (e.g. Arin Publishing Academy)
+  @Prop({ default: false })
+  hasTieredPricing: boolean;
+
+  @Prop({ default: 0 })
+  studentPrice: number; // USD — paid by verified students
+
+  @Prop({ default: 0 })
+  nonStudentPrice: number; // USD — paid by non-students
 }
 
 export const CategorySchema = SchemaFactory.createForClass(Category);
