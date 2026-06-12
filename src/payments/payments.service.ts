@@ -101,10 +101,7 @@ export class PaymentsService {
     // Generate unique reference
     const reference = this.paystackService.generateReference('COURSE');
 
-    // Get callback URL from config
-    const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') || 'https://elearning.arin-africa.org';
-    const callbackUrl = `${frontendUrl}/payment/verify?reference=${reference}`;
+    const callbackUrl = `https://elearning.arin-africa.org/payment/verify?reference=${reference}`;
 
     // Initialize Paystack transaction
     const paystackResponse = await this.paystackService.initializeTransaction(
@@ -546,11 +543,7 @@ export class PaymentsService {
 
     const reference = this.paystackService.generateReference('MOD');
 
-    const frontendUrl =
-      callbackBaseUrl ||
-      this.configService.get<string>('FRONTEND_URL') ||
-      'https://elearning.arin-africa.org';
-    const callbackUrl = `${frontendUrl}/payment/verify?reference=${reference}`;
+    const callbackUrl = `https://elearning.arin-africa.org/payment/verify?reference=${reference}`;
 
     const paystackResponse = await this.paystackService.initializeTransaction(
       user.email,
@@ -720,8 +713,7 @@ export class PaymentsService {
     const amount = isInstallment ? Math.round(fullAmount * 0.5) : fullAmount;
 
     const reference = this.paystackService.generateReference('CAT');
-    const frontendUrl = callbackBaseUrl || this.configService.get<string>('FRONTEND_URL') || 'https://elearning.arin-africa.org';
-    const callbackUrl = `${frontendUrl}/payment/verify?reference=${reference}`;
+    const callbackUrl = `https://elearning.arin-africa.org/payment/verify?reference=${reference}`;
 
     const paystackResponse = await this.paystackService.initializeTransaction(
       user.email,
@@ -857,13 +849,12 @@ export class PaymentsService {
       return { sent: 0, message: 'Everyone has already paid both installments.' };
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     let sent = 0;
     const failed: string[] = [];
 
     for (const record of owing) {
       const user = record.user as any;
-      const paymentUrl = `${frontendUrl}/arin-publishing-academy?action=pay-installment2`;
+      const paymentUrl = `https://elearning.arin-africa.org/arin-publishing-academy?action=pay-installment2`;
       const firstName = user.firstName || user.fullName?.split(' ')[0] || 'Participant';
       try {
         await this.emailService.sendInstallment2ReminderEmail(
