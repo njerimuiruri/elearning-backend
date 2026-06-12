@@ -103,7 +103,7 @@ export class PaymentsService {
 
     // Get callback URL from config
     const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+      this.configService.get<string>('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const callbackUrl = `${frontendUrl}/payment/verify?reference=${reference}`;
 
     // Initialize Paystack transaction
@@ -549,7 +549,7 @@ export class PaymentsService {
     const frontendUrl =
       callbackBaseUrl ||
       this.configService.get<string>('FRONTEND_URL') ||
-      'http://localhost:3000';
+      'https://elearning.arin-africa.org';
     const callbackUrl = `${frontendUrl}/payment/verify?reference=${reference}`;
 
     const paystackResponse = await this.paystackService.initializeTransaction(
@@ -720,7 +720,7 @@ export class PaymentsService {
     const amount = isInstallment ? Math.round(fullAmount * 0.5) : fullAmount;
 
     const reference = this.paystackService.generateReference('CAT');
-    const frontendUrl = callbackBaseUrl || this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = callbackBaseUrl || this.configService.get<string>('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const callbackUrl = `${frontendUrl}/payment/verify?reference=${reference}`;
 
     const paystackResponse = await this.paystackService.initializeTransaction(
@@ -857,7 +857,7 @@ export class PaymentsService {
       return { sent: 0, message: 'Everyone has already paid both installments.' };
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     let sent = 0;
     const failed: string[] = [];
 

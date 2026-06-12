@@ -67,7 +67,7 @@ export class StudentVerificationService {
     this.logger.log(`Student ID uploaded for user ${userId}, category ${resolvedCategoryId}`);
 
     // Notify admins
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const adminEmails = ['n.mutwii@arin-africa.org', 'f.muiruri@arin-africa.org'];
     const studentName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
     const reviewUrl = `${frontendUrl}/admin/student-verifications`;
@@ -181,7 +181,7 @@ export class StudentVerificationService {
     });
 
     // Send payment-ready email
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const paymentUrl = `${frontendUrl}/arin-publishing-academy?pay=student`;
     const firstName = user.firstName || user.fullName?.split(' ')[0] || 'Participant';
 
@@ -222,7 +222,7 @@ export class StudentVerificationService {
     });
 
     // Notify the student so they know to re-upload
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const reuploadUrl = `${frontendUrl}/arin-publishing-academy`;
     const firstName = user.firstName || user.fullName?.split(' ')[0] || 'Participant';
 
