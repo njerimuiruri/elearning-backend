@@ -99,8 +99,9 @@ export class CategoryAccessControlService {
       };
     }
 
-    // Paid category — check if user is a fellow with this category assigned
-    if (user.fellowData?.assignedCategories) {
+    // Paid category — fellows get free access UNLESS it's a tiered-pricing category
+    // Tiered-pricing categories (e.g. Arin Publishing Academy) require payment from everyone
+    if (!category.hasTieredPricing && user.fellowData?.assignedCategories) {
       const isAssigned = user.fellowData.assignedCategories.some(
         (catId) => catId.toString() === categoryId.toString(),
       );
@@ -221,7 +222,8 @@ export class CategoryAccessControlService {
     }
 
     // Check if user is a fellow with this category assigned
-    if (user.fellowData?.assignedCategories) {
+    // Tiered-pricing categories require payment from everyone — no fellow bypass
+    if (!category.hasTieredPricing && user.fellowData?.assignedCategories) {
       const isAssigned = user.fellowData.assignedCategories.some(
         (catId) => catId.toString() === category._id.toString(),
       );

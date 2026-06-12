@@ -39,6 +39,18 @@ export class CreateCategoryDto {
 
   @IsOptional()
   @IsBoolean()
+  hasTieredPricing?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  studentPrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  nonStudentPrice?: number;
+
+  @IsOptional()
+  @IsBoolean()
   paymentRequiredForNonEligible?: boolean;
 
   @IsOptional()
@@ -99,6 +111,18 @@ export class UpdateCategoryDto {
   @IsOptional()
   @IsNumber()
   price?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  hasTieredPricing?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  studentPrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  nonStudentPrice?: number;
 
   @IsOptional()
   @IsBoolean()

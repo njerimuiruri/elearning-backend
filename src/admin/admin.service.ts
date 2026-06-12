@@ -1228,6 +1228,20 @@ export class AdminService {
     return { message: 'Fellow deleted' };
   }
 
+  async revokeUserCategoryAccess(userId: string, categoryId: string) {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+
+    await this.userModel.findByIdAndUpdate(userId, {
+      $pull: {
+        purchasedCategories: new Types.ObjectId(categoryId),
+        'fellowData.assignedCategories': new Types.ObjectId(categoryId),
+      },
+    });
+
+    return { message: 'Category access revoked successfully' };
+  }
+
   async sendBulkEmailToFellows(
     fellowIds: string[],
     subject: string,

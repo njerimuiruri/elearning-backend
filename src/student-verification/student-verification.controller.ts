@@ -9,6 +9,7 @@ import {
   UploadedFile,
   Query,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { StudentVerificationService } from './student-verification.service';
@@ -32,6 +33,7 @@ export class StudentVerificationController {
   async uploadStudentId(
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: any,
+    @Req() req: any,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
 
@@ -44,7 +46,9 @@ export class StudentVerificationController {
       throw new BadRequestException('File size must be under 5MB');
     }
 
-    return this.service.uploadStudentId(user._id, file.buffer, file.originalname);
+    const categoryId = req.body?.categoryId as string | undefined;
+
+    return this.service.uploadStudentId(user._id, file.buffer, file.originalname, categoryId);
   }
 
   /**

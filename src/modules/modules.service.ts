@@ -258,7 +258,17 @@ export class ModulesService {
       publishedAt: new Date(),
     });
 
-    return await module.save();
+    const saved = await module.save();
+
+    // Notify category-enrolled users about the new module (fire-and-forget)
+    const cat = await this.categoryModel.findById(rest.categoryId).select('name').lean();
+    this.notifyEnrolledUsersInCategory(
+      rest.categoryId,
+      rest.title,
+      cat?.name || 'your programme',
+    ).catch((err) => console.error('[createModuleAsAdmin] Email notification failed:', err));
+
+    return saved;
   }
 
   // ── Get module by ID ──────────────────────────────────────────────────────
@@ -389,6 +399,48 @@ export class ModulesService {
         console.log(`[addModuleLesson] Notified ${student.email} of new lesson`);
       } catch (err: any) {
         console.error(`[addModuleLesson] Failed to notify ${student.email}:`, err.message);
+      }
+    }
+  }
+
+  /** Fire-and-forget: email all users enrolled in a category (fellow or purchased) about a new module. */
+  private async notifyEnrolledUsersInCategory(
+    categoryId: string,
+    moduleTitle: string,
+    categoryName: string,
+  ): Promise<void> {
+    if (!categoryId) return;
+    const catObjectId = new Types.ObjectId(categoryId);
+
+    const users = await this.userModel
+      .find({
+        $or: [
+          { 'fellowData.assignedCategories': catObjectId },
+          { purchasedCategories: catObjectId },
+        ],
+        isActive: true,
+      })
+      .select('firstName lastName email')
+      .lean();
+
+    const loginUrl = process.env.FRONTEND_URL
+      ? `${process.env.FRONTEND_URL}/student/modules`
+      : 'https://elearning.arin-africa.org/student/modules';
+
+    for (const user of users) {
+      if (!user.email) continue;
+      const name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Student';
+      try {
+        await this.emailService.sendNewModuleNotification(
+          user.email,
+          name,
+          moduleTitle,
+          categoryName,
+          loginUrl,
+        );
+        console.log(`[notifyEnrolledUsersInCategory] Notified ${user.email}`);
+      } catch (err: any) {
+        console.error(`[notifyEnrolledUsersInCategory] Failed for ${user.email}:`, err.message);
       }
     }
   }
@@ -871,13 +923,22 @@ export class ModulesService {
 
   // ── Admin: Publish ────────────────────────────────────────────────────────
   async publishModule(moduleId: string, _adminId: string): Promise<Module> {
-    const module = await this.moduleModel.findById(moduleId);
+    const module = await this.moduleModel.findById(moduleId).populate('categoryId', 'name');
     if (!module) throw new NotFoundException('Module not found');
 
     module.status = ModuleStatus.PUBLISHED;
     module.publishedAt = new Date();
 
-    return await module.save();
+    const saved = await module.save();
+
+    // Notify all users enrolled in this category (fire-and-forget)
+    const categoryId = (module.categoryId as any)?._id?.toString() || module.categoryId?.toString();
+    const categoryName = (module.categoryId as any)?.name || 'your programme';
+    this.notifyEnrolledUsersInCategory(categoryId, module.title, categoryName).catch((err) =>
+      console.error('[publishModule] Email notification failed:', err),
+    );
+
+    return saved;
   }
 
   // ── Admin: Bulk-publish all admin-created DRAFT modules ──────────────────

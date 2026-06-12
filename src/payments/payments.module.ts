@@ -13,10 +13,12 @@ import {
   ModuleSchema as ModuleSchemaDefinition,
 } from '../schemas/module.schema';
 import { CategoriesModule } from '../categories/categories.module';
+import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [
     ConfigModule,
+    CommonModule,
     MongooseModule.forFeature([
       { name: Payment.name, schema: PaymentSchema },
       { name: Course.name, schema: CourseSchema },

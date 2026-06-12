@@ -71,6 +71,16 @@ export class Payment extends Document {
   @Prop()
   refundedAt?: Date;
 
+  // Installment tracking
+  @Prop({ default: false })
+  isInstallment?: boolean;
+
+  @Prop({ type: Number, enum: [1, 2], default: null })
+  installmentNumber?: number;
+
+  @Prop({ default: false })
+  isFullPayment?: boolean;
+
   // Timestamps (managed by mongoose)
   createdAt!: Date;
   updatedAt!: Date;

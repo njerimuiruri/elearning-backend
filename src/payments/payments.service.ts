@@ -11,9 +11,10 @@ import { PaystackService } from './paystack.service';
 import { CategoryAccessControlService } from '../categories/access-control.service';
 import { Course } from '../schemas/course.schema';
 import { Category } from '../schemas/category.schema';
-import { User } from '../schemas/user.schema';
+import { User, UserType, StudentVerificationStatus } from '../schemas/user.schema';
 import { Module as ModuleEntity } from '../schemas/module.schema';
 import { ConfigService } from '@nestjs/config';
+import { EmailService } from '../common/services/email.service';
 
 @Injectable()
 export class PaymentsService {
@@ -28,18 +29,25 @@ export class PaymentsService {
     private paystackService: PaystackService,
     private categoryAccessControl: CategoryAccessControlService,
     private configService: ConfigService,
+    private emailService: EmailService,
   ) {}
 
   /**
    * Initialize a Paystack payment for a course
    * Checks access requirements and generates Paystack transaction
    */
+  private async enrollUserAsFellow(userId: string, categoryId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      $set: { userType: UserType.FELLOW },
+      $addToSet: { 'fellowData.assignedCategories': new Types.ObjectId(categoryId) },
+    });
+    this.logger.log(`User ${userId} upgraded to fellow and assigned to category ${categoryId}`);
+  }
+
   private getPaystackChannels(
     paymentType: 'local' | 'international' | undefined,
   ): string[] | undefined {
-    if (paymentType === 'local') return ['bank', 'ussd', 'mobile_money', 'qr'];
-    if (paymentType === 'international') return ['card'];
-    return undefined; // let Paystack show all channels
+    return undefined; // let Paystack show all active channels on the account
   }
 
   async initializePayment(
@@ -199,17 +207,52 @@ export class PaymentsService {
       };
       await payment.save();
 
-      // For student-priced payments: do NOT grant access yet — set pending verification
+      // For student-priced payments: check if already verified (new flow: ID uploaded first)
       if (payment.isStudentPrice && payment.categoryId) {
+        const user = await this.userModel.findById(payment.userId.toString()).select(
+          'studentVerification firstName fullName email',
+        );
+        const isAlreadyApproved =
+          user?.studentVerification?.status === StudentVerificationStatus.APPROVED;
+
+        if (isAlreadyApproved) {
+          // Student was verified before paying — grant access immediately
+          await this.categoryAccessControl.markCategoryAsPurchased(
+            payment.userId.toString(),
+            payment.categoryId.toString(),
+          );
+          await this.enrollUserAsFellow(payment.userId.toString(), payment.categoryId.toString());
+          await this.userModel.findByIdAndUpdate(payment.userId.toString(), {
+            'studentVerification.awaitingPayment': false,
+            pendingStudentCategoryId: null,
+          });
+
+          // Send congratulations email
+          const firstName = user.firstName || user.fullName?.split(' ')[0] || 'Participant';
+          try {
+            await this.emailService.sendAcademyRegistrationEmail(user.email, firstName);
+          } catch (err) {
+            this.logger.warn(`Failed to send congrats email to ${user.email}`);
+          }
+
+          this.logger.log(`Student payment ${reference} verified — access granted (pre-verified)`);
+          return {
+            success: true,
+            requiresStudentVerification: false,
+            message: 'Payment verified and access granted.',
+            paymentId: payment._id.toString(),
+            categoryId: payment.categoryId?.toString(),
+            amount: this.paystackService.fromCents(transactionData.amount),
+          };
+        }
+
+        // Student not yet verified — ask them to upload ID
         await this.userModel.findByIdAndUpdate(payment.userId.toString(), {
           pendingStudentCategoryId: payment.categoryId,
-          'studentVerification.status': 'none',
+          'studentVerification.status': StudentVerificationStatus.NONE,
         });
 
-        this.logger.log(
-          `Student payment ${reference} verified — awaiting ID upload for user ${payment.userId}`,
-        );
-
+        this.logger.log(`Student payment ${reference} verified — awaiting ID upload`);
         return {
           success: true,
           requiresStudentVerification: true,
@@ -227,11 +270,23 @@ export class PaymentsService {
           payment.userId.toString(),
           payment.categoryId.toString(),
         );
+        await this.enrollUserAsFellow(payment.userId.toString(), payment.categoryId.toString());
+
+        // Send congratulations email
+        const user = await this.userModel.findById(payment.userId.toString()).select(
+          'firstName fullName email',
+        );
+        if (user) {
+          const firstName = user.firstName || user.fullName?.split(' ')[0] || 'Participant';
+          try {
+            await this.emailService.sendAcademyRegistrationEmail(user.email, firstName);
+          } catch (err) {
+            this.logger.warn(`Failed to send congrats email to ${user.email}`);
+          }
+        }
       }
 
-      this.logger.log(
-        `Payment ${reference} verified and access granted for user ${payment.userId}`,
-      );
+      this.logger.log(`Payment ${reference} verified and access granted for user ${payment.userId}`);
 
       return {
         success: true,
@@ -261,6 +316,26 @@ export class PaymentsService {
         status: transactionData.status,
       };
     }
+  }
+
+  /**
+   * Check payment status for a category directly
+   */
+  async checkCategoryDirectPaymentStatus(userId: string, categoryId: string) {
+    const user = await this.userModel.findById(userId).select(
+      'studentVerification pendingStudentCategoryId purchasedCategories',
+    );
+    if (!user) throw new NotFoundException('User not found');
+
+    const accessCheck = await this.categoryAccessControl.checkCategoryAccess(userId, categoryId);
+
+    return {
+      hasAccess: accessCheck.allowed,
+      verificationStatus: user.studentVerification?.status || 'none',
+      awaitingPayment: user.studentVerification?.awaitingPayment || false,
+      pendingCategoryId: user.pendingStudentCategoryId?.toString() || null,
+      reason: accessCheck.reason,
+    };
   }
 
   /**
@@ -369,6 +444,7 @@ export class PaymentsService {
           payment.userId.toString(),
           payment.categoryId.toString(),
         );
+        await this.enrollUserAsFellow(payment.userId.toString(), payment.categoryId.toString());
       }
 
       this.logger.log(
@@ -554,9 +630,157 @@ export class PaymentsService {
       paid: accessCheck.allowed,
       requiresPayment:
         !accessCheck.allowed && accessCheck.reason === 'payment_required',
+      reason: accessCheck.reason,
+      verificationStatus: accessCheck.verificationStatus,
+      rejectionReason: accessCheck.rejectionReason,
       categoryId: category._id.toString(),
       categoryName: category.name,
+      hasTieredPricing: category.hasTieredPricing || false,
+      studentPrice: category.studentPrice || 0,
+      nonStudentPrice: category.nonStudentPrice || 0,
       price: category.price,
+    };
+  }
+
+  /**
+   * Initialize a Paystack payment directly for a category (no module required)
+   * Supports tiered pricing and installment options
+   */
+  async initializeCategoryPayment(
+    userId: string,
+    categoryId: string,
+    userTier: 'student' | 'non-student',
+    paymentOption: 'full' | 'installment1' | 'installment2',
+    paymentType?: 'local' | 'international',
+    callbackBaseUrl?: string,
+  ) {
+    const [user, category] = await Promise.all([
+      this.userModel.findById(userId),
+      this.categoryModel.findById(categoryId),
+    ]);
+
+    if (!user) throw new NotFoundException('User not found');
+    if (!category) throw new NotFoundException('Category not found');
+
+    // For installment2: user already has access, so skip the access check
+    if (paymentOption !== 'installment2') {
+      const accessCheck = await this.categoryAccessControl.checkCategoryAccess(userId, categoryId);
+      if (accessCheck.allowed) {
+        throw new BadRequestException('You already have access to this category');
+      }
+    }
+
+    // Validate installment2: must have already paid installment1
+    if (paymentOption === 'installment2') {
+      const installment1 = await this.paymentModel.findOne({
+        userId: new Types.ObjectId(userId),
+        categoryId: new Types.ObjectId(categoryId),
+        status: PaymentStatus.COMPLETED,
+        installmentNumber: 1,
+      });
+      if (!installment1) {
+        throw new BadRequestException('No completed first installment found for this category');
+      }
+      const installment2Exists = await this.paymentModel.findOne({
+        userId: new Types.ObjectId(userId),
+        categoryId: new Types.ObjectId(categoryId),
+        status: PaymentStatus.COMPLETED,
+        installmentNumber: 2,
+      });
+      if (installment2Exists) {
+        throw new BadRequestException('Second installment already paid');
+      }
+    }
+
+    let fullAmount: number;
+    let isStudentPrice = false;
+
+    if (category.hasTieredPricing) {
+      if (userTier === 'student') {
+        if (!category.studentPrice || category.studentPrice <= 0) {
+          throw new BadRequestException('Student price not configured for this category');
+        }
+        fullAmount = category.studentPrice;
+        isStudentPrice = true;
+      } else {
+        if (!category.nonStudentPrice || category.nonStudentPrice <= 0) {
+          throw new BadRequestException('Non-student price not configured for this category');
+        }
+        fullAmount = category.nonStudentPrice;
+      }
+    } else {
+      fullAmount = category.price;
+    }
+
+    if (!fullAmount || fullAmount <= 0) throw new BadRequestException('Invalid category price');
+
+    // Installment1 and installment2 are each 50% of full price
+    const isInstallment = paymentOption === 'installment1' || paymentOption === 'installment2';
+    const installmentNum = paymentOption === 'installment1' ? 1 : paymentOption === 'installment2' ? 2 : null;
+    const amount = isInstallment ? Math.round(fullAmount * 0.5) : fullAmount;
+
+    const reference = this.paystackService.generateReference('CAT');
+    const frontendUrl = callbackBaseUrl || this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const callbackUrl = `${frontendUrl}/payment/verify?reference=${reference}`;
+
+    const paystackResponse = await this.paystackService.initializeTransaction(
+      user.email,
+      amount,
+      reference,
+      {
+        userId,
+        categoryId,
+        categoryName: category.name,
+        userName: `${user.firstName} ${user.lastName}`,
+        purchaseType: 'category_access',
+        userTier,
+        paymentOption,
+      },
+      callbackUrl,
+      this.getPaystackChannels(paymentType),
+      'KES',
+    );
+
+    const payment = await this.paymentModel.create({
+      userId: new Types.ObjectId(userId),
+      categoryId: new Types.ObjectId(categoryId),
+      amount,
+      status: PaymentStatus.PENDING,
+      paystackReference: reference,
+      paystackAccessCode: paystackResponse.data.access_code,
+      paystackAuthorizationUrl: paystackResponse.data.authorization_url,
+      purchaseType: 'category_access',
+      isStudentPrice,
+      userTier,
+      isInstallment,
+      installmentNumber: installmentNum,
+      isFullPayment: !isInstallment,
+      metadata: {
+        categoryName: category.name,
+        userEmail: user.email,
+        userTier,
+        paymentOption,
+        fullAmount,
+      },
+    });
+
+    this.logger.log(
+      `Initialized category payment ${reference} for user ${userId}, category ${categoryId}, tier: ${userTier}, option: ${paymentOption}`,
+    );
+
+    return {
+      authorizationUrl: paystackResponse.data.authorization_url,
+      accessCode: paystackResponse.data.access_code,
+      reference,
+      amount,
+      fullAmount,
+      paymentId: payment._id.toString(),
+      categoryId,
+      categoryName: category.name,
+      isStudentPrice,
+      userTier,
+      paymentOption,
+      isInstallment,
     };
   }
 
@@ -573,6 +797,151 @@ export class PaymentsService {
       price: category.price || 0,
       name: category.name,
     };
+  }
+
+  /**
+   * Admin: get installment overview for a category
+   * Returns who has paid installment1, who still owes installment2
+   */
+  async getInstallmentOverview(categoryId: string) {
+    const catObjId = new Types.ObjectId(categoryId);
+
+    // All completed installment1 payments
+    const installment1Payments = await this.paymentModel
+      .find({ categoryId: catObjId, status: PaymentStatus.COMPLETED, installmentNumber: 1 })
+      .populate('userId', 'firstName lastName email')
+      .sort({ createdAt: -1 })
+      .exec();
+
+    // All completed installment2 payments
+    const installment2Payments = await this.paymentModel
+      .find({ categoryId: catObjId, status: PaymentStatus.COMPLETED, installmentNumber: 2 })
+      .select('userId')
+      .exec();
+
+    const paidInstallment2UserIds = new Set(
+      installment2Payments.map(p => p.userId.toString()),
+    );
+
+    const overview = installment1Payments.map(p => {
+      const userId = p.userId._id?.toString() || p.userId.toString();
+      return {
+        userId,
+        user: p.userId,
+        amount1: p.amount,
+        userTier: p.userTier,
+        paidAt: p.createdAt,
+        hasPaidInstallment2: paidInstallment2UserIds.has(userId),
+      };
+    });
+
+    const owingInstallment2 = overview.filter(o => !o.hasPaidInstallment2);
+    const completedBoth = overview.filter(o => o.hasPaidInstallment2);
+
+    return {
+      total: overview.length,
+      owingInstallment2: owingInstallment2.length,
+      completedBoth: completedBoth.length,
+      overview,
+    };
+  }
+
+  /**
+   * Admin: send installment2 reminder emails to everyone who owes it
+   */
+  async sendInstallment2Reminders(categoryId: string) {
+    const { overview } = await this.getInstallmentOverview(categoryId);
+    const owing = overview.filter(o => !o.hasPaidInstallment2);
+
+    if (owing.length === 0) {
+      return { sent: 0, message: 'Everyone has already paid both installments.' };
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    let sent = 0;
+    const failed: string[] = [];
+
+    for (const record of owing) {
+      const user = record.user as any;
+      const paymentUrl = `${frontendUrl}/arin-publishing-academy?action=pay-installment2`;
+      const firstName = user.firstName || user.fullName?.split(' ')[0] || 'Participant';
+      try {
+        await this.emailService.sendInstallment2ReminderEmail(
+          user.email,
+          firstName,
+          record.amount1, // installment2 = same amount as installment1
+          record.userTier || 'non-student',
+          paymentUrl,
+        );
+        sent++;
+      } catch (e) {
+        this.logger.warn(`Failed to send installment2 reminder to ${user.email}: ${e.message}`);
+        failed.push(user.email);
+      }
+    }
+
+    this.logger.log(`Sent installment2 reminders: ${sent} sent, ${failed.length} failed`);
+    return { sent, failed: failed.length, total: owing.length };
+  }
+
+  /**
+   * Admin: get all payments for a specific category (e.g. Arin Publishing Academy)
+   */
+  async getAdminCategoryPayments(categoryId: string, page = 1, limit = 50) {
+    const skip = (page - 1) * limit;
+    const filter: any = {
+      categoryId: new Types.ObjectId(categoryId),
+      status: PaymentStatus.COMPLETED,
+    };
+
+    const [payments, total] = await Promise.all([
+      this.paymentModel
+        .find(filter)
+        .populate('userId', 'firstName lastName email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.paymentModel.countDocuments(filter),
+    ]);
+
+    const totalRevenue = await this.paymentModel.aggregate([
+      { $match: filter },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+
+    return {
+      payments,
+      total,
+      page,
+      limit,
+      totalRevenue: totalRevenue[0]?.total || 0,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  /**
+   * Admin: get all payments across all categories
+   */
+  async getAllPayments(page = 1, limit = 50, status?: string) {
+    const skip = (page - 1) * limit;
+    const filter: any = {};
+    if (status) filter.status = status;
+
+    const [payments, total] = await Promise.all([
+      this.paymentModel
+        .find(filter)
+        .populate('userId', 'firstName lastName email')
+        .populate('categoryId', 'name')
+        .populate('moduleId', 'title')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.paymentModel.countDocuments(filter),
+    ]);
+
+    return { payments, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
 
   /**

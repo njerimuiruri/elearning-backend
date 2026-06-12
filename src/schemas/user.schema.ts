@@ -23,6 +23,10 @@ class StudentVerificationData {
 
   @Prop({ default: null })
   rejectionReason: string;
+
+  // True after admin approves but before student completes payment
+  @Prop({ default: false })
+  awaitingPayment: boolean;
 }
 
 export enum UserRole {

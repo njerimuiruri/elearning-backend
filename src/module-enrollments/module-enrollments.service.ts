@@ -56,6 +56,9 @@ export class ModuleEnrollmentsService {
         categoryId: string;
         price: number;
         categoryName: string;
+        hasTieredPricing: boolean;
+        studentPrice: number;
+        nonStudentPrice: number;
       }
   > {
     const module = await this.moduleModel
@@ -105,22 +108,51 @@ export class ModuleEnrollmentsService {
               categoryId: category._id.toString(),
               price: category.price,
               categoryName: category.name,
+              hasTieredPricing: category.hasTieredPricing || false,
+              studentPrice: category.studentPrice || 0,
+              nonStudentPrice: category.nonStudentPrice || 0,
             };
           }
           // Fellow assigned here, or already purchased → fall through to enroll
         }
 
         // PAID category → fellows free, others must pay
+        // Exception: tiered-pricing categories (e.g. Arin Publishing Academy)
+        // require payment from EVERYONE including fellows
         else if (category.isPaid || category.accessType === 'paid') {
           const hasRoleAccess =
             category.allowedRoles?.includes(user?.role) || false;
 
-          if (!hasFellowAccess && !hasPurchasedAccess && !hasRoleAccess) {
+          // For tiered-pricing categories, fellow status gives no free pass
+          const effectiveFellowAccess = category.hasTieredPricing
+            ? false
+            : hasFellowAccess;
+
+          if (!effectiveFellowAccess && !hasPurchasedAccess && !hasRoleAccess) {
+            // Student paid student price but ID is still pending/rejected verification
+            const pendingCatId = user?.pendingStudentCategoryId?.toString();
+            if (pendingCatId === category._id.toString()) {
+              const verStatus = user?.studentVerification?.status;
+              if (verStatus === 'pending') {
+                throw new ForbiddenException(
+                  'Your student ID is under review. You will get access once approved.',
+                );
+              }
+              if (verStatus === 'rejected') {
+                throw new ForbiddenException(
+                  `Your student ID was rejected: ${user?.studentVerification?.rejectionReason || 'Invalid ID'}. Please re-upload.`,
+                );
+              }
+            }
+
             return {
               requiresPayment: true,
               categoryId: category._id.toString(),
               price: category.price,
               categoryName: category.name,
+              hasTieredPricing: category.hasTieredPricing || false,
+              studentPrice: category.studentPrice || 0,
+              nonStudentPrice: category.nonStudentPrice || 0,
             };
           }
           // Fellow or purchased → fall through to enroll

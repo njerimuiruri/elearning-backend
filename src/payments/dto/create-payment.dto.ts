@@ -16,6 +16,18 @@ export class CreateModulePaymentDto {
   userTier?: 'student' | 'non-student';
 }
 
+export class CreateCategoryPaymentDto {
+  @IsString()
+  @IsNotEmpty()
+  categoryId: string;
+
+  @IsEnum(['student', 'non-student'])
+  userTier: 'student' | 'non-student';
+
+  @IsEnum(['full', 'installment1', 'installment2'])
+  paymentOption: 'full' | 'installment1' | 'installment2';
+}
+
 export class VerifyPaymentDto {
   @IsString()
   @IsNotEmpty()

@@ -271,6 +271,7 @@ export class AuthController {
         fullName: user.fullName,
         region: user.region,
         fellowData: user.fellowData,
+        purchasedCategories: user.purchasedCategories,
         totalPoints: user.totalPoints,
         currentStreakDays: user.currentStreakDays,
         longestStreakDays: user.longestStreakDays,

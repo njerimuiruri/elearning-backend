@@ -8,7 +8,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User, StudentVerificationStatus } from '../schemas/user.schema';
 import { CloudinaryService } from '../common/services/cloudinary.service';
-import { CategoryAccessControlService } from '../categories/access-control.service';
+import { EmailService } from '../common/services/email.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class StudentVerificationService {
@@ -17,32 +18,41 @@ export class StudentVerificationService {
   constructor(
     @InjectModel(User.name) private userModel: Model<User>,
     private cloudinaryService: CloudinaryService,
-    private categoryAccessControl: CategoryAccessControlService,
+    private emailService: EmailService,
+    private configService: ConfigService,
   ) {}
 
   /**
-   * Upload student ID — sets verification status to pending
+   * Upload student ID — sets verification status to pending.
+   * categoryId is required when uploading before payment (new flow).
+   * If the user already has a pendingStudentCategoryId from a prior payment it is preserved.
    */
-  async uploadStudentId(userId: string, fileBuffer: Buffer, fileName: string) {
+  async uploadStudentId(
+    userId: string,
+    fileBuffer: Buffer,
+    fileName: string,
+    categoryId?: string,
+  ) {
     const user = await this.userModel.findById(userId);
     if (!user) throw new NotFoundException('User not found');
 
-    if (!user.pendingStudentCategoryId) {
-      throw new BadRequestException(
-        'No pending student payment found. Please pay first.',
-      );
-    }
-
     const existingStatus = user.studentVerification?.status;
     if (existingStatus === StudentVerificationStatus.APPROVED) {
-      throw new BadRequestException('Your student ID is already verified.');
+      if (user.studentVerification?.awaitingPayment) {
+        throw new BadRequestException(
+          'Your student ID has already been approved. Please complete your payment.',
+        );
+      }
+      throw new BadRequestException('Your student ID is already verified and active.');
     }
 
-    // Upload to Cloudinary under student-ids folder
-    const uploadUrl = await this.cloudinaryService.uploadStudentId(
-      fileBuffer,
-      fileName,
-    );
+    // Resolve the category: use provided categoryId, or fall back to existing pendingStudentCategoryId
+    const resolvedCategoryId = categoryId || user.pendingStudentCategoryId?.toString();
+    if (!resolvedCategoryId) {
+      throw new BadRequestException('Please specify the category you are applying for.');
+    }
+
+    const uploadUrl = await this.cloudinaryService.uploadStudentId(fileBuffer, fileName);
 
     await this.userModel.findByIdAndUpdate(userId, {
       'studentVerification.status': StudentVerificationStatus.PENDING,
@@ -50,9 +60,29 @@ export class StudentVerificationService {
       'studentVerification.submittedAt': new Date(),
       'studentVerification.rejectionReason': null,
       'studentVerification.reviewedAt': null,
+      'studentVerification.awaitingPayment': false,
+      pendingStudentCategoryId: new Types.ObjectId(resolvedCategoryId),
     });
 
-    this.logger.log(`Student ID uploaded for user ${userId}`);
+    this.logger.log(`Student ID uploaded for user ${userId}, category ${resolvedCategoryId}`);
+
+    // Notify admins
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const adminEmails = ['n.mutwii@arin-africa.org', 'f.muiruri@arin-africa.org'];
+    const studentName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+    const reviewUrl = `${frontendUrl}/admin/student-verifications`;
+
+    try {
+      await this.emailService.sendStudentIdSubmissionNotification(
+        adminEmails,
+        studentName,
+        user.email,
+        uploadUrl,
+        reviewUrl,
+      );
+    } catch (err) {
+      this.logger.warn(`Failed to send admin notification for student ID upload: ${(err as any)?.message || String(err)}`);
+    }
 
     return {
       success: true,
@@ -126,7 +156,9 @@ export class StudentVerificationService {
   }
 
   /**
-   * Admin: approve a student verification → grant category access
+   * Admin: approve a student verification.
+   * Marks the student as awaiting payment and sends them a payment-ready email.
+   * Access is granted after they complete payment (handled in verifyPayment).
    */
   async approveVerification(userId: string) {
     const user = await this.userModel.findById(userId);
@@ -140,24 +172,34 @@ export class StudentVerificationService {
       throw new BadRequestException('No pending category found for this user');
     }
 
-    const categoryId = user.pendingStudentCategoryId.toString();
-
-    // Grant category access
-    await this.categoryAccessControl.markCategoryAsPurchased(userId, categoryId);
-
-    // Update verification status
+    // Mark approved + awaiting payment (do NOT grant access yet)
     await this.userModel.findByIdAndUpdate(userId, {
       'studentVerification.status': StudentVerificationStatus.APPROVED,
       'studentVerification.reviewedAt': new Date(),
       'studentVerification.rejectionReason': null,
-      pendingStudentCategoryId: null,
+      'studentVerification.awaitingPayment': true,
     });
 
-    this.logger.log(`Student verification approved for user ${userId}`);
+    // Send payment-ready email
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const paymentUrl = `${frontendUrl}/arin-publishing-academy?pay=student`;
+    const firstName = user.firstName || user.fullName?.split(' ')[0] || 'Participant';
+
+    try {
+      await this.emailService.sendStudentPaymentReadyEmail(
+        user.email,
+        firstName,
+        paymentUrl,
+      );
+    } catch (err) {
+      this.logger.warn(`Failed to send payment-ready email to ${user.email}: ${(err as any)?.message || String(err)}`);
+    }
+
+    this.logger.log(`Student verification approved for user ${userId} — awaiting payment`);
 
     return {
       success: true,
-      message: 'Student verification approved. Access granted.',
+      message: 'Student verification approved. Payment notification sent.',
     };
   }
 
@@ -176,13 +218,30 @@ export class StudentVerificationService {
       'studentVerification.status': StudentVerificationStatus.REJECTED,
       'studentVerification.reviewedAt': new Date(),
       'studentVerification.rejectionReason': reason,
+      'studentVerification.awaitingPayment': false,
     });
+
+    // Notify the student so they know to re-upload
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const reuploadUrl = `${frontendUrl}/arin-publishing-academy`;
+    const firstName = user.firstName || user.fullName?.split(' ')[0] || 'Participant';
+
+    try {
+      await this.emailService.sendStudentIdRejectionEmail(
+        user.email,
+        firstName,
+        reason,
+        reuploadUrl,
+      );
+    } catch (err) {
+      this.logger.warn(`Failed to send rejection email to ${user.email}: ${(err as any)?.message || String(err)}`);
+    }
 
     this.logger.log(`Student verification rejected for user ${userId}: ${reason}`);
 
     return {
       success: true,
-      message: 'Student verification rejected.',
+      message: 'Student verification rejected. Student has been notified.',
     };
   }
 }

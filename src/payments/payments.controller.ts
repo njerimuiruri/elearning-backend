@@ -4,6 +4,7 @@ import {
   Get,
   Body,
   Param,
+  Query,
   UseGuards,
   Req,
   HttpCode,
@@ -16,9 +17,13 @@ import { PaystackService } from './paystack.service';
 import {
   CreatePaymentIntentDto,
   CreateModulePaymentDto,
+  CreateCategoryPaymentDto,
   VerifyPaymentDto,
 } from './dto/create-payment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../decorators/roles.decorator';
+import { UserRole } from '../schemas/user.schema';
 import { CurrentUser } from '../decorators/current-user.decorator';
 import { CategoryAccessControlService } from '../categories/access-control.service';
 
@@ -69,6 +74,43 @@ export class PaymentsController {
       dto.callbackBaseUrl,
       dto.userTier,
     );
+  }
+
+  /**
+   * Initialize a Paystack payment directly for a category (no module required)
+   * POST /api/payments/category/initialize
+   */
+  @Post('category/initialize')
+  @UseGuards(JwtAuthGuard)
+  async initializeCategoryPayment(
+    @Body()
+    dto: CreateCategoryPaymentDto & {
+      paymentType?: 'local' | 'international';
+      callbackBaseUrl?: string;
+    },
+    @CurrentUser() user: any,
+  ) {
+    return this.paymentsService.initializeCategoryPayment(
+      user._id,
+      dto.categoryId,
+      dto.userTier,
+      dto.paymentOption,
+      dto.paymentType,
+      dto.callbackBaseUrl,
+    );
+  }
+
+  /**
+   * Check payment status for a category
+   * GET /api/payments/category/status/:categoryId
+   */
+  @Get('category/status/:categoryId')
+  @UseGuards(JwtAuthGuard)
+  async checkCategoryPaymentStatus(
+    @Param('categoryId') categoryId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.paymentsService.checkCategoryDirectPaymentStatus(user._id, categoryId);
   }
 
   /**
@@ -137,6 +179,62 @@ export class PaymentsController {
     @CurrentUser() user: any,
   ) {
     return this.paymentsService.checkCoursePaymentStatus(user._id, courseId);
+  }
+
+  /**
+   * Admin: get all payments for a specific category
+   * GET /api/payments/admin/category/:categoryId
+   */
+  @Get('admin/category/:categoryId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getAdminCategoryPayments(
+    @Param('categoryId') categoryId: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+  ) {
+    return this.paymentsService.getAdminCategoryPayments(
+      categoryId,
+      Number(page),
+      Number(limit),
+    );
+  }
+
+  /**
+   * Admin: get installment overview for a category
+   * GET /api/payments/admin/category/:categoryId/installments
+   */
+  @Get('admin/category/:categoryId/installments')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getInstallmentOverview(@Param('categoryId') categoryId: string) {
+    return this.paymentsService.getInstallmentOverview(categoryId);
+  }
+
+  /**
+   * Admin: send installment2 reminder emails
+   * POST /api/payments/admin/category/:categoryId/send-installment2-reminders
+   */
+  @Post('admin/category/:categoryId/send-installment2-reminders')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async sendInstallment2Reminders(@Param('categoryId') categoryId: string) {
+    return this.paymentsService.sendInstallment2Reminders(categoryId);
+  }
+
+  /**
+   * Admin: get all payments across all categories
+   * GET /api/payments/admin/all
+   */
+  @Get('admin/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getAllPayments(
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+    @Query('status') status?: string,
+  ) {
+    return this.paymentsService.getAllPayments(Number(page), Number(limit), status);
   }
 
   /**

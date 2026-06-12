@@ -345,6 +345,14 @@ export class AdminController {
     return this.adminService.deleteFellow(id);
   }
 
+  @Delete('users/:userId/category-access/:categoryId')
+  async revokeUserCategoryAccess(
+    @Param('userId') userId: string,
+    @Param('categoryId') categoryId: string,
+  ) {
+    return this.adminService.revokeUserCategoryAccess(userId, categoryId);
+  }
+
   @Post('fellows/:id/reset-password')
   async resetFellowPassword(@Param('id') id: string) {
     return this.adminService.resetFellowPassword(id);

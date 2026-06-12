@@ -92,11 +92,13 @@ export class PaystackService {
     metadata: Record<string, any> = {},
     callbackUrl?: string,
     channels?: string[],
+    currency: string = 'USD',
   ): Promise<PaystackInitializeResponse> {
     try {
       const body: Record<string, any> = {
         email,
-        amount: Math.round(amount * 100), // Convert to cents (smallest currency unit)
+        amount: Math.round(amount * 100), // Paystack expects smallest unit (cents for USD)
+        currency,
         reference,
         metadata,
         callback_url: callbackUrl,
@@ -233,14 +235,14 @@ export class PaystackService {
   }
 
   /**
-   * Convert amount from KES to cents (smallest currency unit)
+   * Convert amount to smallest currency unit (cents for USD — $100 → 10000)
    */
-  toCents(amountInKes: number): number {
-    return Math.round(amountInKes * 100);
+  toCents(amount: number): number {
+    return Math.round(amount * 100);
   }
 
   /**
-   * Convert amount from cents to KES
+   * Convert from smallest currency unit back to full amount (10000 → $100)
    */
   fromCents(amountInCents: number): number {
     return amountInCents / 100;

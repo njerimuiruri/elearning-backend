@@ -2705,6 +2705,38 @@ The Arin Publishing Academy Team
     }
   }
 
+  async sendNewModuleNotification(
+    email: string,
+    studentName: string,
+    moduleTitle: string,
+    categoryName: string,
+    loginUrl: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const subject = `New Module Available in ${categoryName}: ${moduleTitle}`;
+    const html = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden">
+      <div style="background:#021d49;padding:24px 32px;border-radius:8px 8px 0 0">
+        <h2 style="color:#fff;margin:0;font-size:20px">New Module Available 📚</h2>
+        <p style="color:#93c5fd;margin:6px 0 0;font-size:13px">${categoryName}</p>
+      </div>
+      <div style="background:#f9fafb;padding:28px 32px">
+        <p style="color:#374151;margin:0 0 12px">Hi ${studentName},</p>
+        <p style="color:#374151">A new module has been published in your programme <strong>${categoryName}</strong>:</p>
+        <div style="background:#fff;border:1px solid #d1fae5;border-radius:8px;padding:16px 20px;margin:16px 0">
+          <p style="margin:0;font-size:16px;font-weight:700;color:#065f46">${moduleTitle}</p>
+        </div>
+        <p style="color:#6b7280;font-size:14px">Log in to your dashboard to start learning.</p>
+        <a href="${loginUrl}" style="display:inline-block;background:#021d49;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;margin-top:8px">Go to My Dashboard</a>
+        <p style="color:#9ca3af;font-size:12px;margin-top:24px">ARIN E-Learning Platform · You are receiving this because you are enrolled in ${categoryName}</p>
+      </div></div>`;
+    try {
+      await this.transporter.sendMail({ from: this.configService.get('SMTP_FROM') || 'noreply@arin.org', to: email, subject, html });
+      return { success: true, message: `New module notification sent to ${email}` };
+    } catch (error: any) {
+      console.error('[EmailService] sendNewModuleNotification FAILED:', error.message);
+      return { success: false, message: error.message };
+    }
+  }
+
   async sendContentFinalizedNotification(
     email: string,
     studentName: string,
@@ -2826,5 +2858,455 @@ The Arin Publishing Academy Team
       .replace(/&quot;/g, '"')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
+  }
+
+  /**
+   * Notify student that their ID was rejected and they need to re-upload
+   */
+  async sendStudentIdRejectionEmail(
+    email: string,
+    firstName: string,
+    reason: string,
+    reuploadUrl: string,
+  ) {
+    const subject = 'Your Student ID Verification — Action Required';
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="580" cellpadding="0" cellspacing="0" style="max-width:580px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.07);">
+        <tr>
+          <td style="background:#021d49;padding:28px 36px;">
+            <p style="color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">ARIN Publishing Academy</p>
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">Student ID — Action Required</h1>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 36px;">
+            <p style="color:#374151;font-size:15px;margin:0 0 16px;">Dear <strong>${firstName}</strong>,</p>
+            <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">
+              Thank you for submitting your student ID. Unfortunately, we were unable to verify it with the document provided.
+            </p>
+
+            <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:20px 24px;margin-bottom:24px;">
+              <p style="color:#991b1b;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;">Reason</p>
+              <p style="color:#7f1d1d;font-size:14px;margin:0;line-height:1.6;">${reason}</p>
+            </div>
+
+            <p style="color:#374151;font-size:14px;line-height:1.7;margin:0 0 24px;">
+              Please upload a clearer or correct document. Accepted formats are JPG, PNG, or PDF (max 5MB).
+              Valid documents include a student ID card or current enrollment letter.
+            </p>
+
+            <div style="text-align:center;margin:28px 0;">
+              <a href="${reuploadUrl}" style="display:inline-block;background:#021d49;color:#fff;padding:14px 36px;text-decoration:none;border-radius:50px;font-weight:700;font-size:14px;">
+                Re-upload Your Student ID
+              </a>
+            </div>
+
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 20px;"/>
+            <p style="color:#6b7280;font-size:13px;margin:0 0 4px;">Warm regards,</p>
+            <p style="color:#021d49;font-size:14px;font-weight:700;margin:0;">The ARIN Publishing Academy Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:16px 36px;text-align:center;border-top:1px solid #e5e7eb;">
+            <p style="color:#9ca3af;font-size:12px;margin:0;">Africa Research and Impact Network (ARIN) · arin-africa.org</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const plainText = `Dear ${firstName},\n\nWe were unable to verify your student ID.\n\nReason: ${reason}\n\nPlease re-upload a valid document here: ${reuploadUrl}\n\nWarm regards,\nThe ARIN Publishing Academy Team`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainText,
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error sending student ID rejection email:', error);
+    }
+  }
+
+  /**
+   * Notify admin when a student uploads their ID for verification.
+   * Shows the image inline in the email for JPEG/PNG, or a PDF link for PDFs.
+   */
+  async sendStudentIdSubmissionNotification(
+    adminEmail: string | string[],
+    studentName: string,
+    studentEmail: string,
+    idUploadUrl: string,
+    reviewUrl: string,
+  ) {
+    const subject = `New Student ID Submitted — ${studentName}`;
+    const submittedAt = new Date().toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+
+    // Detect file type from URL
+    const isImage = /\.(jpg|jpeg|png)(\?.*)?$/i.test(idUploadUrl);
+    const isPdf = /\.pdf(\?.*)?$/i.test(idUploadUrl);
+
+    // Build document section based on file type
+    const documentSection = isImage
+      ? `
+        <!-- Image preview inline -->
+        <p style="color:#374151;font-size:13px;font-weight:600;margin:0 0 10px;">Submitted Document</p>
+        <a href="${idUploadUrl}" target="_blank" style="display:block;">
+          <img src="${idUploadUrl}"
+            alt="Student ID submitted by ${studentName}"
+            style="max-width:100%;width:100%;border-radius:10px;border:1px solid #e2e8f0;display:block;"
+          />
+        </a>
+        <p style="color:#9ca3af;font-size:11px;margin:8px 0 0;text-align:center;">
+          Click the image to open full size
+        </p>`
+      : isPdf
+        ? `
+        <!-- PDF link -->
+        <p style="color:#374151;font-size:13px;font-weight:600;margin:0 0 10px;">Submitted Document</p>
+        <a href="${idUploadUrl}" target="_blank"
+          style="display:flex;align-items:center;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;text-decoration:none;">
+          <span style="font-size:28px;">📄</span>
+          <span>
+            <span style="display:block;color:#111827;font-weight:600;font-size:14px;">PDF Document</span>
+            <span style="display:block;color:#6b7280;font-size:12px;margin-top:2px;">Click to open and view</span>
+          </span>
+        </a>`
+        : `
+        <!-- Unknown file type — just a link -->
+        <p style="color:#374151;font-size:13px;font-weight:600;margin:0 0 10px;">Submitted Document</p>
+        <a href="${idUploadUrl}" target="_blank" style="color:#021d49;font-size:14px;text-decoration:underline;">
+          View Uploaded File
+        </a>`;
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="580" cellpadding="0" cellspacing="0" style="max-width:580px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.07);">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:#021d49;padding:28px 36px;">
+            <p style="color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">ARIN Publishing Academy</p>
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">New Student ID Submitted</h1>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:32px 36px;">
+            <p style="color:#374151;font-size:15px;margin:0 0 20px;">
+              A student has submitted their ID for verification and is awaiting your approval.
+            </p>
+
+            <!-- Student info -->
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:18px 22px;margin-bottom:24px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+                <tr>
+                  <td style="color:#6b7280;padding:5px 0;width:110px;">Name</td>
+                  <td style="color:#111827;font-weight:600;">${studentName}</td>
+                </tr>
+                <tr>
+                  <td style="color:#6b7280;padding:5px 0;">Email</td>
+                  <td style="color:#111827;">${studentEmail}</td>
+                </tr>
+                <tr>
+                  <td style="color:#6b7280;padding:5px 0;">Submitted</td>
+                  <td style="color:#111827;">${submittedAt}</td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- Document preview -->
+            <div style="margin-bottom:28px;">
+              ${documentSection}
+            </div>
+
+            <!-- Action button -->
+            <div style="text-align:center;margin:8px 0 24px;">
+              <a href="${reviewUrl}"
+                style="display:inline-block;background:#021d49;color:#fff;padding:14px 40px;text-decoration:none;border-radius:50px;font-weight:700;font-size:14px;">
+                Go to Admin Dashboard to Verify
+              </a>
+            </div>
+
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 20px;"/>
+            <p style="color:#9ca3af;font-size:12px;margin:0;text-align:center;">
+              ARIN Publishing Academy · arin-africa.org
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const plainText = `New Student ID Submitted\n\nStudent: ${studentName}\nEmail: ${studentEmail}\nSubmitted: ${submittedAt}\n\nView document: ${idUploadUrl}\n\nGo to admin dashboard to verify: ${reviewUrl}\n\nARIN Publishing Academy`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: adminEmail,
+        subject,
+        html: htmlContent,
+        text: plainText,
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error sending student ID submission notification:', error);
+    }
+  }
+
+  /**
+   * Send congratulation email after Academy payment
+   */
+  async sendAcademyRegistrationEmail(email: string, firstName: string) {
+    const subject = 'Welcome to the ARIN Publishing Academy — Registration Confirmed!';
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#021d49 0%,#1e40af 100%);padding:40px;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:26px;font-weight:700;">Registration Confirmed!</h1>
+            <p style="color:rgba(255,255,255,0.85);margin:10px 0 0;font-size:15px;">ARIN Publishing Academy — First Cohort</p>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:40px;">
+            <p style="color:#374151;font-size:16px;margin:0 0 16px;">Dear <strong>${firstName}</strong>,</p>
+            <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">
+              Congratulations! Your registration for the <strong>ARIN Publishing Academy</strong> has been confirmed. You are now part of our first cohort of researchers and professionals committed to strengthening Africa's research-to-impact pipeline.
+            </p>
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
+              <p style="color:#15803d;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;margin:0 0 8px;">What Happens Next</p>
+              <ul style="margin:0;padding-left:20px;color:#374151;font-size:14px;line-height:2;">
+                <li>Our team will be in touch with your onboarding details</li>
+                <li>You will receive programme schedule and materials before the start date</li>
+                <li>Look out for a welcome email with your cohort information</li>
+              </ul>
+            </div>
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
+              <p style="color:#1e40af;font-size:13px;font-weight:700;margin:0 0 6px;">Your Programme</p>
+              <p style="color:#374151;font-size:14px;margin:0;line-height:1.6;">
+                7 structured modules covering academic writing, publishing, research impact, science communication, ethical publishing, AI in academic writing, and SDG alignment — delivered over 2–3 months.
+              </p>
+            </div>
+            <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 32px;">
+              We are excited to have you on board. If you have any questions in the meantime, please reach out to us.
+            </p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;"/>
+            <p style="color:#6b7280;font-size:13px;margin:0 0 4px;">Warm regards,</p>
+            <p style="color:#021d49;font-size:14px;font-weight:700;margin:0;">The ARIN Publishing Academy Team</p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background:#f8fafc;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb;">
+            <p style="color:#9ca3af;font-size:12px;margin:0;">Africa Research and Impact Network (ARIN) · arin-africa.org</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const plainText = `Dear ${firstName},\n\nCongratulations! Your registration for the ARIN Publishing Academy has been confirmed.\n\nOur team will be in touch with your onboarding details and programme schedule before the start date.\n\nWarm regards,\nThe ARIN Publishing Academy Team`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainText,
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error sending Academy registration email:', error);
+    }
+  }
+
+  /**
+   * Send payment-ready email to student after their ID is approved
+   */
+  async sendStudentPaymentReadyEmail(email: string, firstName: string, paymentUrl: string) {
+    const subject = 'Your Student ID is Verified — Complete Your Registration';
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#16a34a 0%,#15803d 100%);padding:40px;text-align:center;">
+            <div style="font-size:48px;margin-bottom:12px;">✅</div>
+            <h1 style="color:#fff;margin:0;font-size:24px;font-weight:700;">Student ID Verified!</h1>
+            <p style="color:rgba(255,255,255,0.85);margin:10px 0 0;font-size:14px;">You can now complete your payment</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px;">
+            <p style="color:#374151;font-size:16px;margin:0 0 16px;">Dear <strong>${firstName}</strong>,</p>
+            <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 24px;">
+              Great news! Your student ID has been reviewed and <strong>approved</strong>. You are now eligible for the student rate of <strong>$100 USD</strong> for the ARIN Publishing Academy.
+            </p>
+            <div style="text-align:center;margin:32px 0;">
+              <a href="${paymentUrl}" style="display:inline-block;background:linear-gradient(135deg,#021d49 0%,#1e40af 100%);color:#fff;padding:16px 40px;text-decoration:none;border-radius:50px;font-weight:700;font-size:16px;">
+                Complete Payment →
+              </a>
+            </div>
+            <div style="background:#fef9c3;border:1px solid #fde68a;border-radius:12px;padding:16px 20px;margin-bottom:24px;">
+              <p style="color:#92400e;font-size:13px;margin:0;line-height:1.5;">
+                <strong>Note:</strong> This payment link is personal to your account. Please log in before clicking the button above.
+              </p>
+            </div>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;"/>
+            <p style="color:#6b7280;font-size:13px;margin:0 0 4px;">Warm regards,</p>
+            <p style="color:#021d49;font-size:14px;font-weight:700;margin:0;">The ARIN Publishing Academy Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:20px 40px;text-align:center;border-top:1px solid #e5e7eb;">
+            <p style="color:#9ca3af;font-size:12px;margin:0;">Africa Research and Impact Network (ARIN) · arin-africa.org</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const plainText = `Dear ${firstName},\n\nYour student ID has been approved! You can now complete your payment at the student rate of $100 USD.\n\nClick here to pay: ${paymentUrl}\n\nWarm regards,\nThe ARIN Publishing Academy Team`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainText,
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error sending student payment-ready email:', error);
+    }
+  }
+
+  /**
+   * Send installment 2 reminder email
+   */
+  async sendInstallment2ReminderEmail(
+    email: string,
+    firstName: string,
+    amount: number,
+    userTier: string,
+    paymentUrl: string,
+  ) {
+    const subject = 'ARIN Publishing Academy — Your 2nd Installment is Now Due';
+    const tierLabel = userTier === 'student' ? 'Student' : 'Non-Student';
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:linear-gradient(135deg,#021d49 0%,#1e40af 100%);padding:40px;text-align:center;">
+            <h1 style="color:#fff;margin:0;font-size:22px;font-weight:700;">2nd Installment Due</h1>
+            <p style="color:rgba(255,255,255,0.8);margin:10px 0 0;font-size:14px;">ARIN Publishing Academy</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:40px;">
+            <p style="color:#374151;font-size:16px;margin:0 0 16px;">Dear <strong>${firstName}</strong>,</p>
+            <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 20px;">
+              Your second and final installment for the ARIN Publishing Academy is now due.
+            </p>
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:24px;margin-bottom:28px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;">
+                <tr>
+                  <td style="color:#6b7280;padding:4px 0;">Registration type</td>
+                  <td style="color:#111827;font-weight:600;text-align:right;">${tierLabel}</td>
+                </tr>
+                <tr>
+                  <td style="color:#6b7280;padding:4px 0;">Installment</td>
+                  <td style="color:#111827;font-weight:600;text-align:right;">2nd of 2</td>
+                </tr>
+                <tr>
+                  <td style="color:#6b7280;padding:8px 0 4px;border-top:1px solid #e2e8f0;margin-top:8px;">Amount due</td>
+                  <td style="color:#021d49;font-weight:800;font-size:20px;text-align:right;border-top:1px solid #e2e8f0;">$${amount} USD</td>
+                </tr>
+              </table>
+            </div>
+            <div style="text-align:center;margin:32px 0;">
+              <a href="${paymentUrl}" style="display:inline-block;background:linear-gradient(135deg,#021d49 0%,#1e40af 100%);color:#fff;padding:16px 40px;text-decoration:none;border-radius:50px;font-weight:700;font-size:16px;">
+                Pay $${amount} USD Now
+              </a>
+            </div>
+            <p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0 0 24px;">
+              Please log in to your account before clicking the button above. If you have any questions, contact us.
+            </p>
+            <hr style="border:none;border-top:1px solid #e5e7eb;margin:0 0 24px;"/>
+            <p style="color:#6b7280;font-size:13px;margin:0 0 4px;">Warm regards,</p>
+            <p style="color:#021d49;font-size:14px;font-weight:700;margin:0;">The ARIN Publishing Academy Team</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:16px 40px;text-align:center;border-top:1px solid #e5e7eb;">
+            <p style="color:#9ca3af;font-size:12px;margin:0;">Africa Research and Impact Network (ARIN) · arin-africa.org</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const plainText = `Dear ${firstName},\n\nYour 2nd installment of $${amount} USD for the ARIN Publishing Academy is now due.\n\nClick here to pay: ${paymentUrl}\n\nWarm regards,\nThe ARIN Publishing Academy Team`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainText,
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error sending installment2 reminder email:', error);
+    }
   }
 }
