@@ -102,13 +102,6 @@ export class AuthService {
       'UserPlus',
     );
 
-    // Send welcome email in background — never block registration response
-    if (role !== UserRole.INSTRUCTOR) {
-      this.emailService
-        .sendWelcomeEmail(email, firstName)
-        .catch((e) => console.error('Failed to send welcome email:', e.message));
-    }
-
     // For students, generate token immediately
     if (role !== UserRole.INSTRUCTOR) {
       const token = this.generateToken(user);
