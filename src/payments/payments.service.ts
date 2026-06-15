@@ -965,4 +965,75 @@ export class PaymentsService {
 
     return payment;
   }
+
+  /**
+   * Admin: look up a user by email and return their category associations
+   * plus their Publishing Academy payment status.
+   */
+  async adminLookupUserCategories(email: string) {
+    const user = await this.userModel
+      .findOne({ email: email.toLowerCase().trim() })
+      .populate('fellowData.assignedCategories', 'name accessType hasTieredPricing')
+      .populate('purchasedCategories', 'name accessType hasTieredPricing')
+      .select('firstName lastName email role userType fellowData purchasedCategories studentVerification pendingStudentCategoryId')
+      .lean();
+
+    if (!user) return { found: false };
+
+    // Find the Publishing Academy category
+    const publishingAcademy = await this.categoryModel.findOne({
+      $or: [
+        { name: { $regex: /publishing academy/i } },
+        { name: { $regex: /arin publishing/i } },
+      ],
+    }).select('_id name').lean();
+
+    const assignedCategories: any[] = (user.fellowData as any)?.assignedCategories || [];
+    const purchasedCategories: any[] = (user as any).purchasedCategories || [];
+
+    let academyStatus: 'paid' | 'assigned_free' | 'pending_verification' | 'not_enrolled' = 'not_enrolled';
+    let academyId: string | null = publishingAcademy ? publishingAcademy._id.toString() : null;
+
+    if (academyId) {
+      const hasPurchased = purchasedCategories.some(
+        (c: any) => c._id?.toString() === academyId || c.toString?.() === academyId,
+      );
+      const isAssigned = assignedCategories.some(
+        (c: any) => c._id?.toString() === academyId || c.toString?.() === academyId,
+      );
+
+      if (hasPurchased) {
+        academyStatus = 'paid';
+      } else if (isAssigned) {
+        academyStatus = 'assigned_free';
+      } else if (
+        (user as any).studentVerification?.status === 'pending' ||
+        (user as any).studentVerification?.status === 'approved'
+      ) {
+        const pendingCat = (user as any).pendingStudentCategoryId?.toString();
+        if (pendingCat === academyId) academyStatus = 'pending_verification';
+      }
+    }
+
+    return {
+      found: true,
+      user: {
+        id: (user as any)._id?.toString(),
+        firstName: (user as any).firstName,
+        lastName: (user as any).lastName,
+        email: (user as any).email,
+        role: (user as any).role,
+        userType: (user as any).userType,
+      },
+      assignedCategories: assignedCategories.map((c: any) =>
+        c.name ? { id: c._id?.toString(), name: c.name } : { id: c.toString(), name: null },
+      ),
+      purchasedCategories: purchasedCategories.map((c: any) =>
+        c.name ? { id: c._id?.toString(), name: c.name } : { id: c.toString(), name: null },
+      ),
+      publishingAcademy: academyId
+        ? { id: academyId, name: publishingAcademy!.name, status: academyStatus }
+        : null,
+    };
+  }
 }

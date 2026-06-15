@@ -238,6 +238,19 @@ export class PaymentsController {
   }
 
   /**
+   * Admin: look up a user by email — returns their category associations and
+   * Publishing Academy payment status.
+   * GET /api/payments/admin/user-lookup?email=
+   */
+  @Get('admin/user-lookup')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminLookupUserCategories(@Query('email') email: string) {
+    if (!email) return { found: false };
+    return this.paymentsService.adminLookupUserCategories(email);
+  }
+
+  /**
    * Get user's payment history
    * GET /api/payments/my-payments
    */

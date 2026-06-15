@@ -80,8 +80,9 @@ export class CategoryAccessControlService {
 
     // Free category — only fellows assigned to this category get free access.
     // Non-fellows are blocked (they do not get automatic free access).
+    // Tiered-pricing categories always require payment — no fellow bypass.
     if (category.accessType === 'free') {
-      if (user.fellowData?.assignedCategories) {
+      if (!category.hasTieredPricing && user.fellowData?.assignedCategories) {
         const isAssigned = user.fellowData.assignedCategories.some(
           (catId) => catId.toString() === categoryId.toString(),
         );
@@ -92,10 +93,10 @@ export class CategoryAccessControlService {
           };
         }
       }
-      // Non-fellow trying to access a fellow-only free category
+      // Non-fellow, or tiered-pricing category (requires payment regardless of assignment)
       return {
         allowed: false,
-        reason: 'restricted',
+        reason: category.hasTieredPricing ? 'payment_required' : 'restricted',
       };
     }
 
@@ -276,7 +277,8 @@ export class CategoryAccessControlService {
 
     // Check if category is free (isPaid = false or accessType = 'free')
     // NOTE: For backward compatibility, if isPaid is undefined, check accessType
-    if (category.isPaid === false || category.accessType === 'free') {
+    // Tiered-pricing categories must not be treated as free even if accessType defaults to 'free'
+    if ((category.isPaid === false || category.accessType === 'free') && !category.hasTieredPricing) {
       return {
         allowed: true,
         requiresPayment: false,
