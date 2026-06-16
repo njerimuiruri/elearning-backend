@@ -986,22 +986,41 @@ export class ModulesService {
       .lean();
     const moduleIds = modules.map((m) => m._id);
 
+    // Count unique students actually enrolled in this instructor's modules
+    const activeStudentCount = moduleIds.length > 0
+      ? (await this.moduleEnrollmentModel.distinct('studentId', { moduleId: { $in: moduleIds } })).length
+      : 0;
+
     const enrollmentStats = await this.moduleEnrollmentModel.aggregate([
       { $match: { moduleId: { $in: moduleIds } } },
       {
         $group: {
           _id: null,
-          totalStudents: { $sum: 1 },
-          completedStudents: {
-            $sum: { $cond: [{ $eq: ['$isCompleted', true] }, 1, 0] },
+          completedStudentIds: {
+            $addToSet: {
+              $cond: [{ $eq: ['$isCompleted', true] }, '$studentId', null],
+            },
           },
           avgProgress: { $avg: '$overallProgress' },
+        },
+      },
+      {
+        $project: {
+          completedStudents: {
+            $size: {
+              $filter: {
+                input: '$completedStudentIds',
+                as: 'id',
+                cond: { $ne: ['$$id', null] },
+              },
+            },
+          },
+          avgProgress: 1,
         },
       },
     ]);
 
     const stats = enrollmentStats[0] || {
-      totalStudents: 0,
       completedStudents: 0,
       avgProgress: 0,
     };
@@ -1032,15 +1051,75 @@ export class ModulesService {
     return {
       totalModules: modules.length,
       modulesByStatus,
-      totalStudents: stats.totalStudents,
+      totalStudents: activeStudentCount,
       completedStudents: stats.completedStudents,
       completionRate:
-        stats.totalStudents > 0
-          ? Math.round((stats.completedStudents / stats.totalStudents) * 100)
+        activeStudentCount > 0
+          ? Math.round((stats.completedStudents / activeStudentCount) * 100)
           : 0,
       avgProgress: Math.round(stats.avgProgress || 0),
       totalContentHours: Math.round((totalDurationMinutes / 60) * 10) / 10,
     };
+  }
+
+  // ── Instructor enrolled students ──────────────────────────────────────────
+  async getInstructorStudents(instructorId: string) {
+    const instructorObjId = new Types.ObjectId(instructorId);
+    const modules = await this.moduleModel
+      .find({ instructorIds: instructorObjId, isActive: true })
+      .select('_id title')
+      .lean();
+    const moduleIds = modules.map((m) => m._id);
+
+    if (moduleIds.length === 0) return { students: [], total: 0 };
+
+    // Aggregate per-student progress across all of the instructor's modules
+    const enrollmentAgg = await this.moduleEnrollmentModel.aggregate([
+      { $match: { moduleId: { $in: moduleIds } } },
+      {
+        $group: {
+          _id: '$studentId',
+          avgProgress:        { $avg: '$progress' },
+          modulesEnrolled:    { $sum: 1 },
+          modulesCompleted:   { $sum: { $cond: ['$isCompleted', 1, 0] } },
+          enrolledAt:         { $min: '$createdAt' },
+        },
+      },
+      { $sort: { enrolledAt: 1 } },
+    ]);
+
+    if (enrollmentAgg.length === 0) return { students: [], total: 0 };
+
+    // Fetch user profile data for all enrolled students
+    const studentIds = enrollmentAgg.map((e) => e._id);
+    const users = await this.userModel
+      .find({ _id: { $in: studentIds } })
+      .select('_id fullName firstName lastName email gender country profilePhotoUrl')
+      .lean();
+
+    const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+
+    const students = enrollmentAgg.map((e) => {
+      const user = userMap.get(e._id.toString());
+      const name =
+        user?.fullName ||
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+        user?.email ||
+        'Unknown';
+      return {
+        id:               e._id,
+        name,
+        email:            user?.email || '',
+        gender:           user?.gender || null,
+        country:          user?.country || null,
+        profilePhotoUrl:  user?.profilePhotoUrl || null,
+        progress:         Math.round(e.avgProgress || 0),
+        modulesEnrolled:  e.modulesEnrolled,
+        modulesCompleted: e.modulesCompleted,
+      };
+    });
+
+    return { students, total: students.length };
   }
 
   // ── Download helpers ──────────────────────────────────────────────────────

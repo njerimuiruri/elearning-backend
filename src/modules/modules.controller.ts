@@ -73,6 +73,14 @@ export class ModulesController {
     return await this.modulesService.getInstructorModuleStats(req.user.id);
   }
 
+  // ── Get enrolled students for instructor's modules ────────────────────────
+  @Get('instructor/students')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR)
+  async getInstructorStudents(@Request() req) {
+    return await this.modulesService.getInstructorStudents(req.user.id);
+  }
+
   // ── Get modules by category and level ────────────────────────────────────
   @Get('category/:categoryId/level/:level')
   async getModulesByLevelAndCategory(

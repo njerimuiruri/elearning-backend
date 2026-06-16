@@ -33,6 +33,7 @@ import { EmailQueueModule } from './email-queue/email-queue.module';
 import { ProjectsModule } from './projects/projects.module';
 import { CapstoneModule } from './capstone/capstone.module';
 import { StudentVerificationModule } from './student-verification/student-verification.module';
+import { WhiteboardsModule } from './whiteboards/whiteboards.module';
 
 @Module({
   imports: [
@@ -111,6 +112,7 @@ import { StudentVerificationModule } from './student-verification/student-verifi
     ProjectsModule,
     CapstoneModule,
     StudentVerificationModule,
+    WhiteboardsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
