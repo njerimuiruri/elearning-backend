@@ -3111,12 +3111,6 @@ The Arin Publishing Academy Team
                 <li>Look out for a welcome email with your cohort information</li>
               </ul>
             </div>
-            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:20px 24px;margin-bottom:28px;">
-              <p style="color:#1e40af;font-size:13px;font-weight:700;margin:0 0 6px;">Your Programme</p>
-              <p style="color:#374151;font-size:14px;margin:0;line-height:1.6;">
-                7 structured modules covering academic writing, publishing, research impact, science communication, ethical publishing, AI in academic writing, and SDG alignment — delivered over 2–3 months.
-              </p>
-            </div>
             <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 32px;">
               We are excited to have you on board. If you have any questions in the meantime, please reach out to us.
             </p>

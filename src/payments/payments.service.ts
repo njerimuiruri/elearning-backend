@@ -326,12 +326,44 @@ export class PaymentsService {
 
     const accessCheck = await this.categoryAccessControl.checkCategoryAccess(userId, categoryId);
 
+    const catObjId = new Types.ObjectId(categoryId);
+    const userObjId = new Types.ObjectId(userId);
+
+    const [installment1, installment2, fullPayment] = await Promise.all([
+      this.paymentModel.findOne({
+        userId: userObjId, categoryId: catObjId,
+        status: PaymentStatus.COMPLETED, installmentNumber: 1,
+      }).select('amount userTier'),
+      this.paymentModel.findOne({
+        userId: userObjId, categoryId: catObjId,
+        status: PaymentStatus.COMPLETED, installmentNumber: 2,
+      }).select('amount'),
+      this.paymentModel.findOne({
+        userId: userObjId, categoryId: catObjId,
+        status: PaymentStatus.COMPLETED, isFullPayment: true,
+      }).select('amount userTier'),
+    ]);
+
+    let installmentInfo: { isInstallment: boolean; installment1Paid: boolean; installment2Paid: boolean; paidAmount: number; balanceDue: number; userTier: string | undefined } | null = null;
+    if (installment1) {
+      installmentInfo = {
+        isInstallment: true,
+        installment1Paid: true,
+        installment2Paid: !!installment2,
+        paidAmount: installment1.amount + (installment2?.amount || 0),
+        balanceDue: installment2 ? 0 : installment1.amount,
+        userTier: installment1.userTier,
+      };
+    }
+
     return {
       hasAccess: accessCheck.allowed,
       verificationStatus: user.studentVerification?.status || 'none',
       awaitingPayment: user.studentVerification?.awaitingPayment || false,
       pendingCategoryId: user.pendingStudentCategoryId?.toString() || null,
       reason: accessCheck.reason,
+      userTier: fullPayment?.userTier || installment1?.userTier || null,
+      installmentInfo,
     };
   }
 
@@ -730,7 +762,7 @@ export class PaymentsService {
       },
       callbackUrl,
       this.getPaystackChannels(paymentType),
-      'KES',
+      'USD',
     );
 
     const payment = await this.paymentModel.create({
