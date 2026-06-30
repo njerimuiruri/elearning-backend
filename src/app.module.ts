@@ -77,6 +77,9 @@ import { WhiteboardsModule } from './whiteboards/whiteboards.module';
             host: config.get<string>('REDIS_HOST', 'localhost'),
             port: config.get<number>('REDIS_PORT', 6379),
             password: config.get<string>('REDIS_PASSWORD') || undefined,
+            enableOfflineQueue: false,
+            maxRetriesPerRequest: null,
+            retryStrategy: (times: number) => (times > 3 ? null : Math.min(times * 500, 3000)),
           },
         };
       },

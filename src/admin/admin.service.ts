@@ -3449,19 +3449,22 @@ export class AdminService {
 
   // ── Delete a module (admin can remove any module regardless of status) ────
   async deleteModuleAsAdmin(moduleId: string, adminId: string): Promise<void> {
-    const moduleDoc = await this.moduleModel.findById(moduleId);
+    const moduleDoc = await this.moduleModel.findByIdAndDelete(moduleId);
     if (!moduleDoc) throw new NotFoundException('Module not found');
 
-    moduleDoc.isActive = false;
-    await moduleDoc.save();
+    // Clean up related records
+    await Promise.allSettled([
+      this.moduleEnrollmentModel.deleteMany({ moduleId: new Types.ObjectId(moduleId) }),
+      this.moduleCertificateModel.deleteMany({ moduleId: new Types.ObjectId(moduleId) }),
+    ]);
 
     await this.logActivity(
       ActivityType.COURSE_CREATED,
-      `Admin removed module "${moduleDoc.title}"`,
+      `Admin permanently deleted module "${(moduleDoc as any).title}"`,
       adminId,
       undefined,
       undefined,
-      { moduleId: moduleDoc._id, moduleTitle: moduleDoc.title },
+      { moduleId, moduleTitle: (moduleDoc as any).title },
       'Trash2',
     );
   }
@@ -5150,6 +5153,119 @@ export class AdminService {
     return report;
   }
 
+  // ===================== CERTIFICATE SUMMARY =====================
+
+  async getCertificatesSummary() {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const lvls = ['beginner', 'intermediate', 'advanced'];
+
+    const byLevel: Record<string, { total: number; issued: number; pending: number }> = {
+      beginner:     { total: 0, issued: 0, pending: 0 },
+      intermediate: { total: 0, issued: 0, pending: 0 },
+      advanced:     { total: 0, issued: 0, pending: 0 },
+    };
+
+    // Mirror the exact logic of getModuleCertificates() (which powers the Certificates page):
+    //  1. Published modules → required count per level
+    //  2. Completed enrollments → group by {studentId|level}, count modules finished
+    //  3. Cross-reference ModuleCertificate collection as authoritative "issued" flag
+    //     (certificateEarned on enrollments can be out of sync)
+    //  4. Student qualifies (issued or pending) only when completedModules >= requiredCount
+
+    const modules = await this.moduleModel
+      .find({ status: ModuleStatus.PUBLISHED, isActive: { $ne: false } })
+      .select('_id level')
+      .lean();
+
+    const moduleIds = (modules as any[]).map((m) => m._id);
+    if (!moduleIds.length) {
+      return { totalIssued: 0, totalPending: 0, totalLevelCompletions: 0, monthlyTrend: [], byLevel };
+    }
+
+    const moduleIdToLevel: Record<string, string> = {};
+    const requiredPerLevel: Record<string, number> = {};
+    for (const m of modules as any[]) {
+      const lvl = ((m.level as string) || 'beginner').toLowerCase();
+      moduleIdToLevel[m._id.toString()] = lvl;
+      requiredPerLevel[lvl] = (requiredPerLevel[lvl] || 0) + 1;
+    }
+
+    // Completed enrollments — only need studentId + moduleId for grouping
+    const enrollments = await this.moduleEnrollmentModel
+      .find({ moduleId: { $in: moduleIds }, $or: [{ isCompleted: true }, { progress: 100 }] })
+      .select('studentId moduleId')
+      .lean();
+
+    // Group by {studentId|level} and count completed modules per student per level
+    const studentLevelMap = new Map<string, { count: number }>();
+    for (const e of enrollments as any[]) {
+      const sid = e.studentId?.toString();
+      const lvl = moduleIdToLevel[e.moduleId?.toString()];
+      if (!sid || !lvl) continue;
+      const key = `${sid}|${lvl}`;
+      if (!studentLevelMap.has(key)) studentLevelMap.set(key, { count: 0 });
+      studentLevelMap.get(key)!.count++;
+    }
+
+    // Determine which student+level pairs qualify (completed ALL modules)
+    const qualifiedKeys = new Set<string>();
+    const qualifiedStudentIds: Types.ObjectId[] = [];
+    for (const [key, entry] of studentLevelMap) {
+      const lvl = key.split('|')[1];
+      if (requiredPerLevel[lvl] && entry.count >= requiredPerLevel[lvl]) {
+        qualifiedKeys.add(key);
+        const sid = key.split('|')[0];
+        if (Types.ObjectId.isValid(sid)) qualifiedStudentIds.push(new Types.ObjectId(sid));
+      }
+    }
+
+    // Cross-reference ModuleCertificate collection — this is the authoritative issued source
+    const issuedKeys = new Set<string>();
+    if (qualifiedStudentIds.length > 0) {
+      const certDocs = await this.moduleCertificateModel
+        .find({ studentId: { $in: qualifiedStudentIds } })
+        .select('studentId moduleLevel')
+        .lean();
+      for (const cert of certDocs as any[]) {
+        const key = `${cert.studentId.toString()}|${(cert.moduleLevel || '').toLowerCase()}`;
+        issuedKeys.add(key);
+      }
+    }
+
+    for (const key of qualifiedKeys) {
+      const lvl = key.split('|')[1];
+      if (!byLevel[lvl]) continue;
+      if (issuedKeys.has(key)) byLevel[lvl].issued++;
+      else                      byLevel[lvl].pending++;
+    }
+
+    // Monthly trend from ModuleCertificate issuedDate (authoritative timestamp)
+    let monthlyTrend: any[] = [];
+    try {
+      const twelveMonthsAgo = new Date();
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+      twelveMonthsAgo.setDate(1);
+      const monthlyRaw = await this.moduleCertificateModel.aggregate([
+        { $match: { issuedDate: { $gte: twelveMonthsAgo } } },
+        { $group: { _id: { year: { $year: '$issuedDate' }, month: { $month: '$issuedDate' } }, count: { $sum: 1 } } },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]);
+      monthlyTrend = (monthlyRaw as any[]).map((row) => ({
+        label: `${MONTHS[row._id.month - 1]} ${row._id.year}`,
+        month: MONTHS[row._id.month - 1],
+        count: row.count,
+      }));
+    } catch { /* empty trend is fine */ }
+
+    for (const lvl of lvls) byLevel[lvl].total = byLevel[lvl].issued + byLevel[lvl].pending;
+
+    const totalIssued           = lvls.reduce((s, l) => s + byLevel[l].issued,  0);
+    const totalPending          = lvls.reduce((s, l) => s + byLevel[l].pending, 0);
+    const totalLevelCompletions = lvls.reduce((s, l) => s + byLevel[l].total,   0);
+
+    return { totalIssued, totalPending, totalLevelCompletions, monthlyTrend, byLevel };
+  }
+
   // ===================== EXTENDED ANALYTICS =====================
 
   async getExtendedAnalytics() {
@@ -5255,37 +5371,63 @@ export class AdminService {
       { $sort: { totalEnrollments: -1 } },
     ]);
 
-    // ── 3. Certificate stats ─────────────────────────────────────────────────
+    // ── 3. Certificate stats — uses same data source as Admin Certificates page ──
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
-    const [certsFromCollection, certsFromEnrollment, certMonthlyRaw] = await Promise.all([
-      this.moduleCertificateModel.countDocuments(),
-      this.moduleEnrollmentModel.countDocuments({ certificateEarned: true }),
-      this.moduleCertificateModel.aggregate([
-        { $match: { issuedDate: { $gte: twelveMonthsAgo } } },
-        {
-          $group: {
-            _id: { year: { $year: '$issuedDate' }, month: { $month: '$issuedDate' } },
-            count: { $sum: 1 },
-          },
-        },
-        { $sort: { '_id.year': 1, '_id.month': 1 } },
-      ]),
-    ]);
+    // Call getModuleCertificates() — the authoritative source for issued/pending counts
+    // so the analytics always matches what admin sees on the Certificates page
+    let certLevelSummary = {
+      beginnerTotal: 0, beginnerIssued: 0, beginnerPending: 0,
+      intermediateTotal: 0, intermediateIssued: 0, intermediatePending: 0,
+      advancedTotal: 0, advancedIssued: 0, advancedPending: 0,
+      totalIssued: 0, totalPending: 0, totalLevelCompletions: 0,
+    };
+    try {
+      const certsResult = await this.getModuleCertificates();
+      const allStudents: any[] = certsResult.data || [];
+      const byLvl = (lvl: string) => allStudents.filter((s: any) => s.level === lvl);
+      certLevelSummary = {
+        beginnerTotal:       byLvl('beginner').length,
+        beginnerIssued:      byLvl('beginner').filter((s: any) => s.status === 'issued').length,
+        beginnerPending:     byLvl('beginner').filter((s: any) => s.status === 'pending').length,
+        intermediateTotal:   byLvl('intermediate').length,
+        intermediateIssued:  byLvl('intermediate').filter((s: any) => s.status === 'issued').length,
+        intermediatePending: byLvl('intermediate').filter((s: any) => s.status === 'pending').length,
+        advancedTotal:       byLvl('advanced').length,
+        advancedIssued:      byLvl('advanced').filter((s: any) => s.status === 'issued').length,
+        advancedPending:     byLvl('advanced').filter((s: any) => s.status === 'pending').length,
+        totalIssued:         allStudents.filter((s: any) => s.status === 'issued').length,
+        totalPending:        allStudents.filter((s: any) => s.status === 'pending').length,
+        totalLevelCompletions: allStudents.length,
+      };
+    } catch (_) { /* getModuleCertificates failed — defaults to 0 */ }
 
-    // Use whichever count is higher (collection vs enrollment flag)
-    const totalCertsIssued = Math.max(certsFromCollection, certsFromEnrollment);
-    // Count completions using both flag and progress (some records use progress:100 without setting flag)
-    const totalCompleted = await this.moduleEnrollmentModel.countDocuments({
-      $or: [{ isCompleted: true }, { progress: { $gte: 100 } }],
-    });
-    const certIssuanceRate = totalCompleted > 0 ? +((totalCertsIssued / totalCompleted) * 100).toFixed(1) : 0;
+    // Monthly cert issuance trend from ModuleCertificate.issuedDate
+    let certMonthlyRaw: any[] = [];
+    try {
+      certMonthlyRaw = await this.moduleCertificateModel.aggregate([
+        { $match: { issuedDate: { $gte: twelveMonthsAgo } } },
+        { $group: { _id: { year: { $year: '$issuedDate' }, month: { $month: '$issuedDate' } }, count: { $sum: 1 } } },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+      ]);
+    } catch (_) { /* ignore */ }
 
     const certMonthlyTrend = certMonthlyRaw.map((c: any) => ({
       label: `${MONTHS[c._id.month - 1]} ${c._id.year}`,
       month: MONTHS[c._id.month - 1],
       count: c.count,
     }));
+
+    // Module-level completion rate (individual module completions / total enrollments)
+    const totalModuleCompleted = (moduleProgressRaw as any[]).reduce(
+      (sum: number, m: any) => sum + (m.completedCount ?? 0), 0,
+    );
+    const totalEnrollmentsAll = (moduleProgressRaw as any[]).reduce(
+      (sum: number, m: any) => sum + (m.totalEnrollments ?? 0), 0,
+    );
+    const certIssuanceRate = totalEnrollmentsAll > 0
+      ? +((totalModuleCompleted / totalEnrollmentsAll) * 100).toFixed(1)
+      : 0;
 
     // ── 4. Module ratings analytics ──────────────────────────────────────────
     let ratedModules: any[] = [];
@@ -5406,10 +5548,17 @@ export class AdminService {
       levelStats,
       moduleProgressStats: moduleProgressRaw,
       certificates: {
-        totalIssued: totalCertsIssued,
+        totalIssued: certLevelSummary.totalIssued,
+        totalPending: certLevelSummary.totalPending,
+        totalLevelCompletions: certLevelSummary.totalLevelCompletions,
         issuanceRate: certIssuanceRate,
         monthlyTrend: certMonthlyTrend,
-        totalCompletions: totalCompleted,
+        totalModuleCompletions: totalModuleCompleted,
+        byLevel: {
+          beginner:     { total: certLevelSummary.beginnerTotal,     issued: certLevelSummary.beginnerIssued,     pending: certLevelSummary.beginnerPending },
+          intermediate: { total: certLevelSummary.intermediateTotal, issued: certLevelSummary.intermediateIssued, pending: certLevelSummary.intermediatePending },
+          advanced:     { total: certLevelSummary.advancedTotal,     issued: certLevelSummary.advancedIssued,     pending: certLevelSummary.advancedPending },
+        },
       },
       ratings: {
         overallAvgRating,

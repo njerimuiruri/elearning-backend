@@ -470,6 +470,12 @@ export class AdminController {
     return this.adminService.getExtendedAnalytics();
   }
 
+  @Get('analytics/certificates-summary')
+  @ApiOperation({ summary: 'Certificate issuance summary — same data source as Admin Certificates page' })
+  async getCertificatesSummary() {
+    return this.adminService.getCertificatesSummary();
+  }
+
   @Get('analytics/debug-counts')
   @ApiOperation({ summary: 'Raw collection counts for debugging' })
   async getDebugCounts() {
