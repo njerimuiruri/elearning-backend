@@ -5165,81 +5165,22 @@ export class AdminService {
       advanced:     { total: 0, issued: 0, pending: 0 },
     };
 
-    // Mirror the exact logic of getModuleCertificates() (which powers the Certificates page):
-    //  1. Published modules → required count per level
-    //  2. Completed enrollments → group by {studentId|level}, count modules finished
-    //  3. Cross-reference ModuleCertificate collection as authoritative "issued" flag
-    //     (certificateEarned on enrollments can be out of sync)
-    //  4. Student qualifies (issued or pending) only when completedModules >= requiredCount
-
-    const modules = await this.moduleModel
-      .find({ status: ModuleStatus.PUBLISHED, isActive: { $ne: false } })
-      .select('_id level')
-      .lean();
-
-    const moduleIds = (modules as any[]).map((m) => m._id);
-    if (!moduleIds.length) {
-      return { totalIssued: 0, totalPending: 0, totalLevelCompletions: 0, monthlyTrend: [], byLevel };
-    }
-
-    const moduleIdToLevel: Record<string, string> = {};
-    const requiredPerLevel: Record<string, number> = {};
-    for (const m of modules as any[]) {
-      const lvl = ((m.level as string) || 'beginner').toLowerCase();
-      moduleIdToLevel[m._id.toString()] = lvl;
-      requiredPerLevel[lvl] = (requiredPerLevel[lvl] || 0) + 1;
-    }
-
-    // Completed enrollments — only need studentId + moduleId for grouping
-    const enrollments = await this.moduleEnrollmentModel
-      .find({ moduleId: { $in: moduleIds }, $or: [{ isCompleted: true }, { progress: 100 }] })
-      .select('studentId moduleId')
-      .lean();
-
-    // Group by {studentId|level} and count completed modules per student per level
-    const studentLevelMap = new Map<string, { count: number }>();
-    for (const e of enrollments as any[]) {
-      const sid = e.studentId?.toString();
-      const lvl = moduleIdToLevel[e.moduleId?.toString()];
-      if (!sid || !lvl) continue;
-      const key = `${sid}|${lvl}`;
-      if (!studentLevelMap.has(key)) studentLevelMap.set(key, { count: 0 });
-      studentLevelMap.get(key)!.count++;
-    }
-
-    // Determine which student+level pairs qualify (completed ALL modules)
-    const qualifiedKeys = new Set<string>();
-    const qualifiedStudentIds: Types.ObjectId[] = [];
-    for (const [key, entry] of studentLevelMap) {
-      const lvl = key.split('|')[1];
-      if (requiredPerLevel[lvl] && entry.count >= requiredPerLevel[lvl]) {
-        qualifiedKeys.add(key);
-        const sid = key.split('|')[0];
-        if (Types.ObjectId.isValid(sid)) qualifiedStudentIds.push(new Types.ObjectId(sid));
+    // Delegate directly to getModuleCertificates() — the exact same function
+    // that powers the Certificates management page. This guarantees identical numbers.
+    try {
+      const result = await this.getModuleCertificates();
+      for (const student of (result.data || []) as any[]) {
+        const lvl = (student.level || '').toLowerCase();
+        if (!byLevel[lvl]) continue;
+        byLevel[lvl].total++;
+        if (student.status === 'issued') byLevel[lvl].issued++;
+        else                              byLevel[lvl].pending++;
       }
+    } catch (e) {
+      console.error('[getCertificatesSummary] getModuleCertificates failed:', e);
     }
 
-    // Cross-reference ModuleCertificate collection — this is the authoritative issued source
-    const issuedKeys = new Set<string>();
-    if (qualifiedStudentIds.length > 0) {
-      const certDocs = await this.moduleCertificateModel
-        .find({ studentId: { $in: qualifiedStudentIds } })
-        .select('studentId moduleLevel')
-        .lean();
-      for (const cert of certDocs as any[]) {
-        const key = `${cert.studentId.toString()}|${(cert.moduleLevel || '').toLowerCase()}`;
-        issuedKeys.add(key);
-      }
-    }
-
-    for (const key of qualifiedKeys) {
-      const lvl = key.split('|')[1];
-      if (!byLevel[lvl]) continue;
-      if (issuedKeys.has(key)) byLevel[lvl].issued++;
-      else                      byLevel[lvl].pending++;
-    }
-
-    // Monthly trend from ModuleCertificate issuedDate (authoritative timestamp)
+    // Monthly trend from ModuleCertificate issuedDate
     let monthlyTrend: any[] = [];
     try {
       const twelveMonthsAgo = new Date();
@@ -5256,8 +5197,6 @@ export class AdminService {
         count: row.count,
       }));
     } catch { /* empty trend is fine */ }
-
-    for (const lvl of lvls) byLevel[lvl].total = byLevel[lvl].issued + byLevel[lvl].pending;
 
     const totalIssued           = lvls.reduce((s, l) => s + byLevel[l].issued,  0);
     const totalPending          = lvls.reduce((s, l) => s + byLevel[l].pending, 0);

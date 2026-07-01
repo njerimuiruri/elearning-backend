@@ -93,6 +93,20 @@ export class CategoryAccessControlService {
           };
         }
       }
+
+      // Tiered-pricing: check purchasedCategories before denying access
+      if (category.hasTieredPricing && user.purchasedCategories) {
+        const hasPurchased = user.purchasedCategories.some(
+          (catId) => catId.toString() === categoryId.toString(),
+        );
+        if (hasPurchased) {
+          return {
+            allowed: true,
+            reason: 'purchased',
+          };
+        }
+      }
+
       // Non-fellow, or tiered-pricing category (requires payment regardless of assignment)
       return {
         allowed: false,
