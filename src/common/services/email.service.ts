@@ -271,7 +271,7 @@ E-Learning Platform System
               </div>
 
               <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 12px;">
-                We will be in touch with further details about your programme, course materials, and what to expect in the coming days. Keep an eye on your inbox — more information will be sent to you shortly.
+                We will be in touch with further details about your programme, course materials, and what to expect in the coming days. Keep an eye on your inbox  more information will be sent to you shortly.
               </p>
               <p style="color:#374151;font-size:15px;line-height:1.7;margin:0 0 32px;">
                 We look forward to supporting you through this learning experience and are excited to be part of your journey.
@@ -316,7 +316,7 @@ Temporary Password: ${temporaryPassword}
 
 Security reminder: You will be prompted to set a new password the first time you log in. Please keep your credentials safe.
 
-We will be in touch with further details about your programme, course materials, and what to expect in the coming days. Keep an eye on your inbox — more information will be sent to you shortly.
+We will be in touch with further details about your programme, course materials, and what to expect in the coming days. Keep an eye on your inbox  more information will be sent to you shortly.
 
 We look forward to supporting you through this learning experience.
 
@@ -574,7 +574,7 @@ E-Learning Platform Team
           <span style="display:inline-block;font-size:36px;font-weight:900;letter-spacing:12px;color:#021d49;background:#e0e7ff;padding:16px 32px;border-radius:12px;">${otp}</span>
         </div>
         <p style="color:#6b7280;font-size:13px;">If you did not request a password reset, you can safely ignore this email.</p>
-        <p style="color:#6b7280;font-size:13px;">— ARIN E-Learning Platform</p>
+        <p style="color:#6b7280;font-size:13px;"> ARIN E-Learning Platform</p>
       </div>
     `;
     await this.transporter.sendMail({
@@ -1370,14 +1370,14 @@ E-Learning Platform Team
     moduleTitle: string,
     rejectionReason: string,
   ) {
-    const subject = `Module Submission — Feedback Required`;
+    const subject = `Module Submission  Feedback Required`;
     const frontendUrl =
       this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const dashboardUrl = `${frontendUrl}/instructor/modules`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-        <h2 style="color: #dc2626; border-bottom: 3px solid #dc2626; padding-bottom: 10px;">Module Submission — Feedback Required</h2>
+        <h2 style="color: #dc2626; border-bottom: 3px solid #dc2626; padding-bottom: 10px;">Module Submission  Feedback Required</h2>
         <p>Dear <strong>${firstName}</strong>,</p>
         <p>Thank you for submitting <strong>"${moduleTitle}"</strong>. After review, some updates are needed before it can be published.</p>
         <div style="background-color: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
@@ -1390,7 +1390,7 @@ E-Learning Platform Team
       </div>
     `;
 
-    const plainTextContent = `Module Submission — Feedback Required\n\nDear ${firstName},\n\nYour module "${moduleTitle}" requires revisions before it can be published.\n\nFeedback:\n${rejectionReason}\n\nPlease update your module and resubmit.\n\nEdit your module: ${dashboardUrl}\n\nBest regards,\nArin Publishing Academy Team`;
+    const plainTextContent = `Module Submission  Feedback Required\n\nDear ${firstName},\n\nYour module "${moduleTitle}" requires revisions before it can be published.\n\nFeedback:\n${rejectionReason}\n\nPlease update your module and resubmit.\n\nEdit your module: ${dashboardUrl}\n\nBest regards,\nArin Publishing Academy Team`;
 
     try {
       await this.transporter.sendMail({
@@ -1418,7 +1418,7 @@ E-Learning Platform Team
     categoryName: string,
     moduleId: string,
   ) {
-    const subject = `New Module Submission — ${moduleTitle}`;
+    const subject = `New Module Submission  ${moduleTitle}`;
     const frontendUrl =
       this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const adminDashboardUrl = `${frontendUrl}/admin/modules`;
@@ -1521,8 +1521,8 @@ E-Learning Platform Team
     certificateUrl?: string,
   ) {
     const subject = passed
-      ? `Essay Passed: ${moduleName} — Certificate Earned!`
-      : `Essay Reviewed: ${moduleName} — Feedback Available`;
+      ? `Essay Passed: ${moduleName}  Certificate Earned!`
+      : `Essay Reviewed: ${moduleName}  Feedback Available`;
 
     const frontendUrl =
       this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
@@ -1530,7 +1530,7 @@ E-Learning Platform Team
     const htmlContent = passed
       ? `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #16a34a; border-bottom: 3px solid #16a34a; padding-bottom: 10px;">Congratulations — Essay Passed!</h2>
+        <h2 style="color: #16a34a; border-bottom: 3px solid #16a34a; padding-bottom: 10px;">Congratulations  Essay Passed!</h2>
         <p>Dear <strong>${studentName}</strong>,</p>
         <p>Your essay assessment for <strong>"${moduleName}"</strong> has been reviewed by your instructor and you have <strong style="color: #16a34a;">PASSED</strong>!</p>
         <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0;">
@@ -1543,7 +1543,7 @@ E-Learning Platform Team
       `
       : `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #d97706; border-bottom: 3px solid #d97706; padding-bottom: 10px;">Essay Reviewed — Feedback Available</h2>
+        <h2 style="color: #d97706; border-bottom: 3px solid #d97706; padding-bottom: 10px;">Essay Reviewed  Feedback Available</h2>
         <p>Dear <strong>${studentName}</strong>,</p>
         <p>Your essay assessment for <strong>"${moduleName}"</strong> has been reviewed. Please read the feedback carefully and try again.</p>
         <div style="background-color: #fffbeb; border-left: 4px solid #d97706; padding: 15px; margin: 20px 0;">
@@ -1686,7 +1686,7 @@ E-Learning Platform Team
     progress: number,
     moduleId: string,
   ) {
-    const subject = `Don't Stop Now — Continue "${moduleName}"`;
+    const subject = `Don't Stop Now  Continue "${moduleName}"`;
     const frontendUrl =
       this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const moduleUrl = `${frontendUrl}/student/modules/${moduleId}`;
@@ -1694,7 +1694,7 @@ E-Learning Platform Team
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; max-width: 600px; margin: 0 auto;">
         <div style="background: linear-gradient(135deg, #021d49 0%, #039e8e 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-          <h1 style="color: white; margin: 0; font-size: 24px;">Keep Going — You've Got This!</h1>
+          <h1 style="color: white; margin: 0; font-size: 24px;">Keep Going  You've Got This!</h1>
         </div>
         <div style="background-color: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 10px 10px;">
           <p style="font-size: 16px;">Dear <strong>${studentName}</strong>,</p>
@@ -1713,7 +1713,7 @@ E-Learning Platform Team
       </div>
     `;
 
-    const plainTextContent = `Keep Going!\n\nDear ${studentName},\n\nIt's been a few days since you last visited "${moduleName}". You're ${Math.round(progress)}% through — don't stop now!\n\nContinue Learning: ${moduleUrl}\n\nBest regards,\nArin Publishing Academy`;
+    const plainTextContent = `Keep Going!\n\nDear ${studentName},\n\nIt's been a few days since you last visited "${moduleName}". You're ${Math.round(progress)}% through  don't stop now!\n\nContinue Learning: ${moduleUrl}\n\nBest regards,\nArin Publishing Academy`;
 
     try {
       await this.transporter.sendMail({
@@ -2025,7 +2025,7 @@ Go to Dashboard: ${dashboardUrl}
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // FELLOW INVITATION EMAIL — modern, mobile-friendly template
+  // FELLOW INVITATION EMAIL  modern, mobile-friendly template
   // ─────────────────────────────────────────────────────────────────
   async sendFellowInvitationEmail(
     email: string,
@@ -2034,7 +2034,7 @@ Go to Dashboard: ${dashboardUrl}
     options?: { track?: string; cohort?: string; setupToken?: string },
   ) {
     const subject =
-      'Welcome to the Arin Fellowship Programme — Complete Your Profile';
+      'Welcome to the Arin Fellowship Programme  Complete Your Profile';
     const frontendUrl =
       this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
     const loginUrl = `${frontendUrl}/login?ref=${Buffer.from(email).toString('base64url')}`;
@@ -2090,7 +2090,7 @@ Go to Dashboard: ${dashboardUrl}
     <!-- Divider -->
     <tr><td style="padding:28px 48px 0;"><div style="border-top:1px solid #e5e7eb;"></div></td></tr>
 
-    <!-- Login credentials — open layout, no card -->
+    <!-- Login credentials  open layout, no card -->
     <tr>
       <td style="padding:28px 48px 0;">
         <p style="margin:0 0 20px;font-size:13px;font-weight:700;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Your Login Credentials</p>
@@ -2123,10 +2123,10 @@ Go to Dashboard: ${dashboardUrl}
 
         <table cellpadding="0" cellspacing="0" style="width:100%;">
           ${[
-            ['Click <strong>Begin Your Fellowship</strong> below — your email will be filled in automatically.'],
+            ['Click <strong>Begin Your Fellowship</strong> below  your email will be filled in automatically.'],
             ['Enter the <strong>temporary password</strong> shown above and click Sign In.'],
             ['A prompt will appear asking you to <strong>create a new personal password</strong>. Do this right away.'],
-            ['Once your password is set you are fully logged in — no further steps needed.'],
+            ['Once your password is set you are fully logged in  no further steps needed.'],
             ['Explore your dashboard, complete your profile, and start your fellowship journey.'],
           ].map(([text], i) => `
           <tr>
@@ -2147,7 +2147,7 @@ Go to Dashboard: ${dashboardUrl}
       </td>
     </tr>
 
-    <!-- Security note — inline, no card -->
+    <!-- Security note  inline, no card -->
     <tr>
       <td style="padding:4px 48px 0;">
         <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6;">
@@ -2220,7 +2220,7 @@ Keep your temporary password private. It becomes invalid once you set your own.
 ────────────────────────────
 HOW TO GET STARTED
 ────────────────────────────
-1. Click "Begin Your Fellowship" or visit the link below — your email will be filled in automatically.
+1. Click "Begin Your Fellowship" or visit the link below  your email will be filled in automatically.
    ${loginUrl}
 
 2. Enter the temporary password above and click Sign In.
@@ -2228,7 +2228,7 @@ HOW TO GET STARTED
 3. A prompt will appear asking you to create a new personal password.
    Do this right away to secure your account.
 
-4. Once your password is set you are fully logged in — no further steps needed.
+4. Once your password is set you are fully logged in  no further steps needed.
 
 5. Explore your dashboard, complete your profile, and start your fellowship journey.
 
@@ -2311,7 +2311,7 @@ The Arin Publishing Academy Team
           <td style="padding:36px 40px;">
             <p style="color:#374151;font-size:16px;line-height:1.7;margin:0 0 16px;">Hi <strong>${firstName}</strong>,</p>
             <p style="color:#374151;font-size:16px;line-height:1.7;margin:0 0 20px;">
-              We noticed you haven't visited your fellowship modules in a while — and we genuinely miss seeing you learn!
+              We noticed you haven't visited your fellowship modules in a while  and we genuinely miss seeing you learn!
               Every lesson you complete brings you one step closer to the knowledge and credentials that will shape your future.
             </p>
 
@@ -2357,7 +2357,7 @@ The Arin Publishing Academy Team
 </body>
 </html>`;
 
-    const text = `Hi ${firstName},\n\nWe noticed you haven't visited your fellowship modules in a while — and we miss seeing you learn!\n\nEvery lesson you complete brings you one step closer to the knowledge and credentials that will shape your future.\n\nRemember why you started — your fellowship is a rare opportunity to grow, connect, and lead.\n\nLog in and continue your journey: ${dashboardUrl}\n\nBest regards,\nThe ARIN eLearning Team`;
+    const text = `Hi ${firstName},\n\nWe noticed you haven't visited your fellowship modules in a while  and we miss seeing you learn!\n\nEvery lesson you complete brings you one step closer to the knowledge and credentials that will shape your future.\n\nRemember why you started  your fellowship is a rare opportunity to grow, connect, and lead.\n\nLog in and continue your journey: ${dashboardUrl}\n\nBest regards,\nThe ARIN eLearning Team`;
 
     try {
       await this.transporter.sendMail({ from: fromEmail, to, subject, html, text });
@@ -2416,16 +2416,16 @@ The Arin Publishing Academy Team
           <td style="padding:36px 40px;">
             <p style="color:#374151;font-size:16px;line-height:1.7;margin:0 0 16px;">Hi <strong>${firstName}</strong>,</p>
             <p style="color:#374151;font-size:16px;line-height:1.7;margin:0 0 20px;">
-              Your fellowship deadline is on the horizon — but you still have time to finish strong.
+              Your fellowship deadline is on the horizon  but you still have time to finish strong.
               Every module you complete now is proof of your commitment and dedication to growth.
             </p>
 
             <!-- Motivational highlight box -->
             <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:0 8px 8px 0;padding:18px 20px;margin:24px 0;">
-              <p style="color:#15803d;font-size:15px;font-weight:600;margin:0 0 8px;">You've come this far — don't stop now 🚀</p>
+              <p style="color:#15803d;font-size:15px;font-weight:600;margin:0 0 8px;">You've come this far  don't stop now 🚀</p>
               <p style="color:#374151;font-size:14px;line-height:1.6;margin:0;">
                 Think about the growth you've achieved, the knowledge you've gained, and the community you've joined.
-                Completing your fellowship is a milestone worth celebrating — and it starts with your next login.
+                Completing your fellowship is a milestone worth celebrating  and it starts with your next login.
               </p>
             </div>
 
@@ -2463,7 +2463,7 @@ The Arin Publishing Academy Team
 </body>
 </html>`;
 
-    const text = `Hi ${firstName},\n\nYour fellowship deadline is in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.\n\nYou've come this far — don't stop now! Complete your outstanding modules and finish your fellowship strong.\n\nLog in and complete your modules: ${dashboardUrl}\n\nWe're cheering for you,\nThe ARIN eLearning Team`;
+    const text = `Hi ${firstName},\n\nYour fellowship deadline is in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.\n\nYou've come this far  don't stop now! Complete your outstanding modules and finish your fellowship strong.\n\nLog in and complete your modules: ${dashboardUrl}\n\nWe're cheering for you,\nThe ARIN eLearning Team`;
 
     try {
       await this.transporter.sendMail({ from: fromEmail, to, subject, html, text });
@@ -2475,7 +2475,7 @@ The Arin Publishing Academy Team
   }
 
   // ─────────────────────────────────────────────────────────────────
-  // BULK CUSTOM EMAIL — with CC / BCC support
+  // BULK CUSTOM EMAIL  with CC / BCC support
   // ─────────────────────────────────────────────────────────────────
   async sendCustomEmail(
     to: string,
@@ -2793,7 +2793,7 @@ The Arin Publishing Academy Team
       <div style="background:#f9fafb;padding:32px">
         <p style="color:#374151;font-size:15px;line-height:1.7;margin-top:0">
           You've successfully completed all <strong>Beginner modules</strong> in your programme.
-          This is a major milestone — well done!
+          This is a major milestone  well done!
         </p>
 
         <!-- Achievement box -->
@@ -2804,7 +2804,7 @@ The Arin Publishing Academy Team
           </p>
           <p style="margin:8px 0 0;font-size:13px;color:#92400e;line-height:1.5">
             You can now enrol in any ${levelLabel} module at your own pace.
-            No set order — pick what interests you most and dive in.
+            No set order  pick what interests you most and dive in.
           </p>
         </div>
 
@@ -2869,7 +2869,7 @@ The Arin Publishing Academy Team
     reason: string,
     reuploadUrl: string,
   ) {
-    const subject = 'Your Student ID Verification — Action Required';
+    const subject = 'Your Student ID Verification  Action Required';
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
@@ -2881,7 +2881,7 @@ The Arin Publishing Academy Team
         <tr>
           <td style="background:#021d49;padding:28px 36px;">
             <p style="color:rgba(255,255,255,0.6);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin:0 0 6px;">ARIN Publishing Academy</p>
-            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">Student ID — Action Required</h1>
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">Student ID  Action Required</h1>
           </td>
         </tr>
         <tr>
@@ -2950,7 +2950,7 @@ The Arin Publishing Academy Team
     idUploadUrl: string,
     reviewUrl: string,
   ) {
-    const subject = `New Student ID Submitted — ${studentName}`;
+    const subject = `New Student ID Submitted  ${studentName}`;
     const submittedAt = new Date().toLocaleString('en-GB', {
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit',
@@ -2987,7 +2987,7 @@ The Arin Publishing Academy Team
           </span>
         </a>`
         : `
-        <!-- Unknown file type — just a link -->
+        <!-- Unknown file type  just a link -->
         <p style="color:#374151;font-size:13px;font-weight:600;margin:0 0 10px;">Submitted Document</p>
         <a href="${idUploadUrl}" target="_blank" style="color:#021d49;font-size:14px;text-decoration:underline;">
           View Uploaded File
@@ -3080,7 +3080,7 @@ The Arin Publishing Academy Team
    * Send congratulation email after Academy payment
    */
   async sendAcademyRegistrationEmail(email: string, firstName: string) {
-    const subject = 'Welcome to the ARIN Publishing Academy — Registration Confirmed!';
+    const subject = 'Welcome to the ARIN Publishing Academy  Registration Confirmed!';
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
@@ -3093,7 +3093,7 @@ The Arin Publishing Academy Team
         <tr>
           <td style="background:linear-gradient(135deg,#021d49 0%,#1e40af 100%);padding:40px;text-align:center;">
             <h1 style="color:#fff;margin:0;font-size:26px;font-weight:700;">Registration Confirmed!</h1>
-            <p style="color:rgba(255,255,255,0.85);margin:10px 0 0;font-size:15px;">ARIN Publishing Academy — First Cohort</p>
+            <p style="color:rgba(255,255,255,0.85);margin:10px 0 0;font-size:15px;">ARIN Publishing Academy  First Cohort</p>
           </td>
         </tr>
         <!-- Body -->
@@ -3151,7 +3151,7 @@ The Arin Publishing Academy Team
    * Send payment-ready email to student after their ID is approved
    */
   async sendStudentPaymentReadyEmail(email: string, firstName: string, paymentUrl: string) {
-    const subject = 'Your Student ID is Verified — Complete Your Registration';
+    const subject = 'Your Student ID is Verified  Complete Your Registration';
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="en">
@@ -3225,7 +3225,7 @@ The Arin Publishing Academy Team
     userTier: string,
     paymentUrl: string,
   ) {
-    const subject = 'ARIN Publishing Academy — Your 2nd Installment is Now Due';
+    const subject = 'ARIN Publishing Academy  Your 2nd Installment is Now Due';
     const tierLabel = userTier === 'student' ? 'Student' : 'Non-Student';
 
     const htmlContent = `
@@ -3301,6 +3301,82 @@ The Arin Publishing Academy Team
       return { success: true };
     } catch (error: any) {
       console.error('Error sending installment2 reminder email:', error);
+    }
+  }
+
+  async sendBankPaymentConfirmationEmail(
+    email: string,
+    firstName: string,
+    amountPaid: number,
+    paymentStatus: string,
+  ) {
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
+    const loginUrl = `${frontendUrl}/login?ref=${Buffer.from(email).toString('base64url')}`;
+    const supportEmail = this.configService.get('SUPPORT_EMAIL') || 'support@arin-africa.org';
+    const name = firstName || 'Fellow';
+    const isPaid = paymentStatus === 'paid';
+
+    const subject = isPaid
+      ? 'Payment Confirmed  Your Arin Publishing Academy Access is Ready'
+      : 'Payment Received  Arin Publishing Academy';
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#ffffff;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="max-width:620px;margin:0 auto;">
+    <tr><td style="background:linear-gradient(90deg,#021d49 0%,#032a66 100%);height:5px;"></td></tr>
+    <tr><td style="padding:36px 48px 0;">
+      <p style="margin:0;font-size:13px;font-weight:700;color:#021d49;letter-spacing:1.5px;text-transform:uppercase;">Arin Publishing Academy</p>
+    </td></tr>
+    <tr><td style="padding:32px 48px 0;">
+      <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#111827;">Hello, ${name}!</h1>
+      <p style="margin:0;font-size:15px;color:#374151;line-height:1.75;">
+        ${isPaid
+          ? `Your payment of <strong>USD ${amountPaid.toLocaleString()}</strong> for the <strong>Arin Publishing Academy</strong> has been confirmed. Your account is now fully active and you have immediate access to the programme.`
+          : `We have recorded your payment of <strong>USD ${amountPaid.toLocaleString()}</strong> towards the <strong>Arin Publishing Academy</strong>. Once your full payment is completed, your access will be activated.`
+        }
+      </p>
+    </td></tr>
+    <tr><td style="padding:28px 48px 0;"><div style="border-top:1px solid #e5e7eb;"></div></td></tr>
+    <tr><td style="padding:28px 48px 0;">
+      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#6b7280;letter-spacing:1px;text-transform:uppercase;">Your Login Details</p>
+      <p style="margin:0 0 4px;font-size:12px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.8px;">Email Address</p>
+      <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#111827;">${email}</p>
+      <p style="margin:0;font-size:13px;color:#374151;line-height:1.65;">Use your existing password to log in. If you have forgotten your password, use the <strong>Forgot Password</strong> option on the login page.</p>
+    </td></tr>
+    ${isPaid ? `
+    <tr><td style="padding:32px 48px 0;">
+      <a href="${loginUrl}" style="display:inline-block;background:#021d49;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;padding:14px 36px;border-radius:8px;">
+        Access Your Dashboard &rarr;
+      </a>
+    </td></tr>` : ''}
+    <tr><td style="padding:36px 48px 0;"><div style="border-top:1px solid #e5e7eb;"></div></td></tr>
+    <tr><td style="padding:24px 48px 40px;">
+      <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.7;">
+        Questions? Contact us at <a href="mailto:${supportEmail}" style="color:#021d49;font-weight:600;">${supportEmail}</a>
+      </p>
+      <p style="margin:12px 0 0;font-size:13px;color:#374151;"><strong>The Arin Publishing Academy Team</strong></p>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+    const plainText = `Hello ${name},\n\n${isPaid ? `Your payment of USD ${amountPaid.toLocaleString()} for the Arin Publishing Academy has been confirmed. You can now log in with your email (${email}) and your existing password.\n\nLogin: ${loginUrl}` : `We have recorded your payment of USD ${amountPaid.toLocaleString()} for the Arin Publishing Academy.`}\n\nThe Arin Publishing Academy Team`;
+
+    try {
+      await this.transporter.sendMail({
+        from: this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainText,
+      });
+      return { success: true };
+    } catch (error: any) {
+      console.error('Error sending bank payment confirmation email:', error);
+      return { success: false };
     }
   }
 }

@@ -471,7 +471,7 @@ export class AdminController {
   }
 
   @Get('analytics/certificates-summary')
-  @ApiOperation({ summary: 'Certificate issuance summary — same data source as Admin Certificates page' })
+  @ApiOperation({ summary: 'Certificate issuance summary  same data source as Admin Certificates page' })
   async getCertificatesSummary() {
     return this.adminService.getCertificatesSummary();
   }
@@ -744,7 +744,7 @@ export class AdminController {
   @Put('modules/:id')
   @ApiOperation({
     summary:
-      'Update any module — admin can edit regardless of status or ownership',
+      'Update any module  admin can edit regardless of status or ownership',
   })
   async updateModuleAsAdmin(
     @Param('id') id: string,
@@ -759,7 +759,7 @@ export class AdminController {
   }
 
   @Put('modules/:id/finalize')
-  @ApiOperation({ summary: 'Finalize module content — unlocks Final Assessment for students' })
+  @ApiOperation({ summary: 'Finalize module content  unlocks Final Assessment for students' })
   async finalizeModuleContent(@Param('id') id: string, @CurrentUser() admin: any) {
     return this.adminService.finalizeContentAsAdmin(id, admin._id?.toString());
   }
@@ -767,7 +767,7 @@ export class AdminController {
   @Post('modules/:id/lessons')
   @ApiOperation({
     summary:
-      'Add a lesson to any module — admin can add lessons regardless of status or ownership',
+      'Add a lesson to any module  admin can add lessons regardless of status or ownership',
   })
   async addModuleLessonAsAdmin(
     @Param('id') id: string,
@@ -784,7 +784,7 @@ export class AdminController {
   @Delete('modules/:id/lessons/:lessonIndex')
   @ApiOperation({
     summary:
-      'Delete a lesson from any module — admin can remove lessons regardless of status or ownership',
+      'Delete a lesson from any module  admin can remove lessons regardless of status or ownership',
   })
   async deleteModuleLessonAsAdmin(
     @Param('id') id: string,
@@ -801,7 +801,7 @@ export class AdminController {
   @Delete('modules/:id')
   @ApiOperation({
     summary:
-      'Delete (deactivate) a module — admin can remove any module regardless of status',
+      'Delete (deactivate) a module  admin can remove any module regardless of status',
   })
   async deleteModule(@Param('id') id: string, @CurrentUser() admin: any) {
     return this.adminService.deleteModuleAsAdmin(id, admin._id?.toString());
@@ -882,5 +882,38 @@ export class AdminController {
       reason,
       admin._id?.toString(),
     );
+  }
+
+  // ─── Bank Payments (Arin Publishing Academy) ──────────────────────────────
+
+  @Get('bank-payments')
+  async getBankPayments(
+    @Query('categoryId') categoryId?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.adminService.getBankPayments({ categoryId, status, search, page, limit });
+  }
+
+  @Post('bank-payments')
+  async createBankPayment(@Body() dto: any) {
+    return this.adminService.createBankPayment(dto);
+  }
+
+  @Post('bank-payments/bulk')
+  async createBulkBankPayments(@Body() dto: any) {
+    return this.adminService.createBulkBankPayments(dto);
+  }
+
+  @Put('bank-payments/:id')
+  async updateBankPayment(@Param('id') id: string, @Body() dto: any) {
+    return this.adminService.updateBankPayment(id, dto);
+  }
+
+  @Delete('bank-payments/:id')
+  async deleteBankPayment(@Param('id') id: string) {
+    return this.adminService.deleteBankPayment(id);
   }
 }

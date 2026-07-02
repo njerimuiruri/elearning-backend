@@ -9,7 +9,7 @@
  * Usage:
  *   npx ts-node -r tsconfig-paths/register src/seeds/arin-publishing-paid.seed.ts
  *
- * Re-running is safe — skips creation if email already exists and updates instead.
+ * Re-running is safe  skips creation if email already exists and updates instead.
  */
 
 import { NestFactory } from '@nestjs/core';
@@ -67,7 +67,7 @@ async function seedPublishingPaidStudent() {
   const hashedPassword = await bcrypt.hash(STUDENT_PASSWORD, 10);
   const check = await bcrypt.compare(STUDENT_PASSWORD, hashedPassword);
   if (!check) {
-    console.error('❌  bcrypt sanity check failed — aborting.');
+    console.error('❌  bcrypt sanity check failed  aborting.');
     await app.close();
     process.exit(1);
   }
@@ -77,7 +77,7 @@ async function seedPublishingPaidStudent() {
   let student      = await userModel.findOne({ email: STUDENT_EMAIL.toLowerCase() });
 
   if (student) {
-    console.log(`ℹ️   Student already exists — updating password + category access.`);
+    console.log(`ℹ️   Student already exists  updating password + category access.`);
     await userModel.findByIdAndUpdate(student._id, {
       password:            hashedPassword,
       mustSetPassword:     false,
@@ -114,7 +114,7 @@ async function seedPublishingPaidStudent() {
   });
 
   if (existingPayment) {
-    console.log(`ℹ️   Completed payment record already exists — skipping.`);
+    console.log(`ℹ️   Completed payment record already exists  skipping.`);
   } else {
     const fakeReference = `SEED-${crypto.randomUUID().replace(/-/g, '').toUpperCase().slice(0, 16)}`;
     await paymentModel.create({
@@ -141,7 +141,7 @@ async function seedPublishingPaidStudent() {
   const loginWorks = await bcrypt.compare(STUDENT_PASSWORD, saved!.password);
 
   if (!loginWorks) {
-    console.error('\n❌  Password saved to DB does NOT match — login will fail!');
+    console.error('\n❌  Password saved to DB does NOT match  login will fail!');
     await app.close();
     process.exit(1);
   }
@@ -154,7 +154,7 @@ async function seedPublishingPaidStudent() {
   console.log(`🔐  Password   : ${STUDENT_PASSWORD}`);
   console.log(`📂  Category   : ${category.name}`);
   console.log(`🆔  User ID    : ${student!._id}`);
-  console.log(`💳  Payment    : USD ${PAYMENT_AMOUNT} — full payment (${USER_TIER})`);
+  console.log(`💳  Payment    : USD ${PAYMENT_AMOUNT}  full payment (${USER_TIER})`);
   console.log(`✔️   Login test : password verified against DB hash ✓`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');

@@ -492,7 +492,7 @@ export class BulkMessagingService {
         ];
         break;
       }
-      // 'all' — no extra filter applied
+      // 'all'  no extra filter applied
     }
   }
 

@@ -32,7 +32,7 @@ const fileUploadPipe = new ParseFilePipe({
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
-  /** POST /api/projects — submit a new document */
+  /** POST /api/projects  submit a new document */
   @Post()
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   async submit(
@@ -57,7 +57,7 @@ export class ProjectsController {
     return { success: true, message: 'Document submitted for review', data: project };
   }
 
-  /** GET /api/projects/my — student's own submissions */
+  /** GET /api/projects/my  student's own submissions */
   @Get('my')
   async mySubmissions(@Request() req: any) {
     const projects = await this.projectsService.getMySubmissions(
@@ -66,7 +66,7 @@ export class ProjectsController {
     return { success: true, data: projects };
   }
 
-  /** GET /api/projects/admin-resources — admin-uploaded docs for this fellow */
+  /** GET /api/projects/admin-resources  admin-uploaded docs for this fellow */
   @Get('admin-resources')
   async adminResources(@Request() req: any) {
     const projects = await this.projectsService.getAdminResourcesForFellow(
@@ -75,7 +75,7 @@ export class ProjectsController {
     return { success: true, data: projects };
   }
 
-  /** GET /api/projects — approved community documents (student-submitted) */
+  /** GET /api/projects  approved community documents (student-submitted) */
   @Get()
   async community(
     @Query('search') search?: string,
@@ -91,7 +91,7 @@ export class ProjectsController {
     return { success: true, data: projects };
   }
 
-  /** PUT /api/projects/:id — student updates own pending submission */
+  /** PUT /api/projects/:id  student updates own pending submission */
   @Put(':id')
   async update(@Request() req: any, @Param('id') id: string, @Body() body: any) {
     const tags = Array.isArray(body['tags[]'])
@@ -108,7 +108,7 @@ export class ProjectsController {
     return { success: true, message: 'Document updated', data: project };
   }
 
-  /** POST /api/projects/:id/rate — rate a community project */
+  /** POST /api/projects/:id/rate  rate a community project */
   @Post(':id/rate')
   async rate(
     @Request() req: any,
@@ -123,7 +123,7 @@ export class ProjectsController {
     return { success: true, data: project };
   }
 
-  /** DELETE /api/projects/:id — delete own pending submission */
+  /** DELETE /api/projects/:id  delete own pending submission */
   @Delete(':id')
   async remove(@Request() req: any, @Param('id') id: string) {
     await this.projectsService.deleteSubmission(id, req.user.id || req.user._id);
@@ -139,7 +139,7 @@ export class ProjectsController {
 export class AdminProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
-  /** POST /api/admin/projects/upload — admin uploads a resource for fellows */
+  /** POST /api/admin/projects/upload  admin uploads a resource for fellows */
   @Post('upload')
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   async uploadResource(
@@ -206,7 +206,7 @@ export class AdminProjectsController {
     return { success: true, data: project };
   }
 
-  /** DELETE /api/admin/projects/:id — admin deletes a resource */
+  /** DELETE /api/admin/projects/:id  admin deletes a resource */
   @Delete(':id')
   async remove(@Param('id') id: string) {
     await this.projectsService.adminDeleteResource(id);

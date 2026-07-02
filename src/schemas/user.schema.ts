@@ -212,6 +212,18 @@ export class User extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Category', default: null })
   pendingStudentCategoryId: Types.ObjectId;
 
+  // Pay-later enrollments (enrolled without payment, gets Module 1 teaser only)
+  @Prop([{
+    categoryId: { type: Types.ObjectId, ref: 'Category' },
+    tier: { type: String, enum: ['student', 'non-student'] },
+    enrolledAt: { type: Date, default: Date.now },
+  }])
+  payLaterEnrollments: Array<{ categoryId: Types.ObjectId; tier: string; enrolledAt: Date }>;
+
+  // Categories from which admin has manually locked user access
+  @Prop([{ type: Types.ObjectId, ref: 'Category' }])
+  lockedFromCategories: Types.ObjectId[];
+
   // Password management
   @Prop({ default: false })
   mustSetPassword: boolean; // Flag for admin-created users to set password on first login

@@ -59,10 +59,10 @@ export class Category extends Document {
   hasTieredPricing: boolean;
 
   @Prop({ default: 0 })
-  studentPrice: number; // USD — paid by verified students
+  studentPrice: number; // USD  paid by verified students
 
   @Prop({ default: 0 })
-  nonStudentPrice: number; // USD — paid by non-students
+  nonStudentPrice: number; // USD  paid by non-students
 }
 
 export const CategorySchema = SchemaFactory.createForClass(Category);

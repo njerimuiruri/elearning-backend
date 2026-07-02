@@ -74,7 +74,7 @@ export class CloudinaryService {
     const match = cloudinaryUrl.match(/\/raw\/upload\/(?:v\d+\/)?(.+)$/);
     if (!match) return cloudinaryUrl;
 
-    // For raw resources the extension IS part of the public_id — pass it as-is
+    // For raw resources the extension IS part of the public_id  pass it as-is
     const publicId = match[1];
     const dotPos = publicId.lastIndexOf('.');
     const format = dotPos !== -1 ? publicId.slice(dotPos + 1) : '';

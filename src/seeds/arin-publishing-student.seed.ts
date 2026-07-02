@@ -4,7 +4,7 @@
  * Usage:
  *   npx ts-node -r tsconfig-paths/register src/seeds/arin-publishing-student.seed.ts
  *
- * Re-running is safe — skips creation if email already exists
+ * Re-running is safe  skips creation if email already exists
  * and still updates the purchasedCategories assignment.
  */
 
@@ -60,7 +60,7 @@ async function seedPublishingStudent() {
 
   const check = await bcrypt.compare(STUDENT_PASSWORD, hashedPassword);
   if (!check) {
-    console.error('❌  bcrypt sanity check failed — aborting.');
+    console.error('❌  bcrypt sanity check failed  aborting.');
     await app.close();
     process.exit(1);
   }
@@ -70,7 +70,7 @@ async function seedPublishingStudent() {
   let student      = await userModel.findOne({ email: STUDENT_EMAIL.toLowerCase() });
 
   if (student) {
-    console.log(`ℹ️   Student already exists — updating password + category access.`);
+    console.log(`ℹ️   Student already exists  updating password + category access.`);
     await userModel.findByIdAndUpdate(student._id, {
       password: hashedPassword,
       mustSetPassword: false,
@@ -99,7 +99,7 @@ async function seedPublishingStudent() {
   const loginWorks = await bcrypt.compare(STUDENT_PASSWORD, saved!.password);
 
   if (!loginWorks) {
-    console.error('\n❌  Password saved to DB does NOT match — login will fail!');
+    console.error('\n❌  Password saved to DB does NOT match  login will fail!');
     await app.close();
     process.exit(1);
   }

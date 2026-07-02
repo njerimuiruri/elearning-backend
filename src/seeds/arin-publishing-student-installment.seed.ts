@@ -2,13 +2,13 @@
  * Seed a test student (student tier) who has paid Installment 1 for "ARIN Publishing Academy".
  *
  * Installment breakdown (student price = $100):
- *   Installment 1 — $50  → paid (grants immediate access)
- *   Installment 2 — $50  → still owed
+ *   Installment 1  $50  → paid (grants immediate access)
+ *   Installment 2  $50  → still owed
  *
  * Usage:
  *   npx ts-node -r tsconfig-paths/register src/seeds/arin-publishing-student-installment.seed.ts
  *
- * Re-running is safe — updates existing user and skips duplicate payment records.
+ * Re-running is safe  updates existing user and skips duplicate payment records.
  */
 
 import { NestFactory } from '@nestjs/core';
@@ -28,7 +28,7 @@ const STUDENT_FIRST    = 'Test';
 const STUDENT_LAST     = 'StudentInstallment';
 const CATEGORY_NAME    = 'Arin Publishing Academy';
 const STUDENT_FULL_PRICE   = 100; // USD full student price
-const INSTALLMENT_AMOUNT   = Math.round(STUDENT_FULL_PRICE * 0.5); // $50 — each installment is 50%
+const INSTALLMENT_AMOUNT   = Math.round(STUDENT_FULL_PRICE * 0.5); // $50  each installment is 50%
 const USER_TIER            = 'student';
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -68,7 +68,7 @@ async function seedStudentInstallment() {
   const hashedPassword = await bcrypt.hash(STUDENT_PASSWORD, 10);
   const check = await bcrypt.compare(STUDENT_PASSWORD, hashedPassword);
   if (!check) {
-    console.error('❌  bcrypt sanity check failed — aborting.');
+    console.error('❌  bcrypt sanity check failed  aborting.');
     await app.close();
     process.exit(1);
   }
@@ -78,7 +78,7 @@ async function seedStudentInstallment() {
   let student      = await userModel.findOne({ email: STUDENT_EMAIL.toLowerCase() });
 
   if (student) {
-    console.log(`ℹ️   Student already exists — updating password + category access.`);
+    console.log(`ℹ️   Student already exists  updating password + category access.`);
     await userModel.findByIdAndUpdate(student._id, {
       password:            hashedPassword,
       mustSetPassword:     false,
@@ -114,7 +114,7 @@ async function seedStudentInstallment() {
   });
 
   if (existingInstallment1) {
-    console.log(`ℹ️   Installment 1 payment record already exists — skipping.`);
+    console.log(`ℹ️   Installment 1 payment record already exists  skipping.`);
   } else {
     const fakeReference = `SEED-INST1-${crypto.randomUUID().replace(/-/g, '').toUpperCase().slice(0, 12)}`;
     await paymentModel.create({
@@ -130,12 +130,12 @@ async function seedStudentInstallment() {
       userTier:          USER_TIER,
       metadata: {
         seeded:    true,
-        note:      'Installment 1 — created by arin-publishing-student-installment.seed.ts',
+        note:      'Installment 1  created by arin-publishing-student-installment.seed.ts',
         createdAt: new Date().toISOString(),
       },
     });
     console.log(`✅  Installment 1 payment created: $${INSTALLMENT_AMOUNT} of $${STUDENT_FULL_PRICE} (${USER_TIER})`);
-    console.log(`⚠️   Installment 2 ($${INSTALLMENT_AMOUNT}) is still owed — access is granted but balance remains`);
+    console.log(`⚠️   Installment 2 ($${INSTALLMENT_AMOUNT}) is still owed  access is granted but balance remains`);
   }
 
   // ── 5. Verify saved password ───────────────────────────────────────────────
@@ -143,7 +143,7 @@ async function seedStudentInstallment() {
   const loginWorks = await bcrypt.compare(STUDENT_PASSWORD, saved!.password);
 
   if (!loginWorks) {
-    console.error('\n❌  Password saved to DB does NOT match — login will fail!');
+    console.error('\n❌  Password saved to DB does NOT match  login will fail!');
     await app.close();
     process.exit(1);
   }

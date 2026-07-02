@@ -1,5 +1,5 @@
 /**
- * Seed script — creates a test student and marks the first 6 published modules
+ * Seed script  creates a test student and marks the first 6 published modules
  * as completed so the student can access the capstone page.
  *
  * Run with:
@@ -29,7 +29,7 @@ async function run() {
   }).lean() as any;
 
   if (!category) {
-    console.warn('⚠️  Could not find "AI for Climate Resilience" category — fellow access will be missing');
+    console.warn('⚠️  Could not find "AI for Climate Resilience" category  fellow access will be missing');
   } else {
     console.log(`✅ Found category: ${category.name}`);
   }
@@ -83,7 +83,7 @@ async function run() {
       );
       console.log('✅ Student fellow data updated');
     } else {
-      console.log('ℹ️  Student already exists — reusing');
+      console.log('ℹ️  Student already exists  reusing');
     }
   }
 
@@ -99,7 +99,7 @@ async function run() {
     return;
   }
 
-  console.log(`📚 Found ${modules.length} published module(s) — marking all as completed`);
+  console.log(`📚 Found ${modules.length} published module(s)  marking all as completed`);
 
   // ── 3. Upsert a completed enrollment for each module ────────────────────
   for (const mod of modules) {

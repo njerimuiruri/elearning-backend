@@ -155,7 +155,7 @@ export class ModulesService {
       try {
         baseQuery.categoryId = new Types.ObjectId(filters.category);
       } catch {
-        // invalid ObjectId — return empty
+        // invalid ObjectId  return empty
         return { modules: [], total: 0, pages: 0 };
       }
     }
@@ -445,7 +445,7 @@ export class ModulesService {
     }
   }
 
-  /** Mark module content as finalized — unlocks Final Assessment for enrolled students. */
+  /** Mark module content as finalized  unlocks Final Assessment for enrolled students. */
   async finalizeContent(moduleId: string, actorId: string): Promise<Module> {
     const module = await this.moduleModel.findById(moduleId);
     if (!module) throw new NotFoundException('Module not found');
@@ -1510,7 +1510,7 @@ export class ModulesService {
 
   // ── PowerPoint builder ────────────────────────────────────────────────────
 
-  /** Build a .pptx file for a single lesson — one PowerPoint slide per content slide */
+  /** Build a .pptx file for a single lesson  one PowerPoint slide per content slide */
   private async buildLessonPptx(
     lesson: any,
     lessonIndex: number,
@@ -1993,7 +1993,7 @@ export class ModulesService {
       });
     }
 
-    // ── Lessons — one .pptx per lesson ───────────────────────────────────────
+    // ── Lessons  one .pptx per lesson ───────────────────────────────────────
     const lessons: any[] = (mod as any).lessons || [];
     for (let li = 0; li < lessons.length; li++) {
       const lesson = lessons[li];

@@ -198,7 +198,7 @@ export class ReminderService {
           student._id.toString(),
           NotificationType.INACTIVITY_REMINDER,
           'Continue Your Learning',
-          `You haven't visited "${course.title}" in a while. You're ${Math.round(enrollment.progress)}% through — keep going!`,
+          `You haven't visited "${course.title}" in a while. You're ${Math.round(enrollment.progress)}% through  keep going!`,
         )
         .catch(() => {});
 
@@ -265,7 +265,7 @@ export class ReminderService {
           student._id.toString(),
           NotificationType.INACTIVITY_REMINDER,
           'Continue Your Learning',
-          `You haven't visited "${module.title}" in a while. You're ${Math.round(enrollment.progress)}% through — keep going!`,
+          `You haven't visited "${module.title}" in a while. You're ${Math.round(enrollment.progress)}% through  keep going!`,
         )
         .catch(() => {});
 
@@ -515,7 +515,7 @@ export class ReminderService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // FELLOW DEADLINE REMINDERS — runs every Monday at 8 AM
+  // FELLOW DEADLINE REMINDERS  runs every Monday at 8 AM
   // ─────────────────────────────────────────────────────────────────────────────
 
   /**
@@ -603,7 +603,7 @@ export class ReminderService {
 
         const notifSubject = isDeadlineApproaching
           ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left in your fellowship`
-          : 'Keep going — your fellowship progress needs attention';
+          : 'Keep going  your fellowship progress needs attention';
 
         await this.notificationsService.createReminderNotification(
           (fellow._id as any).toString(),

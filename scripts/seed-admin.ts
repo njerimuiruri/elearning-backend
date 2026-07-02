@@ -42,7 +42,7 @@ async function run() {
 
   const existing = await User.findOne({ email: ADMIN_EMAIL });
   if (existing) {
-    console.log(`ℹ️  Admin with email "${ADMIN_EMAIL}" already exists — skipping.`);
+    console.log(`ℹ️  Admin with email "${ADMIN_EMAIL}" already exists  skipping.`);
     await mongoose.disconnect();
     return;
   }

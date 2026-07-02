@@ -58,7 +58,7 @@ export class Payment extends Document {
   @Prop()
   failureReason?: string;
 
-  // Tiered pricing — track whether student or non-student price was used
+  // Tiered pricing  track whether student or non-student price was used
   @Prop({ default: false })
   isStudentPrice?: boolean;
 

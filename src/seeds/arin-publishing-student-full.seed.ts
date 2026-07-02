@@ -1,7 +1,7 @@
 /**
  * Seed: Student who has paid IN FULL for "ARIN Publishing Academy".
  *
- * Payment: $100 USD — full payment, student tier.
+ * Payment: $100 USD  full payment, student tier.
  *
  * Usage:
  *   npx ts-node -r tsconfig-paths/register src/seeds/arin-publishing-student-full.seed.ts
@@ -54,7 +54,7 @@ async function seed() {
   let user             = await userModel.findOne({ email: STUDENT_EMAIL.toLowerCase() });
 
   if (user) {
-    console.log(`ℹ️   User already exists — updating.`);
+    console.log(`ℹ️   User already exists  updating.`);
     await userModel.findByIdAndUpdate(user._id, {
       password: hashedPassword, mustSetPassword: false,
       isActive: true, purchasedCategories: [categoryId], fellowData: null,
@@ -78,7 +78,7 @@ async function seed() {
   });
 
   if (existing) {
-    console.log(`ℹ️   Full payment record already exists — skipping.`);
+    console.log(`ℹ️   Full payment record already exists  skipping.`);
   } else {
     const ref = `SEED-SF-${crypto.randomUUID().replace(/-/g, '').toUpperCase().slice(0, 14)}`;
     await paymentModel.create({
@@ -94,7 +94,7 @@ async function seed() {
   const saved      = await userModel.findById(user!._id).select('+password');
   const loginWorks = await bcrypt.compare(STUDENT_PASSWORD, saved!.password);
   if (!loginWorks) {
-    console.error('❌  Password mismatch — login will fail!');
+    console.error('❌  Password mismatch  login will fail!');
     await app.close(); process.exit(1);
   }
 
@@ -105,7 +105,7 @@ async function seed() {
   console.log(`🔐  Password   : ${STUDENT_PASSWORD}`);
   console.log(`📂  Category   : ${category.name}`);
   console.log(`🆔  User ID    : ${user!._id}`);
-  console.log(`💳  Payment    : $${PAYMENT_AMOUNT} — full payment (${USER_TIER})`);
+  console.log(`💳  Payment    : $${PAYMENT_AMOUNT}  full payment (${USER_TIER})`);
   console.log(`✔️   Login test : password verified ✓`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');

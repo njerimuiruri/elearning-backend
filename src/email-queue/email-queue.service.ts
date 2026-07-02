@@ -23,7 +23,7 @@ export class EmailQueueService {
 
   /**
    * Adds a fellow invitation email job to the queue.
-   * Returns immediately — the worker processes it in the background.
+   * Returns immediately  the worker processes it in the background.
    */
   async enqueueFellowInvitation(data: FellowInvitationJobData): Promise<void> {
     await this.queue.add('send-fellow-invitation', data, {
@@ -54,7 +54,7 @@ export class EmailQueueService {
     this.logger.log(`Queued ${jobs.length} fellow invitation emails`);
   }
 
-  /** Returns current queue counts — useful for a status endpoint. */
+  /** Returns current queue counts  useful for a status endpoint. */
   async getQueueStatus() {
     const [waiting, active, completed, failed, delayed] = await Promise.all([
       this.queue.getWaitingCount(),

@@ -5,7 +5,7 @@
  *   cd /path/to/elearning-backend
  *   npx ts-node -r tsconfig-paths/register src/seeds/fellow.seed.ts
  *
- * Re-running is safe — it skips creation if the email already exists
+ * Re-running is safe  it skips creation if the email already exists
  * and still updates the category assignment.
  */
 
@@ -49,10 +49,10 @@ async function seedFellow() {
   // ── 2. Hash password ───────────────────────────────────────────────────────
   const hashedPassword = await bcrypt.hash(FELLOW_PASSWORD, 10);
 
-  // Quick sanity-check — confirm bcrypt works before saving
+  // Quick sanity-check  confirm bcrypt works before saving
   const check = await bcrypt.compare(FELLOW_PASSWORD, hashedPassword);
   if (!check) {
-    console.error('❌  bcrypt sanity check failed — password will not match at login. Aborting.');
+    console.error('❌  bcrypt sanity check failed  password will not match at login. Aborting.');
     await app.close();
     process.exit(1);
   }
@@ -62,7 +62,7 @@ async function seedFellow() {
   let   fellow      = await userModel.findOne({ email: FELLOW_EMAIL.toLowerCase() });
 
   if (fellow) {
-    console.log(`ℹ️   Fellow already exists — updating password + category assignment.`);
+    console.log(`ℹ️   Fellow already exists  updating password + category assignment.`);
     await userModel.findByIdAndUpdate(fellow._id, {
       password: hashedPassword,
       mustSetPassword: false,
@@ -103,7 +103,7 @@ async function seedFellow() {
   const loginWorks = await bcrypt.compare(FELLOW_PASSWORD, saved!.password);
 
   if (!loginWorks) {
-    console.error('\n❌  Password saved to DB does NOT match — login will fail!');
+    console.error('\n❌  Password saved to DB does NOT match  login will fail!');
     console.error('   This usually means another pre-save hook is re-hashing the password.');
     await app.close();
     process.exit(1);

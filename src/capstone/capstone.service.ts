@@ -365,7 +365,7 @@ export class CapstoneService {
     capstone.gradedAt = new Date();
 
     if (payload.feedback) {
-      this.pushComment(capstone, 'instructor', `Grade: ${grade}/100 — ${payload.feedback}`);
+      this.pushComment(capstone, 'instructor', `Grade: ${grade}/100  ${payload.feedback}`);
     }
 
     await capstone.save();
@@ -378,7 +378,7 @@ export class CapstoneService {
       capstone.studentName,
       NotificationType.CAPSTONE_STATUS_UPDATED,
       'Capstone Graded',
-      `Your capstone "${capstone.title}" has been graded: ${grade}/100 — ${passed ? 'Passed' : 'Did not pass'}.`,
+      `Your capstone "${capstone.title}" has been graded: ${grade}/100  ${passed ? 'Passed' : 'Did not pass'}.`,
       `/capstone`,
       capstone._id as Types.ObjectId,
       this.buildGradingEmail(capstone.studentName, capstone.title, grade, passed, payload.feedback),

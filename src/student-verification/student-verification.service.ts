@@ -23,7 +23,7 @@ export class StudentVerificationService {
   ) {}
 
   /**
-   * Upload student ID — sets verification status to pending.
+   * Upload student ID  sets verification status to pending.
    * categoryId is required when uploading before payment (new flow).
    * If the user already has a pendingStudentCategoryId from a prior payment it is preserved.
    */
@@ -193,7 +193,7 @@ export class StudentVerificationService {
       this.logger.warn(`Failed to send payment-ready email to ${user.email}: ${(err as any)?.message || String(err)}`);
     }
 
-    this.logger.log(`Student verification approved for user ${userId} — awaiting payment`);
+    this.logger.log(`Student verification approved for user ${userId}  awaiting payment`);
 
     return {
       success: true,

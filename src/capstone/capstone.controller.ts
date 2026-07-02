@@ -36,14 +36,14 @@ export class CapstoneController {
 
   // ── Student endpoints ──────────────────────────────────────────────────────
 
-  /** GET /api/capstone/my — student's own capstone record */
+  /** GET /api/capstone/my  student's own capstone record */
   @Get('my')
   @ApiOperation({ summary: "Get the authenticated student's capstone" })
   async getMyCapstone(@Request() req: any) {
     return this.capstoneService.getMyCapstone(req.user.id || req.user._id);
   }
 
-  /** POST /api/capstone — submit initial proposal (multipart) */
+  /** POST /api/capstone  submit initial proposal (multipart) */
   @Post()
   @UseInterceptors(FilesInterceptor('files', 3, multerOpts))
   @ApiOperation({ summary: 'Submit capstone proposal' })
@@ -67,7 +67,7 @@ export class CapstoneController {
     );
   }
 
-  /** PUT /api/capstone/:id/resubmit — resubmit after revision request (multipart) */
+  /** PUT /api/capstone/:id/resubmit  resubmit after revision request (multipart) */
   @Put(':id/resubmit')
   @UseInterceptors(FilesInterceptor('files', 3, multerOpts))
   @ApiOperation({ summary: 'Resubmit capstone proposal after revision' })
@@ -86,7 +86,7 @@ export class CapstoneController {
     );
   }
 
-  /** PUT /api/capstone/:id/implementation — upload final implementation files (multipart) */
+  /** PUT /api/capstone/:id/implementation  upload final implementation files (multipart) */
   @Put(':id/implementation')
   @UseInterceptors(FilesInterceptor('files', 3, multerOpts))
   @ApiOperation({ summary: 'Submit final project implementation' })
@@ -104,7 +104,7 @@ export class CapstoneController {
     );
   }
 
-  /** DELETE /api/capstone/:id — student withdraws their own submission */
+  /** DELETE /api/capstone/:id  student withdraws their own submission */
   @Delete(':id')
   @ApiOperation({ summary: 'Student withdraws their own capstone submission' })
   async withdrawCapstone(
@@ -118,7 +118,7 @@ export class CapstoneController {
   // NOTE: These static routes (/admin) are declared before the dynamic (:id)
   // routes so NestJS/Express matches them correctly.
 
-  /** GET /api/capstone/admin — list all submissions with optional filters */
+  /** GET /api/capstone/admin  list all submissions with optional filters */
   @Get('admin')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.INSTRUCTOR)
@@ -132,7 +132,7 @@ export class CapstoneController {
     });
   }
 
-  /** PUT /api/capstone/:id/approve — approve the proposal */
+  /** PUT /api/capstone/:id/approve  approve the proposal */
   @Put(':id/approve')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.INSTRUCTOR)
@@ -144,7 +144,7 @@ export class CapstoneController {
     return this.capstoneService.approveProposal(id, body.comment || '');
   }
 
-  /** PUT /api/capstone/:id/revision — request revision from student */
+  /** PUT /api/capstone/:id/revision  request revision from student */
   @Put(':id/revision')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.INSTRUCTOR)
@@ -156,7 +156,7 @@ export class CapstoneController {
     return this.capstoneService.requestRevision(id, body.comment);
   }
 
-  /** PUT /api/capstone/:id/reject — reject the capstone outright */
+  /** PUT /api/capstone/:id/reject  reject the capstone outright */
   @Put(':id/reject')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.INSTRUCTOR)
@@ -168,7 +168,7 @@ export class CapstoneController {
     return this.capstoneService.rejectCapstone(id, body.comment || '');
   }
 
-  /** POST /api/capstone/:id/comment — add inline feedback without changing status */
+  /** POST /api/capstone/:id/comment  add inline feedback without changing status */
   @Post(':id/comment')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.INSTRUCTOR)
@@ -180,7 +180,7 @@ export class CapstoneController {
     return this.capstoneService.addComment(id, body.comment);
   }
 
-  /** PUT /api/capstone/:id/grade — grade the final implementation */
+  /** PUT /api/capstone/:id/grade  grade the final implementation */
   @Put(':id/grade')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.INSTRUCTOR)
@@ -192,7 +192,7 @@ export class CapstoneController {
     return this.capstoneService.gradeCapstone(id, body);
   }
 
-  /** GET /api/capstone/:id — get a single capstone by ID (instructor/admin) */
+  /** GET /api/capstone/:id  get a single capstone by ID (instructor/admin) */
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.INSTRUCTOR)
@@ -201,7 +201,7 @@ export class CapstoneController {
     return this.capstoneService.getCapstoneById(id);
   }
 
-  /** DELETE /api/capstone/:id/force — instructor/admin force-deletes any submission */
+  /** DELETE /api/capstone/:id/force  instructor/admin force-deletes any submission */
   @Delete(':id/force')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.INSTRUCTOR)

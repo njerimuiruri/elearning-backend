@@ -272,6 +272,7 @@ export class AuthController {
         region: user.region,
         fellowData: user.fellowData,
         purchasedCategories: user.purchasedCategories,
+        payLaterEnrollments: (user as any).payLaterEnrollments || [],
         totalPoints: user.totalPoints,
         currentStreakDays: user.currentStreakDays,
         longestStreakDays: user.longestStreakDays,

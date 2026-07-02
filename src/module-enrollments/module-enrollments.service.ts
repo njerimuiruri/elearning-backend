@@ -180,7 +180,7 @@ export class ModuleEnrollmentsService {
 
     // ── Sequential order gate ─────────────────────────────────────────────────
     // Beginner modules are sequential: order N requires order N-1 to be completed.
-    // Intermediate and advanced modules are self-paced — students who have
+    // Intermediate and advanced modules are self-paced  students who have
     // unlocked the level can enroll in any module within it freely.
     // Optional modules are also exempt from sequential gating.
     const isSequentiallyGated =
@@ -230,7 +230,7 @@ export class ModuleEnrollmentsService {
       category._id.toString(),
     );
 
-    // Resolve lessons — prefer direct lessons[], fall back to topics
+    // Resolve lessons  prefer direct lessons[], fall back to topics
     const allLessons =
       module.lessons && module.lessons.length > 0
         ? [...module.lessons].sort(
@@ -388,11 +388,11 @@ export class ModuleEnrollmentsService {
   // ── NEW: Get fresh, server-derived enrollment progress ────────────────────
   /**
    * Single source of truth for the frontend.
-   * Derives every UI-visible state from the database — never from a cached flag.
+   * Derives every UI-visible state from the database  never from a cached flag.
    *
    * Returns:
-   *  lessonStates[]   — per-lesson { isCompleted, isAccessible, isLocked }
-   *  nextLessonIndex  — lowest-index incomplete & accessible lesson
+   *  lessonStates[]    per-lesson { isCompleted, isAccessible, isLocked }
+   *  nextLessonIndex   lowest-index incomplete & accessible lesson
    *  completedLessons / totalLessons / progress (%)
    */
   async getEnrollmentProgress(enrollmentId: string, studentId: string) {
@@ -414,7 +414,7 @@ export class ModuleEnrollmentsService {
     const totalLessons = lessons.length;
     const generation = enrollment.moduleRepeatGeneration ?? 0;
 
-    // Fetch all completions for the current repeat generation — O(lessons) query
+    // Fetch all completions for the current repeat generation  O(lessons) query
     const completionDocs = await this.lessonCompletionModel.find({
       enrollmentId: new Types.ObjectId(enrollmentId),
       repeatGeneration: generation,
@@ -559,7 +559,7 @@ export class ModuleEnrollmentsService {
    * Properties:
    *  - Idempotent: calling it twice for the same lesson is safe (upsert).
    *  - Append-only: never sets any flag to false, never overwrites a completion.
-   *  - Atomic counter update: uses $inc / $set on specific fields — never saves
+   *  - Atomic counter update: uses $inc / $set on specific fields  never saves
    *    the full enrollment document, so it cannot race with trackSlideProgress.
    *
    * Returns the fresh progress state (same shape as getEnrollmentProgress).
@@ -588,9 +588,9 @@ export class ModuleEnrollmentsService {
 
     const generation = enrollment.moduleRepeatGeneration ?? 0;
 
-    // Upsert — creates the record only if it doesn't exist yet.
+    // Upsert  creates the record only if it doesn't exist yet.
     // $setOnInsert means: if the document is being INSERTED (not updated), apply these fields.
-    // If the document already existed, the operation is a no-op — nothing changes.
+    // If the document already existed, the operation is a no-op  nothing changes.
     const upsertResult = await this.lessonCompletionModel.findOneAndUpdate(
       { enrollmentId: new Types.ObjectId(enrollmentId), lessonIndex, repeatGeneration: generation },
       {
@@ -623,7 +623,7 @@ export class ModuleEnrollmentsService {
       const newProgress =
         totalLessons > 0 ? Math.min(100, Math.round((completedCount / totalLessons) * 100)) : 0;
 
-      // Atomic field-level update — never touches the rest of the document
+      // Atomic field-level update  never touches the rest of the document
       const atomicUpdate: Record<string, any> = {
         $set: {
           completedLessons: completedCount,
@@ -656,7 +656,7 @@ export class ModuleEnrollmentsService {
           atomicUpdate.$set.completedAt = new Date();
           atomicUpdate.$set.certificateEarned = false; // no cert without final assessment
           shouldUpdateProgressionForModuleCompletion = true;
-          console.log(`[markLessonCompleted] Auto-completing enrollment ${enrollmentId} — no final assessment`);
+          console.log(`[markLessonCompleted] Auto-completing enrollment ${enrollmentId}  no final assessment`);
         }
       }
 
@@ -740,7 +740,7 @@ export class ModuleEnrollmentsService {
       (lp) => lp.lessonIndex === lessonIndex,
     );
     if (!lessonProgress) {
-      // If missing, this is an older enrollment — add it
+      // If missing, this is an older enrollment  add it
       (enrollment.lessonProgress as any).push({
         lessonIndex,
         isCompleted: false,
@@ -1010,7 +1010,7 @@ export class ModuleEnrollmentsService {
 
     const module = enrollment.moduleId as any;
 
-    // Resolve lessons — prefer direct lessons[], fall back to topics
+    // Resolve lessons  prefer direct lessons[], fall back to topics
     const allLessons: any[] =
       module.lessons && module.lessons.length > 0
         ? [...module.lessons].sort(
@@ -1057,7 +1057,7 @@ export class ModuleEnrollmentsService {
           : 0;
     }
 
-    // Guard: assessment already passed — no re-submission needed
+    // Guard: assessment already passed  no re-submission needed
     if (lessonProgress.assessmentPassed) {
       throw new BadRequestException('You have already passed this assessment.');
     }
@@ -1071,7 +1071,7 @@ export class ModuleEnrollmentsService {
       );
     }
 
-    // Normalise QuizQuestion fields — use .toObject() to get a plain JS object
+    // Normalise QuizQuestion fields  use .toObject() to get a plain JS object
     // (Mongoose subdocuments don't spread cleanly: arrays like `options` get lost with { ...q })
     const normalizedQuestions = (lesson.assessmentQuiz || []).map((q: any) => {
       const plain = typeof q.toObject === 'function' ? q.toObject() : { ...q };
@@ -1104,7 +1104,7 @@ export class ModuleEnrollmentsService {
       answersMap[String(a.questionIndex)] = String(a.answer);
     });
     lessonProgress.lastAnswers = answersMap;
-    // Mixed (Object) fields aren't auto-tracked by Mongoose — must mark as modified
+    // Mixed (Object) fields aren't auto-tracked by Mongoose  must mark as modified
     enrollment.markModified('lessonProgress');
     console.log(
       `[submitLessonAssessment] Saved lastAnswers | lesson=${lessonIndex} | passed=${passed} | answersCount=${Object.keys(answersMap).length}`,
@@ -1142,7 +1142,7 @@ export class ModuleEnrollmentsService {
     } else {
       // ── FAIL ─────────────────────────────────────────────────────────────
       if (maxAttempts > 0 && lessonProgress.assessmentAttempts >= maxAttempts) {
-        // Max attempts exhausted — reset this lesson so student must redo it
+        // Max attempts exhausted  reset this lesson so student must redo it
         lessonResetRequired = true;
         lessonProgress.isCompleted = false;
         lessonProgress.completedAt = undefined;
@@ -1248,7 +1248,7 @@ export class ModuleEnrollmentsService {
       throw new BadRequestException('Module has no final assessment');
     }
 
-    // Check if all lessons are completed — recompute from lessonProgress to avoid
+    // Check if all lessons are completed  recompute from lessonProgress to avoid
     // stale stored-counter issues (e.g. counter not updated if lessons were added
     // after enrolment, or a save race condition).
     const freshCompleted = enrollment.lessonProgress.filter((lp) => lp.isCompleted).length;
@@ -1264,12 +1264,12 @@ export class ModuleEnrollmentsService {
 
     const maxAttempts = module.finalAssessment.maxAttempts ?? 3;
 
-    // Cooldown guard — active after exhausting a round of attempts
+    // Cooldown guard  active after exhausting a round of attempts
     if (enrollment.assessmentCooldownUntil && enrollment.assessmentCooldownUntil > new Date()) {
       const remainingMs = enrollment.assessmentCooldownUntil.getTime() - Date.now();
       const remainingMins = Math.ceil(remainingMs / 60000);
       console.log(
-        `[submitFinalAssessment] Cooldown active for enrollment ${enrollment._id} — ${remainingMins} min(s) remaining`,
+        `[submitFinalAssessment] Cooldown active for enrollment ${enrollment._id}  ${remainingMins} min(s) remaining`,
       );
       throw new BadRequestException(
         `Please review the lessons before retrying. Cooldown expires in ${remainingMins} minute(s).`,
@@ -1281,7 +1281,7 @@ export class ModuleEnrollmentsService {
       enrollment.finalAssessmentAttempts = 0;
       enrollment.assessmentCooldownUntil = undefined;
       console.log(
-        `[submitFinalAssessment] Cooldown passed — resetting attempt counter for enrollment ${enrollment._id}`,
+        `[submitFinalAssessment] Cooldown passed  resetting attempt counter for enrollment ${enrollment._id}`,
       );
     }
 
@@ -1461,7 +1461,7 @@ export class ModuleEnrollmentsService {
 
     await enrollment.save();
 
-    // Strip correct answers from results when the student did not pass —
+    // Strip correct answers from results when the student did not pass 
     // prevents answer harvesting by inspecting the network response.
     const sanitizedResults = passed
       ? results
@@ -1598,7 +1598,7 @@ export class ModuleEnrollmentsService {
       );
       levelUnlocked = progressionResult.levelUnlocked;
 
-      // Email student — passed
+      // Email student  passed
       if (student?.email) {
         await this.emailService
           .sendEssayGradingResultToStudent(
@@ -1645,7 +1645,7 @@ export class ModuleEnrollmentsService {
         maxAttempts > 0 &&
         enrollment.finalAssessmentAttempts >= maxAttempts
       ) {
-        // Max attempts exhausted — force module repeat
+        // Max attempts exhausted  force module repeat
         requiresModuleRepeat = true;
         enrollment.requiresModuleRepeat = true;
         enrollment.moduleRepeatCount = (enrollment.moduleRepeatCount || 0) + 1;
@@ -1663,7 +1663,7 @@ export class ModuleEnrollmentsService {
         enrollment.finalAssessmentAttempts = 0;
       }
 
-      // Email student — failed
+      // Email student  failed
       if (student?.email) {
         await this.emailService
           .sendEssayGradingResultToStudent(
@@ -1685,7 +1685,7 @@ export class ModuleEnrollmentsService {
           student._id.toString(),
           NotificationType.ESSAY_GRADED,
           requiresModuleRepeat
-            ? 'Essay Assessment — Module Repeat Required'
+            ? 'Essay Assessment  Module Repeat Required'
             : 'Essay Assessment Reviewed',
           failMessage,
         );
@@ -1721,7 +1721,7 @@ export class ModuleEnrollmentsService {
     const moduleMap = new Map(modules.map((m) => [m._id.toString(), m]));
     if (moduleMap.size === 0) return [];
 
-    // 2. Build enrollment query — only enrollments that have been attempted
+    // 2. Build enrollment query  only enrollments that have been attempted
     const enrollmentQuery: any = {
       moduleId: {
         $in: Array.from(moduleMap.keys()).map((id) => new Types.ObjectId(id)),
@@ -1925,7 +1925,7 @@ export class ModuleEnrollmentsService {
       } else {
         // Essay / short-answer / no answer key → manual grading
         console.log(
-          `[gradeAssessment] Q${i} | type="${question.type ?? 'no-type'}" | no answer key or essay — manual grading, scored 0`,
+          `[gradeAssessment] Q${i} | type="${question.type ?? 'no-type'}" | no answer key or essay  manual grading, scored 0`,
         );
         result.isCorrect = false;
         result.pointsEarned = 0;
@@ -1960,7 +1960,7 @@ export class ModuleEnrollmentsService {
     return { message: 'Enrollment deleted', deletedId: enrollmentId };
   }
 
-  /** Delete ALL enrollments for a student — full fresh-start reset (admin only). */
+  /** Delete ALL enrollments for a student  full fresh-start reset (admin only). */
   async adminResetStudentEnrollments(studentId: string) {
     if (!Types.ObjectId.isValid(studentId)) {
       throw new BadRequestException('Invalid student ID');
@@ -1985,7 +1985,7 @@ export class ModuleEnrollmentsService {
     });
 
     return {
-      message: `Reset complete — ${result.deletedCount} enrollment(s) removed for student ${studentId}`,
+      message: `Reset complete  ${result.deletedCount} enrollment(s) removed for student ${studentId}`,
       deletedCount: result.deletedCount,
     };
   }

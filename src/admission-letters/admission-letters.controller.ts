@@ -141,7 +141,7 @@ export class AdmissionLettersController {
     return this.service.deleteLog(id);
   }
 
-  // ─── Public: Inline file viewer (no auth — linked from email) ───────────────
+  // ─── Public: Inline file viewer (no auth  linked from email) ───────────────
 
   @Get('view/:templateId')
   @Public()
@@ -152,11 +152,11 @@ export class AdmissionLettersController {
     return this.service.streamTemplate(templateId, res);
   }
 
-  // ─── Public Tracking Endpoints (no auth — email client requests) ──────────
+  // ─── Public Tracking Endpoints (no auth  email client requests) ──────────
 
   @Get('track/:token/pixel.png')
   async trackOpen(@Param('token') token: string, @Res() res: Response) {
-    // Fire and forget — never block the image response
+    // Fire and forget  never block the image response
     this.service.recordOpen(token);
 
     // 1×1 transparent PNG

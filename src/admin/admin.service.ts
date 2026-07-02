@@ -28,6 +28,7 @@ import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
 import { ModuleCertificate } from '../schemas/module-certificate.schema';
 import { Category } from '../schemas/category.schema';
 import { Microgrant, MicrograntStatus } from '../schemas/microgrant.schema';
+import { BankPayment, BankPaymentStatus } from '../schemas/bank-payment.schema';
 import { EmailService } from '../common/services/email.service';
 import { EmailQueueService } from '../email-queue/email-queue.service';
 import { CreateModuleDto } from '../modules/dto/create-module.dto';
@@ -74,6 +75,7 @@ export class AdminService {
     private moduleCertificateModel: Model<ModuleCertificate>,
     @InjectModel(Category.name) private categoryModel: Model<Category>,
     @InjectModel(Microgrant.name) private micrograntModel: Model<Microgrant>,
+    @InjectModel(BankPayment.name) private bankPaymentModel: Model<BankPayment>,
     private emailService: EmailService,
     private emailQueueService: EmailQueueService,
   ) {}
@@ -977,6 +979,8 @@ export class AdminService {
       category,
       phoneNumber,
       sendEmail,
+      tier = 'non-student',
+      accessType = 'full', // 'full' | 'pay_later'
     } = dto;
 
     if (!email) throw new BadRequestException('Email is required');
@@ -989,6 +993,9 @@ export class AdminService {
 
     const temporaryPassword = crypto.randomBytes(8).toString('hex');
     const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+
+    const isPayLater = accessType === 'pay_later' && !!category;
+    const catObjId = category ? new Types.ObjectId(category) : null;
 
     const fellow = await this.userModel.create({
       fullName: fullName || `${firstName || ''} ${lastName || ''}`.trim(),
@@ -1004,13 +1011,18 @@ export class AdminService {
       isActive: true,
       mustSetPassword: true,
       invitationEmailSent: false,
+      // Pay-later: Module 1 teaser only — no full category access
+      payLaterEnrollments: isPayLater
+        ? [{ categoryId: catObjId, tier, enrolledAt: new Date() }]
+        : [],
       fellowData: {
         fellowId: `FELLOW-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
         cohort: new Date().getFullYear().toString(),
         deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         requiredCourses: [],
         fellowshipStatus: FellowshipStatus.ACTIVE,
-        assignedCategories: category ? [new Types.ObjectId(category)] : [],
+        // Full access only if NOT pay-later
+        assignedCategories: (!isPayLater && catObjId) ? [catObjId] : [],
         region: region || null,
         track: track || null,
       },
@@ -1033,7 +1045,7 @@ export class AdminService {
       'UserPlus',
     );
 
-    // Send email in the background — never block the HTTP response waiting for SMTP
+    // Send email in the background  never block the HTTP response waiting for SMTP
     if (sendEmail) {
       this.emailService
         .sendFellowInvitationEmail(
@@ -2643,7 +2655,7 @@ export class AdminService {
         }),
         this.userModel.countDocuments({ role: UserRole.STUDENT }),
 
-        // Top students by engagement score — uses ModuleEnrollment
+        // Top students by engagement score  uses ModuleEnrollment
         this.moduleEnrollmentModel.aggregate([
           {
             $group: {
@@ -2685,7 +2697,7 @@ export class AdminService {
           },
         ]),
 
-        // At-risk students — uses ModuleEnrollment
+        // At-risk students  uses ModuleEnrollment
         this.moduleEnrollmentModel.aggregate([
           {
             $match: {
@@ -3790,7 +3802,7 @@ export class AdminService {
   }
 
   /**
-   * GET /admin/fellows/progress — list all fellows with real progress data.
+   * GET /admin/fellows/progress  list all fellows with real progress data.
    * Supports filters: status, category, cohort, risk, search, page, limit.
    */
   async getFellowsProgress(filters: {
@@ -4032,7 +4044,7 @@ export class AdminService {
   }
 
   /**
-   * GET /admin/fellows/:id/progress — full progress detail for one fellow.
+   * GET /admin/fellows/:id/progress  full progress detail for one fellow.
    */
   async getFellowProgressDetail(fellowId: string) {
     const fellow = await this.userModel
@@ -4221,25 +4233,25 @@ export class AdminService {
       case 'allow_proceed':
         updateFields = { isActive: true, 'fellowData.isSuspended': false };
         activityMessage = `Fellow ${name} marked as eligible to proceed`;
-        emailSubject = 'You are eligible to proceed — ARIN Fellowship';
+        emailSubject = 'You are eligible to proceed  ARIN Fellowship';
         emailBody = `Dear ${fellow.firstName},\n\nGreat news! The admin has reviewed your progress and confirmed you are eligible to continue to the next stage of your fellowship.\n\n${note ? `Note from admin: ${note}\n\n` : ''}Keep up the excellent work!\n\nARIN eLearning Team`;
         break;
       case 'suspend':
         updateFields = { 'fellowData.isSuspended': true };
         activityMessage = `Fellow ${name} suspended`;
-        emailSubject = 'Your Fellowship Access Has Been Suspended — ARIN Academy';
+        emailSubject = 'Your Fellowship Access Has Been Suspended  ARIN Academy';
         emailBody = `Dear ${fellow.firstName},\n\nYour access to the fellowship modules has been temporarily suspended by an administrator.\n\n${note ? `Reason: ${note}\n\n` : ''}Please contact us if you have any questions.\n\nARIN eLearning Team`;
         break;
       case 'unsuspend':
         updateFields = { 'fellowData.isSuspended': false };
         activityMessage = `Fellow ${name} unsuspended (access restored)`;
-        emailSubject = 'Your Fellowship Access Has Been Restored — ARIN Academy';
+        emailSubject = 'Your Fellowship Access Has Been Restored  ARIN Academy';
         emailBody = `Dear ${fellow.firstName},\n\nYour access to the fellowship modules has been restored. You may now continue your learning journey.\n\n${note ? `Note from admin: ${note}\n\n` : ''}Welcome back!\n\nARIN eLearning Team`;
         break;
       case 'deactivate':
         updateFields = { isActive: false, 'fellowData.isSuspended': true };
         activityMessage = `Fellow ${name} deactivated due to insufficient progress`;
-        emailSubject = 'Fellowship Status Update — ARIN Academy';
+        emailSubject = 'Fellowship Status Update  ARIN Academy';
         emailBody = `Dear ${fellow.firstName},\n\nAfter reviewing your progress, we regret to inform you that your access to the fellowship programme has been deactivated.\n\n${note ? `Reason: ${note}\n\n` : ''}If you believe this is an error or would like to discuss this decision, please contact us.\n\nARIN eLearning Team`;
         break;
       case 'mark_completed':
@@ -4247,7 +4259,7 @@ export class AdminService {
           'fellowData.fellowshipStatus': FellowshipStatus.COMPLETED,
         };
         activityMessage = `Fellow ${name} marked as completed`;
-        emailSubject = 'Congratulations — Fellowship Completed!';
+        emailSubject = 'Congratulations  Fellowship Completed!';
         emailBody = `Dear ${fellow.firstName},\n\nCongratulations! You have successfully completed the ARIN Fellowship programme.\n\n${note ? `Message from admin: ${note}\n\n` : ''}We are proud of your achievement and look forward to seeing your continued growth.\n\nARIN eLearning Team`;
         break;
     }
@@ -4280,7 +4292,7 @@ export class AdminService {
   }
 
   /**
-   * GET /admin/fellows/progress/stats — aggregate overview stats for the progress dashboard.
+   * GET /admin/fellows/progress/stats  aggregate overview stats for the progress dashboard.
    */
   async getFellowProgressStats() {
     const now = Date.now();
@@ -4563,7 +4575,7 @@ export class AdminService {
     const mod = enrollment.moduleId as any;
     const modLevel = mod?.level || 'beginner';
 
-    // Check ModuleCertificate collection (authoritative) — also catches cases where
+    // Check ModuleCertificate collection (authoritative)  also catches cases where
     // the certificateEarned flag on enrollment fell out of sync
     const existingCert = await this.moduleCertificateModel.findOne({
       studentId: enrollment.studentId,
@@ -4665,16 +4677,16 @@ export class AdminService {
     const completedModules = enrollments.filter((e) => e.isCompleted).length;
     const totalModules = enrollments.length || 1;
 
-    // Assessment score — average of all module finalAssessmentScore values
+    // Assessment score  average of all module finalAssessmentScore values
     const scored = enrollments.filter((e) => (e.finalAssessmentScore ?? 0) > 0);
     const assessmentScore = scored.length > 0
       ? Math.round(scored.reduce((s, e) => s + (e.finalAssessmentScore || 0), 0) / scored.length)
       : 0;
 
-    // Engagement — % of modules completed
+    // Engagement  % of modules completed
     const engagementScore = Math.round((completedModules / totalModules) * 100);
 
-    // Activity — recency of last login (100 = today, 0 = 90+ days)
+    // Activity  recency of last login (100 = today, 0 = 90+ days)
     const lastLogin = fellow.lastLogin ? new Date(fellow.lastLogin) : null;
     const daysSinceLastLogin = lastLogin
       ? Math.floor((Date.now() - lastLogin.getTime()) / 86400000)
@@ -4768,8 +4780,8 @@ export class AdminService {
         studentId: sid,
         name: `${fellow.firstName || ''} ${fellow.lastName || ''}`.trim() || 'Unknown',
         email: fellow.email,
-        cohort: fellow.fellowData?.cohort || '—',
-        track: fellow.fellowData?.track || '—',
+        cohort: fellow.fellowData?.cohort || '',
+        track: fellow.fellowData?.track || '',
         profileImage: (fellow as any).profileImage || null,
         lastLogin: fellow.lastLogin || null,
         ...scores,
@@ -4846,7 +4858,7 @@ export class AdminService {
         const name = `${(fellow as any).firstName || ''} ${(fellow as any).lastName || ''}`.trim();
         this.emailService.sendCustomEmail(
           (fellow as any).email,
-          'Congratulations — You Have Been Awarded a Mini-Grant!',
+          'Congratulations  You Have Been Awarded a Mini-Grant!',
           `Dear ${(fellow as any).firstName || 'Fellow'},\n\nWe are pleased to inform you that you have been awarded a mini-grant of ${currency} ${amount.toLocaleString()} in recognition of your outstanding performance, engagement, and commitment to the ARIN Fellowship programme.\n\nKeep up the excellent work!\n\nARIN eLearning Team`,
         ).catch((e) => console.error('Mini-grant email failed:', e.message));
 
@@ -4898,14 +4910,14 @@ export class AdminService {
         id: g.studentId?._id?.toString(),
         name: `${g.studentId?.firstName || ''} ${g.studentId?.lastName || ''}`.trim(),
         email: g.studentId?.email,
-        cohort: g.studentId?.fellowData?.cohort || '—',
+        cohort: g.studentId?.fellowData?.cohort || '',
       },
-      category: g.categoryId?.name || '—',
+      category: g.categoryId?.name || '',
       amount: g.amount,
       currency: g.currency,
       status: g.status,
       criteriaSnapshot: g.criteriaSnapshot,
-      issuedBy: g.issuedBy ? `${g.issuedBy.firstName} ${g.issuedBy.lastName}` : '—',
+      issuedBy: g.issuedBy ? `${g.issuedBy.firstName} ${g.issuedBy.lastName}` : '',
       issuedAt: g.issuedAt,
       notes: g.notes,
       createdAt: g.createdAt,
@@ -5030,7 +5042,7 @@ export class AdminService {
         },
       ]),
 
-      // 5. Level champions — top student per level
+      // 5. Level champions  top student per level
       this.moduleEnrollmentModel.aggregate([
         { $lookup: { from: 'modules', localField: 'moduleId', foreignField: '_id', as: 'module' } },
         { $unwind: { path: '$module', preserveNullAndEmptyArrays: false } },
@@ -5165,7 +5177,7 @@ export class AdminService {
       advanced:     { total: 0, issued: 0, pending: 0 },
     };
 
-    // Delegate directly to getModuleCertificates() — the exact same function
+    // Delegate directly to getModuleCertificates()  the exact same function
     // that powers the Certificates management page. This guarantees identical numbers.
     try {
       const result = await this.getModuleCertificates();
@@ -5310,10 +5322,10 @@ export class AdminService {
       { $sort: { totalEnrollments: -1 } },
     ]);
 
-    // ── 3. Certificate stats — uses same data source as Admin Certificates page ──
+    // ── 3. Certificate stats  uses same data source as Admin Certificates page ──
     const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
-    // Call getModuleCertificates() — the authoritative source for issued/pending counts
+    // Call getModuleCertificates()  the authoritative source for issued/pending counts
     // so the analytics always matches what admin sees on the Certificates page
     let certLevelSummary = {
       beginnerTotal: 0, beginnerIssued: 0, beginnerPending: 0,
@@ -5339,7 +5351,7 @@ export class AdminService {
         totalPending:        allStudents.filter((s: any) => s.status === 'pending').length,
         totalLevelCompletions: allStudents.length,
       };
-    } catch (_) { /* getModuleCertificates failed — defaults to 0 */ }
+    } catch (_) { /* getModuleCertificates failed  defaults to 0 */ }
 
     // Monthly cert issuance trend from ModuleCertificate.issuedDate
     let certMonthlyRaw: any[] = [];
@@ -5528,5 +5540,396 @@ export class AdminService {
         grading: { totalPendingGrading: 0, instructorLeaderboard: [] },
       };
     }
+  }
+
+  // ─── Bank Payment Methods ──────────────────────────────────────────────────
+
+  private computeBalance(amountDue: number, amountPaid: number): number {
+    return Math.max(0, amountDue - amountPaid);
+  }
+
+  private deriveStatus(amountDue: number, amountPaid: number, explicitStatus?: string): string {
+    if (explicitStatus) return explicitStatus;
+    if (amountPaid <= 0) return BankPaymentStatus.PENDING;
+    if (amountPaid >= amountDue) return BankPaymentStatus.PAID;
+    return BankPaymentStatus.PARTIAL;
+  }
+
+  private async grantPublishingAccess(userId: Types.ObjectId, categoryId: Types.ObjectId) {
+    await this.userModel.findByIdAndUpdate(userId, {
+      $addToSet: { purchasedCategories: categoryId },
+    });
+  }
+
+  private async revokePublishingAccess(userId: Types.ObjectId, categoryId: Types.ObjectId) {
+    await this.userModel.findByIdAndUpdate(userId, {
+      $pull: { purchasedCategories: categoryId },
+    });
+  }
+
+  async createBankPayment(dto: {
+    categoryId: string;
+    fullName: string;
+    email: string;
+    gender?: string;
+    nationality?: string;
+    phoneNumber?: string;
+    institution?: string;
+    participantCategory?: string;
+    amountDue: number;
+    amountPaid: number;
+    paymentStatus?: string;
+    tranche?: string;
+    dateOfPayment?: string;
+    comments?: string;
+    sendEmail?: boolean;
+  }) {
+    const {
+      categoryId, fullName, email, gender, nationality, phoneNumber,
+      institution, participantCategory, amountDue, amountPaid,
+      paymentStatus, tranche, dateOfPayment, comments, sendEmail,
+    } = dto;
+
+    if (!email) throw new BadRequestException('Email is required');
+    if (!categoryId) throw new BadRequestException('Category is required');
+
+    const balance = this.computeBalance(amountDue, amountPaid);
+    const status = this.deriveStatus(amountDue, amountPaid, paymentStatus);
+    const catObjId = new Types.ObjectId(categoryId);
+
+    // Find or create user
+    let user = await this.userModel.findOne({ email });
+    let isNewUser = false;
+    let temporaryPassword: string | null = null;
+
+    if (!user) {
+      isNewUser = true;
+      temporaryPassword = crypto.randomBytes(8).toString('hex');
+      const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+      const nameParts = fullName.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      user = await this.userModel.create({
+        fullName: fullName.trim(),
+        firstName,
+        lastName,
+        email,
+        gender: gender || null,
+        phoneNumber: phoneNumber || null,
+        password: hashedPassword,
+        role: UserRole.STUDENT,
+        userType: 'fellow',
+        isActive: true,
+        mustSetPassword: true,
+        invitationEmailSent: false,
+        fellowData: {
+          fellowId: `FELLOW-${Date.now()}-${Math.random().toString(36).substr(2, 5).toUpperCase()}`,
+          cohort: new Date().getFullYear().toString(),
+          deadline: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          requiredCourses: [],
+          fellowshipStatus: FellowshipStatus.ACTIVE,
+          assignedCategories: [],
+        },
+      });
+
+      const setupToken = crypto.randomBytes(32).toString('hex');
+      await this.passwordResetModel.create({
+        userId: user._id,
+        email,
+        token: crypto.createHash('sha256').update(setupToken).digest('hex'),
+      });
+
+      // Always send invitation email for new users
+      this.emailService
+        .sendFellowInvitationEmail(email, firstName || 'Fellow', temporaryPassword, {
+          cohort: user.fellowData.cohort,
+          setupToken,
+        })
+        .then((result) => {
+          if (result?.success) {
+            return this.userModel.findByIdAndUpdate(user!._id, {
+              invitationEmailSent: true,
+              invitationEmailSentAt: new Date(),
+            });
+          }
+        })
+        .catch((err) => console.error('Invite email failed:', err.message));
+    } else {
+      const firstName = user.firstName || fullName.trim().split(' ')[0] || 'Fellow';
+
+      if ((user as any).mustSetPassword) {
+        // User exists but has never set their own password (was previously created manually)
+        // Reset to a fresh temp password and resend full invitation
+        temporaryPassword = crypto.randomBytes(8).toString('hex');
+        const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+        await this.userModel.findByIdAndUpdate(user._id, {
+          password: hashedPassword,
+          mustSetPassword: true,
+        });
+
+        const setupToken = crypto.randomBytes(32).toString('hex');
+        await this.passwordResetModel.create({
+          userId: user._id,
+          email,
+          token: crypto.createHash('sha256').update(setupToken).digest('hex'),
+        });
+
+        this.emailService
+          .sendFellowInvitationEmail(email, firstName, temporaryPassword, {
+            cohort: (user as any).fellowData?.cohort || new Date().getFullYear().toString(),
+            setupToken,
+          })
+          .then((result) => {
+            if (result?.success) {
+              return this.userModel.findByIdAndUpdate(user!._id, {
+                invitationEmailSent: true,
+                invitationEmailSentAt: new Date(),
+              });
+            }
+          })
+          .catch((err) => console.error('Invite email failed for existing user:', err.message));
+      } else {
+        // User already has an active account (registered via Paystack or set their own password)
+        // Do NOT touch their password — just notify them appropriately
+        if (paymentStatus === BankPaymentStatus.PAY_LATER) {
+          // Notify them that Module 1 is now available
+          this.emailService
+            .sendAcademyRegistrationEmail(email, firstName)
+            .catch((err) => console.error('Academy registration email failed:', err.message));
+        } else {
+          this.emailService
+            .sendBankPaymentConfirmationEmail(email, firstName, amountPaid, status)
+            .catch((err) => console.error('Payment confirmation email failed:', err.message));
+        }
+      }
+    }
+
+    const record = await this.bankPaymentModel.create({
+      userId: user._id,
+      categoryId: catObjId,
+      fullName: fullName.trim(),
+      email,
+      gender: gender || null,
+      nationality: nationality || null,
+      phoneNumber: phoneNumber || null,
+      institution: institution || null,
+      participantCategory: participantCategory || null,
+      amountDue,
+      amountPaid,
+      balance,
+      paymentStatus: status,
+      tranche: tranche || null,
+      dateOfPayment: dateOfPayment ? new Date(dateOfPayment) : null,
+      comments: comments || null,
+    });
+
+    if (status === BankPaymentStatus.PAID) {
+      await this.grantPublishingAccess(user._id as Types.ObjectId, catObjId);
+    } else if (status === BankPaymentStatus.PAY_LATER) {
+      // Add to payLaterEnrollments — Module 1 teaser only until they pay
+      const tierValue = participantCategory?.toLowerCase() === 'student' ? 'student' : 'non-student';
+      const alreadyEnrolled = (user as any).payLaterEnrollments?.some(
+        (e: any) => e.categoryId?.toString() === catObjId.toString(),
+      );
+      if (!alreadyEnrolled) {
+        await this.userModel.findByIdAndUpdate(user._id, {
+          $addToSet: {
+            payLaterEnrollments: { categoryId: catObjId, tier: tierValue, enrolledAt: new Date() },
+          },
+        });
+      }
+    }
+
+    return {
+      message: 'Bank payment record created successfully',
+      record,
+      isNewUser,
+      temporaryPassword,
+      emailType: isNewUser
+        ? 'invitation'
+        : status === BankPaymentStatus.PAY_LATER
+          ? 'module1_access'
+          : 'payment_confirmation',
+    };
+  }
+
+  async createBulkBankPayments(dto: {
+    categoryId: string;
+    records: Array<{
+      fullName: string;
+      email: string;
+      gender?: string;
+      nationality?: string;
+      phoneNumber?: string;
+      institution?: string;
+      participantCategory?: string;
+      amountDue: number;
+      amountPaid: number;
+      paymentStatus?: string;
+      tranche?: string;
+      dateOfPayment?: string;
+      comments?: string;
+    }>;
+    sendEmail?: boolean;
+  }) {
+    const { categoryId, records, sendEmail } = dto;
+    if (!records?.length) throw new BadRequestException('No records provided');
+
+    const results = { created: 0, failed: 0, errors: [] as any[] };
+
+    for (const rec of records) {
+      try {
+        await this.createBankPayment({ ...rec, categoryId, sendEmail });
+        results.created++;
+      } catch (err: any) {
+        results.failed++;
+        results.errors.push({ email: rec.email, error: err.message });
+      }
+    }
+
+    return { message: `Created ${results.created}, failed ${results.failed}`, ...results };
+  }
+
+  async getBankPayments(query: {
+    categoryId?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const { categoryId, status, search, page = 1, limit = 100 } = query;
+    const filter: any = {};
+    if (categoryId) filter.categoryId = new Types.ObjectId(categoryId);
+    if (status && status !== 'all') filter.paymentStatus = status;
+    if (search) {
+      filter.$or = [
+        { fullName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+    const [records, total] = await Promise.all([
+      this.bankPaymentModel.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      this.bankPaymentModel.countDocuments(filter),
+    ]);
+
+    const stats = await this.bankPaymentModel.aggregate([
+      { $match: categoryId ? { categoryId: new Types.ObjectId(categoryId) } : {} },
+      {
+        $group: {
+          _id: null,
+          totalAmountDue: { $sum: '$amountDue' },
+          totalAmountPaid: { $sum: '$amountPaid' },
+          totalBalance: { $sum: '$balance' },
+          paid: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'paid'] }, 1, 0] } },
+          partial: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'partial'] }, 1, 0] } },
+          pending: { $sum: { $cond: [{ $eq: ['$paymentStatus', 'pending'] }, 1, 0] } },
+        },
+      },
+    ]);
+
+    return {
+      records,
+      total,
+      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      stats: stats[0] || { totalAmountDue: 0, totalAmountPaid: 0, totalBalance: 0, paid: 0, partial: 0, pending: 0 },
+    };
+  }
+
+  async updateBankPayment(id: string, dto: {
+    fullName?: string;
+    gender?: string;
+    nationality?: string;
+    phoneNumber?: string;
+    institution?: string;
+    participantCategory?: string;
+    amountDue?: number;
+    amountPaid?: number;
+    paymentStatus?: string;
+    tranche?: string;
+    dateOfPayment?: string;
+    comments?: string;
+  }) {
+    const record = await this.bankPaymentModel.findById(id);
+    if (!record) throw new NotFoundException('Bank payment record not found');
+
+    const prevStatus = record.paymentStatus;
+
+    const amountDue = dto.amountDue ?? record.amountDue;
+    const amountPaid = dto.amountPaid ?? record.amountPaid;
+    const balance = this.computeBalance(amountDue, amountPaid);
+    const status = this.deriveStatus(amountDue, amountPaid, dto.paymentStatus);
+
+    const updated = await this.bankPaymentModel.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          ...(dto.fullName !== undefined && { fullName: dto.fullName }),
+          ...(dto.gender !== undefined && { gender: dto.gender }),
+          ...(dto.nationality !== undefined && { nationality: dto.nationality }),
+          ...(dto.phoneNumber !== undefined && { phoneNumber: dto.phoneNumber }),
+          ...(dto.institution !== undefined && { institution: dto.institution }),
+          ...(dto.participantCategory !== undefined && { participantCategory: dto.participantCategory }),
+          amountDue,
+          amountPaid,
+          balance,
+          paymentStatus: status,
+          ...(dto.tranche !== undefined && { tranche: dto.tranche }),
+          ...(dto.dateOfPayment !== undefined && { dateOfPayment: dto.dateOfPayment ? new Date(dto.dateOfPayment) : null }),
+          ...(dto.comments !== undefined && { comments: dto.comments }),
+        },
+      },
+      { new: true },
+    );
+
+    if (record.userId) {
+      const userId = record.userId as Types.ObjectId;
+      const catId = record.categoryId as Types.ObjectId;
+      if (status === BankPaymentStatus.PAID && prevStatus !== BankPaymentStatus.PAID) {
+        await this.grantPublishingAccess(userId, catId);
+      } else if (status !== BankPaymentStatus.PAID && prevStatus === BankPaymentStatus.PAID) {
+        await this.revokePublishingAccess(userId, catId);
+      }
+    }
+
+    return { message: 'Bank payment record updated', record: updated };
+  }
+
+  async deleteBankPayment(id: string) {
+    const record = await this.bankPaymentModel.findById(id);
+    if (!record) throw new NotFoundException('Bank payment record not found');
+
+    // Revoke category access based on what the deleted record granted
+    if (record.userId && record.categoryId) {
+      if (record.paymentStatus === BankPaymentStatus.PAY_LATER) {
+        // Remove from payLaterEnrollments — revokes Module 1 teaser access
+        await this.userModel.findByIdAndUpdate(record.userId, {
+          $pull: { payLaterEnrollments: { categoryId: record.categoryId } },
+        });
+      } else if (
+        record.paymentStatus === BankPaymentStatus.PAID ||
+        record.paymentStatus === BankPaymentStatus.PARTIAL
+      ) {
+        // Check if there are other paid/partial records for the same category
+        // before revoking full access — don't revoke if another record still covers it
+        const otherPaidRecord = await this.bankPaymentModel.findOne({
+          _id: { $ne: record._id },
+          userId: record.userId,
+          categoryId: record.categoryId,
+          paymentStatus: { $in: [BankPaymentStatus.PAID, BankPaymentStatus.PARTIAL] },
+        });
+        if (!otherPaidRecord) {
+          await this.revokePublishingAccess(
+            record.userId as Types.ObjectId,
+            record.categoryId as Types.ObjectId,
+          );
+        }
+      }
+    }
+
+    await this.bankPaymentModel.findByIdAndDelete(id);
+    return { message: 'Bank payment record deleted' };
   }
 }

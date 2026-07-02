@@ -61,7 +61,7 @@ import { WhiteboardsModule } from './whiteboards/whiteboards.module';
             connection.on('connected', () => console.log('✅ MongoDB connected'));
             connection.on('error', (err) => console.error('❌ MongoDB error:', err));
             connection.on('disconnected', () => {
-              console.warn('⚠️ MongoDB disconnected — will attempt reconnect…');
+              console.warn('⚠️ MongoDB disconnected  will attempt reconnect…');
             });
             connection.on('reconnected', () => console.log('🔄 MongoDB reconnected'));
             return connection;

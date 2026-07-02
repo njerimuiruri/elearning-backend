@@ -10,7 +10,7 @@
  * and creates the corresponding `LessonCompletion` record so existing
  * students don't lose their progress.
  *
- * Safe to run multiple times — uses upsert so it won't duplicate records.
+ * Safe to run multiple times  uses upsert so it won't duplicate records.
  *
  * Run with:
  *   npx ts-node -r tsconfig-paths/register src/migrations/002-migrate-lesson-completions.ts
@@ -78,7 +78,7 @@ async function run() {
           totalMigrated++;
         } catch (err: any) {
           if (err.code === 11000) {
-            // Duplicate key — record already exists, skip
+            // Duplicate key  record already exists, skip
             totalSkipped++;
           } else {
             console.error(

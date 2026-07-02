@@ -6,7 +6,7 @@ import { Document, Types } from 'mongoose';
  *
  * Design rules:
  *  - One document is created per (enrollmentId, lessonIndex, repeatGeneration).
- *  - It is NEVER updated or deleted — completion is permanent for that generation.
+ *  - It is NEVER updated or deleted  completion is permanent for that generation.
  *  - A module-repeat cycle increments repeatGeneration on the enrollment, making
  *    old completion records invisible to the current pass without destroying them.
  *  - Progress is always derived by COUNTing these records, never from a mutable flag.

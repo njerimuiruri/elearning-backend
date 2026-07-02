@@ -160,7 +160,7 @@ export class ModuleEnrollmentsController {
   }
 
   // ── NEW: Idempotent lesson completion (replaces old completeLesson) ────────
-  // Safe to call multiple times for the same lesson — second call is a no-op.
+  // Safe to call multiple times for the same lesson  second call is a no-op.
   // Returns fresh progress state (same shape as GET /progress).
   @Put(':enrollmentId/lessons/:lessonIndex/complete')
   @UseGuards(JwtAuthGuard, RolesGuard)

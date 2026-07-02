@@ -235,7 +235,7 @@ export class PaystackService {
   }
 
   /**
-   * Convert amount to smallest currency unit (cents for USD — $100 → 10000)
+   * Convert amount to smallest currency unit (cents for USD  $100 → 10000)
    */
   toCents(amount: number): number {
     return Math.round(amount * 100);

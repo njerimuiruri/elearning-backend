@@ -127,7 +127,7 @@ export class LessonResource {
 }
 
 // ─────────────────────────────────────────
-// ModuleLesson — direct child of a Module
+// ModuleLesson  direct child of a Module
 // Structure: Category → Module → Lesson → Slides
 // ─────────────────────────────────────────
 export class ModuleLesson {
@@ -524,7 +524,7 @@ export class Module extends Document {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   createdBy?: Types.ObjectId;
 
-  /** 'admin' | 'instructor' — who created this module */
+  /** 'admin' | 'instructor'  who created this module */
   @Prop({ type: String, enum: ['admin', 'instructor'], default: 'instructor' })
   createdByRole?: string;
 

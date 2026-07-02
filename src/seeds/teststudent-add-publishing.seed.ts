@@ -68,7 +68,7 @@ async function seed() {
   );
 
   if (alreadyPurchased) {
-    console.log(`ℹ️   Publishing Academy already in purchasedCategories — skipping update.`);
+    console.log(`ℹ️   Publishing Academy already in purchasedCategories  skipping update.`);
   } else {
     await userModel.findByIdAndUpdate(userId, {
       $addToSet: { purchasedCategories: categoryId },
@@ -82,7 +82,7 @@ async function seed() {
   });
 
   if (existingPayment) {
-    console.log(`ℹ️   Full payment record already exists — skipping.`);
+    console.log(`ℹ️   Full payment record already exists  skipping.`);
   } else {
     const ref = `SEED-TS-PUB-${crypto.randomUUID().replace(/-/g, '').toUpperCase().slice(0, 10)}`;
     await paymentModel.create({

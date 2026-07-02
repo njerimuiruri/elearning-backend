@@ -20,21 +20,21 @@ import { WhiteboardsService } from './whiteboards.service';
 export class WhiteboardsController {
   constructor(private readonly service: WhiteboardsService) {}
 
-  /** POST /whiteboards — create a new whiteboard */
+  /** POST /whiteboards  create a new whiteboard */
   @Post()
   async create(@Request() req, @Body() body: any) {
     const data = await this.service.create(req.user.id, body.title, body.pages, body.textLayers);
     return { success: true, data };
   }
 
-  /** GET /whiteboards/my — instructor's own whiteboards (no page data) */
+  /** GET /whiteboards/my  instructor's own whiteboards (no page data) */
   @Get('my')
   async getMyWhiteboards(@Request() req) {
     const data = await this.service.getMyWhiteboards(req.user.id);
     return { success: true, data };
   }
 
-  /** GET /whiteboards/admin/all — all whiteboards (admin only) */
+  /** GET /whiteboards/admin/all  all whiteboards (admin only) */
   @Get('admin/all')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -43,7 +43,7 @@ export class WhiteboardsController {
     return { success: true, data };
   }
 
-  /** DELETE /whiteboards/admin/:id — admin can delete any whiteboard */
+  /** DELETE /whiteboards/admin/:id  admin can delete any whiteboard */
   @Delete('admin/:id')
   @UseGuards(RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -62,21 +62,21 @@ export class WhiteboardsController {
     return { success: true, data };
   }
 
-  /** GET /whiteboards/:id — full whiteboard including pages */
+  /** GET /whiteboards/:id  full whiteboard including pages */
   @Get(':id')
   async getById(@Param('id') id: string) {
     const data = await this.service.getById(id);
     return { success: true, data };
   }
 
-  /** PUT /whiteboards/:id — save title + pages + text layers */
+  /** PUT /whiteboards/:id  save title + pages + text layers */
   @Put(':id')
   async update(@Request() req, @Param('id') id: string, @Body() body: any) {
     const data = await this.service.update(id, req.user.id, body.title, body.pages, body.textLayers);
     return { success: true, data };
   }
 
-  /** POST /whiteboards/:id/share — set which categories can see this */
+  /** POST /whiteboards/:id/share  set which categories can see this */
   @Post(':id/share')
   async share(@Request() req, @Param('id') id: string, @Body() body: any) {
     const data = await this.service.share(id, req.user.id, body.categoryIds || []);

@@ -404,7 +404,7 @@ export class DiscussionsService {
         );
       }
     } else {
-      // Instructor or admin replied — notify ALL enrolled students (email + dashboard)
+      // Instructor or admin replied  notify ALL enrolled students (email + dashboard)
       const replyLabel = authorRole === 'admin' ? 'Admin' : 'Instructor';
       const enrollments = await this.enrollmentModel
         .find({ moduleId: new Types.ObjectId(moduleId) })

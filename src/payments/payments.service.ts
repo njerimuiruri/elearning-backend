@@ -213,7 +213,7 @@ export class PaymentsService {
           user?.studentVerification?.status === StudentVerificationStatus.APPROVED;
 
         if (isAlreadyApproved) {
-          // Student was verified before paying — grant access immediately
+          // Student was verified before paying  grant access immediately
           await this.categoryAccessControl.markCategoryAsPurchased(
             payment.userId.toString(),
             payment.categoryId.toString(),
@@ -232,7 +232,7 @@ export class PaymentsService {
             this.logger.warn(`Failed to send congrats email to ${user.email}`);
           }
 
-          this.logger.log(`Student payment ${reference} verified — access granted (pre-verified)`);
+          this.logger.log(`Student payment ${reference} verified  access granted (pre-verified)`);
           return {
             success: true,
             requiresStudentVerification: false,
@@ -243,13 +243,13 @@ export class PaymentsService {
           };
         }
 
-        // Student not yet verified — ask them to upload ID
+        // Student not yet verified  ask them to upload ID
         await this.userModel.findByIdAndUpdate(payment.userId.toString(), {
           pendingStudentCategoryId: payment.categoryId,
           'studentVerification.status': StudentVerificationStatus.NONE,
         });
 
-        this.logger.log(`Student payment ${reference} verified — awaiting ID upload`);
+        this.logger.log(`Student payment ${reference} verified  awaiting ID upload`);
         return {
           success: true,
           requiresStudentVerification: true,
@@ -261,7 +261,7 @@ export class PaymentsService {
         };
       }
 
-      // Non-student price — grant access immediately
+      // Non-student price  grant access immediately
       if (payment.categoryId) {
         await this.categoryAccessControl.markCategoryAsPurchased(
           payment.userId.toString(),
@@ -320,7 +320,7 @@ export class PaymentsService {
    */
   async checkCategoryDirectPaymentStatus(userId: string, categoryId: string) {
     const user = await this.userModel.findById(userId).select(
-      'studentVerification pendingStudentCategoryId purchasedCategories',
+      'studentVerification pendingStudentCategoryId purchasedCategories payLaterEnrollments lockedFromCategories',
     );
     if (!user) throw new NotFoundException('User not found');
 
@@ -356,14 +356,19 @@ export class PaymentsService {
       };
     }
 
+    const payLaterEnrollment = (user as any).payLaterEnrollments?.find(
+      (e: any) => e.categoryId?.toString() === categoryId,
+    );
+
     return {
       hasAccess: accessCheck.allowed,
       verificationStatus: user.studentVerification?.status || 'none',
       awaitingPayment: user.studentVerification?.awaitingPayment || false,
       pendingCategoryId: user.pendingStudentCategoryId?.toString() || null,
       reason: accessCheck.reason,
-      userTier: fullPayment?.userTier || installment1?.userTier || null,
+      userTier: fullPayment?.userTier || installment1?.userTier || payLaterEnrollment?.tier || null,
       installmentInfo,
+      isPayLater: !!payLaterEnrollment,
     };
   }
 
@@ -463,7 +468,7 @@ export class PaymentsService {
           pendingStudentCategoryId: payment.categoryId,
           'studentVerification.status': 'none',
         });
-        this.logger.log(`Webhook: Student payment ${data.reference} completed — awaiting ID upload`);
+        this.logger.log(`Webhook: Student payment ${data.reference} completed  awaiting ID upload`);
         return;
       }
 
@@ -1067,5 +1072,176 @@ export class PaymentsService {
         ? { id: academyId, name: publishingAcademy!.name, status: academyStatus }
         : null,
     };
+  }
+
+  /** Enroll user in a category without payment (pay-later / teaser access) */
+  async enrollPayLater(userId: string, categoryId: string, tier: 'student' | 'non-student'): Promise<void> {
+    const [user, category] = await Promise.all([
+      this.userModel.findById(userId).select('purchasedCategories payLaterEnrollments'),
+      this.categoryModel.findById(categoryId).select('_id'),
+    ]);
+    if (!user) throw new NotFoundException('User not found');
+    if (!category) throw new NotFoundException('Category not found');
+
+    const catObjId = new Types.ObjectId(categoryId);
+    const alreadyPurchased = user.purchasedCategories?.some((c) => c.toString() === categoryId);
+    const alreadyPayLater = (user as any).payLaterEnrollments?.some(
+      (e: any) => e.categoryId?.toString() === categoryId,
+    );
+    if (alreadyPurchased || alreadyPayLater) return;
+
+    await this.userModel.findByIdAndUpdate(userId, {
+      $addToSet: {
+        payLaterEnrollments: { categoryId: catObjId, tier, enrolledAt: new Date() },
+      },
+    });
+    this.logger.log(`User ${userId} enrolled pay-later for category ${categoryId} (${tier})`);
+  }
+
+  /** Admin: get all pay-later enrolled users for a category */
+  async getPayLaterEnrollments(categoryId: string) {
+    const catObjId = new Types.ObjectId(categoryId);
+    const users = await this.userModel
+      .find({ 'payLaterEnrollments.categoryId': catObjId })
+      .select('firstName lastName email payLaterEnrollments lockedFromCategories')
+      .lean();
+
+    return users.map((u: any) => {
+      const enrollment = u.payLaterEnrollments?.find(
+        (e: any) => e.categoryId?.toString() === categoryId,
+      );
+      return {
+        _id: u._id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        email: u.email,
+        tier: enrollment?.tier || 'non-student',
+        enrolledAt: enrollment?.enrolledAt,
+        isLocked: u.lockedFromCategories?.some((c: any) => c.toString() === categoryId) || false,
+        paymentStatus: 'pay_later',
+      };
+    });
+  }
+
+  /** Admin: get unified Publishing Academy fellows list (paid + pay-later) */
+  async getPublishingAcademyFellows(categoryId: string) {
+    const catObjId = new Types.ObjectId(categoryId);
+
+    const [paidPayments, payLaterUsers] = await Promise.all([
+      this.paymentModel
+        .find({ categoryId: catObjId, status: PaymentStatus.COMPLETED })
+        .populate('userId', 'firstName lastName email lockedFromCategories')
+        .sort({ createdAt: -1 })
+        .lean(),
+      this.userModel
+        .find({ 'payLaterEnrollments.categoryId': catObjId })
+        .select('firstName lastName email payLaterEnrollments lockedFromCategories purchasedCategories')
+        .lean(),
+    ]);
+
+    const paidUserIds = new Set(
+      paidPayments.map((p: any) => p.userId?._id?.toString()).filter(Boolean),
+    );
+
+    const payLaterList = payLaterUsers
+      .filter((u: any) => !paidUserIds.has(u._id?.toString()))
+      .map((u: any) => {
+        const enrollment = u.payLaterEnrollments?.find(
+          (e: any) => e.categoryId?.toString() === categoryId,
+        );
+        return {
+          _id: u._id,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          email: u.email,
+          tier: enrollment?.tier || 'non-student',
+          enrolledAt: enrollment?.enrolledAt,
+          isLocked: u.lockedFromCategories?.some((c: any) => c.toString() === categoryId) || false,
+          source: 'pay_later',
+          paymentStatus: 'pay_later',
+          amount: 0,
+        };
+      });
+
+    return { paid: paidPayments, payLater: payLaterList };
+  }
+
+  /** Admin: lock a user from accessing a category */
+  async lockUserFromCategory(userId: string, categoryId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      $addToSet: { lockedFromCategories: new Types.ObjectId(categoryId) },
+    });
+    this.logger.log(`User ${userId} locked from category ${categoryId}`);
+  }
+
+  /** Admin: unlock a user from a category */
+  async unlockUserFromCategory(userId: string, categoryId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      $pull: { lockedFromCategories: new Types.ObjectId(categoryId) },
+    });
+    this.logger.log(`User ${userId} unlocked from category ${categoryId}`);
+  }
+
+  /** Admin: send payment reminder to a single pay-later user */
+  async sendPayLaterReminder(userId: string, categoryId: string): Promise<void> {
+    const [user, category] = await Promise.all([
+      this.userModel.findById(userId).select('firstName email'),
+      this.categoryModel.findById(categoryId).select('name studentPrice nonStudentPrice'),
+    ]);
+    if (!user || !category) throw new NotFoundException('User or category not found');
+
+    const enrollment = await this.userModel
+      .findById(userId)
+      .select('payLaterEnrollments')
+      .lean() as any;
+    const tier = enrollment?.payLaterEnrollments?.find(
+      (e: any) => e.categoryId?.toString() === categoryId,
+    )?.tier || 'non-student';
+
+    const price = tier === 'student'
+      ? ((category as any).studentPrice || 100)
+      : ((category as any).nonStudentPrice || 200);
+
+    const frontendUrl = this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
+    const paymentUrl = `${frontendUrl}/arin-publishing-academy`;
+    const firstName = (user as any).firstName || 'Participant';
+
+    await this.emailService.sendSimpleEmail(
+      (user as any).email,
+      `Complete your ${(category as any).name} registration`,
+      `<div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <h2 style="color:#021d49">Complete Your Registration</h2>
+        <p>Dear ${firstName},</p>
+        <p>You enrolled in the <strong>${(category as any).name}</strong> with pay-later access.
+        You currently have access to <strong>Module 1</strong> only.</p>
+        <p>Complete your payment of <strong>USD ${price}</strong> to unlock all modules.</p>
+        <a href="${paymentUrl}" style="display:inline-block;background:#021d49;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;margin:16px 0">
+          Complete Payment
+        </a>
+        <p style="color:#666;font-size:0.85em">If you have questions, contact us at info@arin-africa.org</p>
+      </div>`,
+    );
+  }
+
+  /** Admin: send payment reminders to all pay-later users for a category */
+  async sendBulkPayLaterReminders(categoryId: string): Promise<{ sent: number; failed: number; total: number }> {
+    const catObjId = new Types.ObjectId(categoryId);
+    const users = await this.userModel
+      .find({ 'payLaterEnrollments.categoryId': catObjId })
+      .select('_id')
+      .lean();
+
+    let sent = 0;
+    const failed: string[] = [];
+    for (const u of users) {
+      try {
+        await this.sendPayLaterReminder((u as any)._id.toString(), categoryId);
+        sent++;
+      } catch (e) {
+        this.logger.warn(`Reminder failed for user ${(u as any)._id}: ${e.message}`);
+        failed.push((u as any)._id.toString());
+      }
+    }
+    return { sent, failed: failed.length, total: users.length };
   }
 }

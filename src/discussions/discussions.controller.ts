@@ -29,7 +29,7 @@ export class DiscussionsController {
    *   - Instructor: must be assigned to the module
    *   - Student: must be enrolled in the module
    *   - Admin: allowed to create/moderate discussions
-   * No RolesGuard here — any authenticated user may attempt;
+   * No RolesGuard here  any authenticated user may attempt;
    * the service throws 403 if the user lacks the required access.
    */
   @Post()
@@ -64,7 +64,7 @@ export class DiscussionsController {
    * Get all discussions for a module.
    * Query params:
    *   sort=recent (default) | active
-   *   lessonIndex=<number>  — filter to a specific lesson
+   *   lessonIndex=<number>   filter to a specific lesson
    * Access: enrolled students, assigned instructors, admin.
    */
   @Get('module/:moduleId')

@@ -219,7 +219,7 @@ export class AdmissionLettersService {
       sentBy: new Types.ObjectId(adminId),
     });
 
-    // Fire and forget — don't block the HTTP response
+    // Fire and forget  don't block the HTTP response
     this.processEmailQueue(sendRecord, template, dto).catch((err) =>
       this.logger.error('Bulk admission letter send failed', err),
     );
@@ -369,7 +369,7 @@ export class AdmissionLettersService {
     });
 
     this.logger.log(
-      `Admission letter send complete — success: ${successCount}, failed: ${failureCount}`,
+      `Admission letter send complete  success: ${successCount}, failed: ${failureCount}`,
     );
   }
 
@@ -397,7 +397,7 @@ export class AdmissionLettersService {
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Admission Letter — Arin Fellowship</title>
+  <title>Admission Letter  Arin Fellowship</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f5f7;font-family:Georgia,'Times New Roman',serif;-webkit-text-size-adjust:100%;">
 

@@ -12,7 +12,7 @@ import { User } from '../schemas/user.schema';
   /**
    * Rate limiter: at most 10 emails per 60 seconds.
    * BullMQ pauses this worker automatically when the limit is hit
-   * and resumes once the window resets — no manual sleep needed.
+   * and resumes once the window resets  no manual sleep needed.
    */
   limiter: { max: 10, duration: 60_000 },
   /**
@@ -36,7 +36,7 @@ export class EmailQueueProcessor extends WorkerHost {
       job.data;
 
     this.logger.log(
-      `Processing job ${job.id} — sending invitation to ${email} (attempt ${job.attemptsMade + 1})`,
+      `Processing job ${job.id}  sending invitation to ${email} (attempt ${job.attemptsMade + 1})`,
     );
 
     const result = await this.emailService.sendFellowInvitationEmail(
@@ -67,7 +67,7 @@ export class EmailQueueProcessor extends WorkerHost {
     const remaining = (job.opts.attempts ?? 1) - (job.attemptsMade + 1);
     if (remaining > 0) {
       this.logger.warn(
-        `Job ${job.id} failed for ${job.data.email}: ${error.message} — ${remaining} retries left`,
+        `Job ${job.id} failed for ${job.data.email}: ${error.message}  ${remaining} retries left`,
       );
     } else {
       this.logger.error(

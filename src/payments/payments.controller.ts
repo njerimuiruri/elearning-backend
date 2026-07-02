@@ -237,8 +237,84 @@ export class PaymentsController {
     return this.paymentsService.getAllPayments(Number(page), Number(limit), status);
   }
 
+  /** Enroll user as pay-later (no payment, Module 1 teaser only)
+   * POST /api/payments/category/pay-later
+   */
+  @Post('category/pay-later')
+  @UseGuards(JwtAuthGuard)
+  async enrollPayLater(
+    @Body() dto: { categoryId: string; tier: 'student' | 'non-student' },
+    @CurrentUser() user: any,
+  ) {
+    await this.paymentsService.enrollPayLater(user._id, dto.categoryId, dto.tier);
+    return { success: true };
+  }
+
+  /** Admin: get all pay-later enrollments for a category
+   * GET /api/payments/admin/publishing-academy/:categoryId/pay-later
+   */
+  @Get('admin/publishing-academy/:categoryId/pay-later')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getPayLaterEnrollments(@Param('categoryId') categoryId: string) {
+    return this.paymentsService.getPayLaterEnrollments(categoryId);
+  }
+
+  /** Admin: get unified fellows list (paid + pay-later)
+   * GET /api/payments/admin/publishing-academy/:categoryId/fellows
+   */
+  @Get('admin/publishing-academy/:categoryId/fellows')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getPublishingAcademyFellows(@Param('categoryId') categoryId: string) {
+    return this.paymentsService.getPublishingAcademyFellows(categoryId);
+  }
+
+  /** Admin: lock user from category
+   * POST /api/payments/admin/publishing-academy/:categoryId/lock/:userId
+   */
+  @Post('admin/publishing-academy/:categoryId/lock/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async lockUser(@Param('categoryId') categoryId: string, @Param('userId') userId: string) {
+    await this.paymentsService.lockUserFromCategory(userId, categoryId);
+    return { success: true };
+  }
+
+  /** Admin: unlock user from category
+   * POST /api/payments/admin/publishing-academy/:categoryId/unlock/:userId
+   */
+  @Post('admin/publishing-academy/:categoryId/unlock/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async unlockUser(@Param('categoryId') categoryId: string, @Param('userId') userId: string) {
+    await this.paymentsService.unlockUserFromCategory(userId, categoryId);
+    return { success: true };
+  }
+
+  /** Admin: send payment reminder to one pay-later user
+   * POST /api/payments/admin/publishing-academy/:categoryId/send-reminder/:userId
+   */
+  @Post('admin/publishing-academy/:categoryId/send-reminder/:userId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async sendReminder(@Param('categoryId') categoryId: string, @Param('userId') userId: string) {
+    await this.paymentsService.sendPayLaterReminder(userId, categoryId);
+    return { success: true };
+  }
+
+  /** Admin: send bulk payment reminders to all pay-later users
+   * POST /api/payments/admin/publishing-academy/:categoryId/send-reminders-bulk
+   */
+  @Post('admin/publishing-academy/:categoryId/send-reminders-bulk')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async sendBulkReminders(@Param('categoryId') categoryId: string) {
+    return this.paymentsService.sendBulkPayLaterReminders(categoryId);
+  }
+
   /**
-   * Admin: look up a user by email — returns their category associations and
+   * Admin: look up a user by email  returns their category associations and
    * Publishing Academy payment status.
    * GET /api/payments/admin/user-lookup?email=
    */

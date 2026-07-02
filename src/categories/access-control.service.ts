@@ -16,11 +16,13 @@ export interface CategoryAccessResult {
     | 'fellow_access'
     | 'purchased'
     | 'verification_pending'
-    | 'verification_rejected';
+    | 'verification_rejected'
+    | 'pay_later';
   price?: number;
   categoryId?: string;
   verificationStatus?: string;
   rejectionReason?: string;
+  isPayLater?: boolean;
 }
 
 export interface CourseAccessResult {
@@ -78,9 +80,9 @@ export class CategoryAccessControlService {
       };
     }
 
-    // Free category — only fellows assigned to this category get free access.
+    // Free category  only fellows assigned to this category get free access.
     // Non-fellows are blocked (they do not get automatic free access).
-    // Tiered-pricing categories always require payment — no fellow bypass.
+    // Tiered-pricing categories always require payment  no fellow bypass.
     if (category.accessType === 'free') {
       if (!category.hasTieredPricing && user.fellowData?.assignedCategories) {
         const isAssigned = user.fellowData.assignedCategories.some(
@@ -114,7 +116,7 @@ export class CategoryAccessControlService {
       };
     }
 
-    // Paid category — fellows get free access UNLESS it's a tiered-pricing category
+    // Paid category  fellows get free access UNLESS it's a tiered-pricing category
     // Tiered-pricing categories (e.g. Arin Publishing Academy) require payment from everyone
     if (!category.hasTieredPricing && user.fellowData?.assignedCategories) {
       const isAssigned = user.fellowData.assignedCategories.some(
@@ -129,6 +131,11 @@ export class CategoryAccessControlService {
       }
     }
 
+    // Admin lock  overrides paid/pay-later access
+    if (user.lockedFromCategories?.some((cId) => cId.toString() === categoryId.toString())) {
+      return { allowed: false, reason: 'restricted' };
+    }
+
     // Check if user has purchased this category
     if (user.purchasedCategories) {
       const hasPurchased = user.purchasedCategories.some(
@@ -141,6 +148,11 @@ export class CategoryAccessControlService {
           reason: 'purchased',
         };
       }
+    }
+
+    // Pay-later enrollment  limited access (Module 1 only, enforced on frontend)
+    if (user.payLaterEnrollments?.some((e) => e.categoryId.toString() === categoryId.toString())) {
+      return { allowed: true, reason: 'pay_later', isPayLater: true };
     }
 
     // Check if user paid student price and is awaiting verification
@@ -179,7 +191,7 @@ export class CategoryAccessControlService {
       };
     }
 
-    // Tiered-pricing category — not yet purchased
+    // Tiered-pricing category  not yet purchased
     if (category.hasTieredPricing) {
       return {
         allowed: false,
@@ -237,7 +249,7 @@ export class CategoryAccessControlService {
     }
 
     // Check if user is a fellow with this category assigned
-    // Tiered-pricing categories require payment from everyone — no fellow bypass
+    // Tiered-pricing categories require payment from everyone  no fellow bypass
     if (!category.hasTieredPricing && user.fellowData?.assignedCategories) {
       const isAssigned = user.fellowData.assignedCategories.some(
         (catId) => catId.toString() === category._id.toString(),

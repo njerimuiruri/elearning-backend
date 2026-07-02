@@ -188,7 +188,7 @@ export class AuthService {
       'UserPlus',
     );
 
-    // Notify admin in background — never block instructor registration response
+    // Notify admin in background  never block instructor registration response
     this.userModel.find({ role: UserRole.ADMIN }).then((adminUsers) => {
       const adminEmails = adminUsers.map((a) => a.email);
       if (!adminEmails.includes('faith.muiruri@strathmore.edu')) {

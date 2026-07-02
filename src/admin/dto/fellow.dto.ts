@@ -52,7 +52,7 @@ export class CreateFellowDto {
 
   @IsBoolean()
   @IsOptional()
-  sendEmail?: boolean; // send invitation email immediately (default: false — save now, email later)
+  sendEmail?: boolean; // send invitation email immediately (default: false  save now, email later)
 }
 
 export class BulkCreateFellowsDto {

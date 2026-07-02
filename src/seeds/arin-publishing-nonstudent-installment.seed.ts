@@ -2,8 +2,8 @@
  * Seed: Non-student who has paid Installment 1 for "ARIN Publishing Academy".
  *
  * Installment breakdown (non-student price = $200):
- *   Installment 1 — $100  → paid (grants immediate access)
- *   Installment 2 — $100  → still owed
+ *   Installment 1  $100  → paid (grants immediate access)
+ *   Installment 2  $100  → still owed
  *
  * Usage:
  *   npx ts-node -r tsconfig-paths/register src/seeds/arin-publishing-nonstudent-installment.seed.ts
@@ -57,7 +57,7 @@ async function seed() {
   let user             = await userModel.findOne({ email: STUDENT_EMAIL.toLowerCase() });
 
   if (user) {
-    console.log(`ℹ️   User already exists — updating.`);
+    console.log(`ℹ️   User already exists  updating.`);
     await userModel.findByIdAndUpdate(user._id, {
       password: hashedPassword, mustSetPassword: false,
       isActive: true, purchasedCategories: [categoryId], fellowData: null,
@@ -81,7 +81,7 @@ async function seed() {
   });
 
   if (existing) {
-    console.log(`ℹ️   Installment 1 payment record already exists — skipping.`);
+    console.log(`ℹ️   Installment 1 payment record already exists  skipping.`);
   } else {
     const ref = `SEED-NSI-${crypto.randomUUID().replace(/-/g, '').toUpperCase().slice(0, 12)}`;
     await paymentModel.create({
@@ -99,7 +99,7 @@ async function seed() {
   const saved      = await userModel.findById(user!._id).select('+password');
   const loginWorks = await bcrypt.compare(STUDENT_PASSWORD, saved!.password);
   if (!loginWorks) {
-    console.error('❌  Password mismatch — login will fail!');
+    console.error('❌  Password mismatch  login will fail!');
     await app.close(); process.exit(1);
   }
 

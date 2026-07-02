@@ -173,7 +173,7 @@ export class ModuleEnrollment extends Document {
   @Prop({ type: Date, default: null })
   essaySubmittedAt?: Date;
 
-  // Module repeat enforcement (legacy — no longer triggered, kept for DB compat)
+  // Module repeat enforcement (legacy  no longer triggered, kept for DB compat)
   @Prop({ default: false })
   requiresModuleRepeat: boolean;
 
@@ -189,7 +189,7 @@ export class ModuleEnrollment extends Document {
   /**
    * Incremented each time a module repeat is triggered (final assessment
    * max attempts exhausted). LessonCompletion records are scoped to this
-   * generation so old completions are never deleted — they become part of
+   * generation so old completions are never deleted  they become part of
    * the student's history while the current pass starts fresh.
    */
   @Prop({ default: 0 })
