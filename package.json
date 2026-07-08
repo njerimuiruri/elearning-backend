@@ -21,6 +21,7 @@
     "seed:admin": "ts-node -r tsconfig-paths/register src/seeds/admin.seed.ts",
     "seed:categories": "ts-node -r tsconfig-paths/register src/seeds/categories.seed.ts",
     "seed:courses": "ts-node -r tsconfig-paths/register src/seeds/courses.seed.ts",
+    "seed:arin-modules": "ts-node -r tsconfig-paths/register src/seeds/arin-modules.seed.ts",
     "rebuild:indexes": "ts-node -r tsconfig-paths/register scripts/rebuild-indexes.ts"
   },
   "dependencies": {

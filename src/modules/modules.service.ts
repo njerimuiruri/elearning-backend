@@ -941,6 +941,62 @@ export class ModulesService {
     return saved;
   }
 
+  // ── Admin: Assign/reassign instructor ─────────────────────────────────────
+  async assignInstructor(moduleId: string, instructorEmail: string): Promise<Module> {
+    const module = await this.moduleModel.findById(moduleId);
+    if (!module) throw new NotFoundException('Module not found');
+
+    const instructor = await this.userModel.findOne({ email: instructorEmail });
+    if (!instructor) {
+      throw new NotFoundException(`No user found with email ${instructorEmail}`);
+    }
+
+    if (!module.instructorIds.some((id) => id.toString() === instructor._id.toString())) {
+      module.instructorIds.push(instructor._id as Types.ObjectId);
+    }
+    module.pendingInstructorEmail = undefined;
+    module.pendingInstructorName = undefined;
+
+    const saved = await module.save();
+
+    this.emailService
+      .sendModuleAssignmentEmailToInstructor(
+        instructor.email,
+        instructor.firstName || 'Instructor',
+        module.title,
+      )
+      .catch((err) => console.error('[assignInstructor] Email notification failed:', err));
+
+    return saved;
+  }
+
+  // ── Admin: Credit an instructor's name/specialization (display only) ──────
+  async updateInstructorCredit(
+    moduleId: string,
+    instructorDisplayName?: string,
+    instructorSpecialization?: string,
+  ): Promise<Module> {
+    const module = await this.moduleModel.findById(moduleId);
+    if (!module) throw new NotFoundException('Module not found');
+
+    module.instructorDisplayName = instructorDisplayName;
+    module.instructorSpecialization = instructorSpecialization;
+
+    return await module.save();
+  }
+
+  // ── Admin: Remove instructor from module ──────────────────────────────────
+  async removeInstructor(moduleId: string, instructorId: string): Promise<Module> {
+    const module = await this.moduleModel.findById(moduleId);
+    if (!module) throw new NotFoundException('Module not found');
+
+    module.instructorIds = module.instructorIds.filter(
+      (id) => id.toString() !== instructorId,
+    );
+
+    return await module.save();
+  }
+
   // ── Admin: Bulk-publish all admin-created DRAFT modules ──────────────────
   async publishAllAdminDraftModules(): Promise<{ published: number }> {
     const result = await this.moduleModel.updateMany(

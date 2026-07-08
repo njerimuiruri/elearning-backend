@@ -210,6 +210,23 @@ export class ModuleLesson {
 
   @Prop()
   duration?: string;
+
+  // Topics covered in this lesson/session (e.g. "Understanding journal article structures")
+  @Prop({ type: [String], default: [] })
+  topics!: string[];
+
+  // Optional practice exercise for this lesson/session
+  @Prop()
+  exercise?: string;
+
+  // Main presentation deck (single PDF), viewable in-platform and fully downloadable.
+  // Used by categories (e.g. Arin Publishing Academy) that prefer one legible PDF
+  // over a series of per-slide diagram images.
+  @Prop()
+  mainPresentationUrl?: string;
+
+  @Prop()
+  mainPresentationName?: string;
 }
 
 // ─────────────────────────────────────────
@@ -439,6 +456,18 @@ export class Module extends Document {
   @Prop()
   capstone?: string;
 
+  // The overarching goal of the module (e.g. "To equip participants with the skills required to...")
+  @Prop()
+  goal?: string;
+
+  // Module-wide assignment students complete (one per module, distinct from per-lesson quizzes)
+  @Prop()
+  assignment?: string;
+
+  // What a student should produce/demonstrate after completing the assignment
+  @Prop()
+  expectedOutput?: string;
+
   @Prop({ type: Types.ObjectId, ref: 'Category', required: true })
   declare categoryId: Types.ObjectId;
 
@@ -506,6 +535,10 @@ export class Module extends Document {
         ],
         order: { type: Number, default: 0 },
         duration: String,
+        topics: { type: [String], default: [] },
+        exercise: String,
+        mainPresentationUrl: String,
+        mainPresentationName: String,
       },
     ],
     default: [],
@@ -539,6 +572,18 @@ export class Module extends Document {
   /** Display name for the pending (unregistered) instructor */
   @Prop()
   pendingInstructorName?: string;
+
+  /**
+   * Credited instructor's display name/specialization, independent of the actual
+   * account used to upload content (e.g. a shared account uploading on behalf of
+   * the real subject-matter expert). Shown to students alongside/instead of the
+   * assigned account's name.
+   */
+  @Prop()
+  instructorDisplayName?: string;
+
+  @Prop()
+  instructorSpecialization?: string;
 
   @Prop({ type: ModuleFinalAssessment, required: false })
   finalAssessment?: ModuleFinalAssessment;

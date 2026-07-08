@@ -415,6 +415,44 @@ export class ModulesController {
     return await this.modulesService.publishModule(id, req.user.id);
   }
 
+  // ── Admin: Assign/reassign instructor ─────────────────────────────────────
+  @Put(':id/assign-instructor')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async assignInstructor(
+    @Param('id') id: string,
+    @Body('instructorEmail') instructorEmail: string,
+  ) {
+    return await this.modulesService.assignInstructor(id, instructorEmail);
+  }
+
+  // ── Admin: Credit an instructor's name/specialization (display only) ──────
+  @Put(':id/instructor-credit')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async updateInstructorCredit(
+    @Param('id') id: string,
+    @Body('instructorDisplayName') instructorDisplayName: string,
+    @Body('instructorSpecialization') instructorSpecialization: string,
+  ) {
+    return await this.modulesService.updateInstructorCredit(
+      id,
+      instructorDisplayName,
+      instructorSpecialization,
+    );
+  }
+
+  // ── Admin: Remove instructor from module ──────────────────────────────────
+  @Delete(':id/instructors/:instructorId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async removeInstructor(
+    @Param('id') id: string,
+    @Param('instructorId') instructorId: string,
+  ) {
+    return await this.modulesService.removeInstructor(id, instructorId);
+  }
+
   // ── Bulk-publish all admin-created DRAFT modules ──────────────────────────
   @Post('admin/publish-all-drafts')
   @UseGuards(JwtAuthGuard, RolesGuard)

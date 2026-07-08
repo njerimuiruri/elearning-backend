@@ -1364,6 +1364,54 @@ E-Learning Platform Team
     }
   }
 
+  async sendModuleAssignmentEmailToInstructor(
+    email: string,
+    firstName: string,
+    moduleTitle: string,
+  ) {
+    const subject = `You've Been Assigned a Module to Build`;
+    const frontendUrl =
+      this.configService.get('FRONTEND_URL') || 'https://elearning.arin-africa.org';
+    const dashboardUrl = `${frontendUrl}/instructor/modules`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+        <h2 style="color: #16a34a; border-bottom: 3px solid #16a34a; padding-bottom: 10px;">New Module Assignment</h2>
+        <p>Dear <strong>${firstName}</strong>,</p>
+        <p>You've been assigned as the instructor for the module <strong>"${moduleTitle}"</strong>.</p>
+        <div style="background-color: #f0fdf4; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0;">
+          <h3 style="color: #16a34a; margin-top: 0;">Next Steps</h3>
+          <ul>
+            <li>Log in to your instructor dashboard</li>
+            <li>Open the module and add lessons in order (Lesson 1, Lesson 2, ...)</li>
+            <li>Attach materials to each lesson — PDFs, PowerPoint, Word documents, or a YouTube link</li>
+          </ul>
+        </div>
+        <p><a href="${dashboardUrl}" style="display:inline-block;padding:12px 24px;background:#16a34a;color:#fff;text-decoration:none;border-radius:5px;font-weight:bold;">Go to Your Modules</a></p>
+        <p>Best regards,<br/>Arin Publishing Academy Team</p>
+      </div>
+    `;
+
+    const plainTextContent = `New Module Assignment\n\nDear ${firstName},\n\nYou've been assigned as the instructor for the module "${moduleTitle}".\n\nLog in to your instructor dashboard, open the module, and add lessons in order with materials (PDFs, PowerPoint, Word documents, or a YouTube link).\n\nGo to your modules: ${dashboardUrl}\n\nBest regards,\nArin Publishing Academy Team`;
+
+    try {
+      await this.transporter.sendMail({
+        from:
+          this.configService.get('SMTP_FROM_EMAIL') || 'noreply@elearning.com',
+        to: email,
+        subject,
+        html: htmlContent,
+        text: plainTextContent,
+      });
+      return {
+        success: true,
+        message: `Module assignment email sent to ${email}`,
+      };
+    } catch (error: any) {
+      console.error('Error sending module assignment email:', error);
+    }
+  }
+
   async sendModuleRejectionEmailToInstructor(
     email: string,
     firstName: string,

@@ -181,6 +181,16 @@ export class CreateModuleLessonDto {
   @IsOptional()
   @IsString()
   duration?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => (value == null ? undefined : value))
+  @IsArray()
+  @IsString({ each: true })
+  topics?: string[];
+
+  @IsOptional()
+  @IsString()
+  exercise?: string;
 }
 
 // ─────────────────────────────────────────
@@ -380,6 +390,18 @@ export class CreateModuleDto {
   @IsOptional()
   @IsString()
   capstone?: string;
+
+  @IsOptional()
+  @IsString()
+  goal?: string;
+
+  @IsOptional()
+  @IsString()
+  assignment?: string;
+
+  @IsOptional()
+  @IsString()
+  expectedOutput?: string;
 
   @IsString()
   @IsNotEmpty()
