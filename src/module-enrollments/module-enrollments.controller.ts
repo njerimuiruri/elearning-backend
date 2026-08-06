@@ -117,6 +117,28 @@ export class ModuleEnrollmentsController {
     return { success: true, data };
   }
 
+  // ---------------------------------------------------------------------------
+  // Admin: list all final-assessment submissions across every module (view-only)
+  // GET /module-enrollments/admin/submissions?moduleId=&instructorId=&submissionType=&status=
+  // ---------------------------------------------------------------------------
+  @Get('admin/submissions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async getAdminSubmissions(
+    @Query('moduleId') moduleId?: string,
+    @Query('instructorId') instructorId?: string,
+    @Query('submissionType') submissionType?: 'essay' | 'mcq' | 'all',
+    @Query('status') status?: 'pending' | 'passed' | 'failed' | 'all',
+  ) {
+    const data = await this.enrollmentsService.getAdminSubmissions({
+      moduleId,
+      instructorId,
+      submissionType,
+      status,
+    });
+    return { success: true, data };
+  }
+
   // Get enrollment details (owner or admin only)
   @Get(':enrollmentId')
   @UseGuards(JwtAuthGuard)
@@ -254,5 +276,29 @@ export class ModuleEnrollmentsController {
       body.feedback,
       body.score,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Instructor + Admin: get (or generate + cache) AI summary/insights for one
+  // essay answer. GET-like operation exposed as POST since it can trigger
+  // generation as a side effect; pass ?regenerate=true to force a fresh call.
+  // ---------------------------------------------------------------------------
+  @Post(':enrollmentId/essay/:questionIndex/ai-analysis')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.INSTRUCTOR, UserRole.ADMIN)
+  async getEssayAiAnalysis(
+    @Param('enrollmentId') enrollmentId: string,
+    @Param('questionIndex') questionIndex: string,
+    @Query('regenerate') regenerate: string,
+    @Request() req,
+  ) {
+    const data = await this.enrollmentsService.getOrGenerateEssayAiInsights(
+      enrollmentId,
+      parseInt(questionIndex, 10),
+      this.getUserId(req),
+      req.user?.role,
+      regenerate === 'true',
+    );
+    return { success: true, data };
   }
 }

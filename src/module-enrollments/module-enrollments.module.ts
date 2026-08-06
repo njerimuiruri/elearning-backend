@@ -23,6 +23,7 @@ import { User, UserSchema } from '../schemas/user.schema';
 import { ProgressionModule } from '../progression/progression.module';
 import { CommonModule } from '../common/common.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { GroqEssayInsightsService } from '../services/groq-essay-insights.service';
 
 @Module({
   imports: [
@@ -39,7 +40,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
   ],
   controllers: [ModuleEnrollmentsController],
-  providers: [ModuleEnrollmentsService],
+  providers: [ModuleEnrollmentsService, GroqEssayInsightsService],
   exports: [ModuleEnrollmentsService],
 })
 export class ModuleEnrollmentsModule {}

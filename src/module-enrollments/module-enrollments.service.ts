@@ -23,6 +23,7 @@ import { ProgressionService } from '../progression/progression.service';
 import { EmailService } from '../common/services/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../schemas/notification.schema';
+import { GroqEssayInsightsService } from '../services/groq-essay-insights.service';
 
 @Injectable()
 export class ModuleEnrollmentsService {
@@ -43,6 +44,7 @@ export class ModuleEnrollmentsService {
     private progressionService: ProgressionService,
     private emailService: EmailService,
     private notificationsService: NotificationsService,
+    private groqEssayInsightsService: GroqEssayInsightsService,
   ) {}
 
   // Enroll in module (with payment check for paid categories)
@@ -1710,6 +1712,78 @@ export class ModuleEnrollmentsService {
   }
 
   // ---------------------------------------------------------------------------
+  // Get or generate (and cache) AI-powered summary/insights for one essay answer
+  // ---------------------------------------------------------------------------
+  async getOrGenerateEssayAiInsights(
+    enrollmentId: string,
+    questionIndex: number,
+    requesterId: string,
+    requesterRole: string,
+    regenerate: boolean,
+  ): Promise<any> {
+    const enrollment = await this.enrollmentModel
+      .findById(enrollmentId)
+      .populate('moduleId');
+    if (!enrollment) throw new NotFoundException('Enrollment not found');
+
+    const module = enrollment.moduleId as any;
+
+    if (requesterRole !== 'admin') {
+      const isAssigned = module?.instructorIds?.some(
+        (id: any) => id.toString() === requesterId,
+      );
+      if (!isAssigned) {
+        throw new ForbiddenException(
+          'You are not assigned as instructor for this module',
+        );
+      }
+    }
+
+    const results = enrollment.finalAssessmentResults || [];
+    const result: any = results[questionIndex];
+    if (!result) {
+      throw new BadRequestException('Question index out of range');
+    }
+    if (result.questionType !== 'essay') {
+      throw new BadRequestException(
+        'AI insights are only available for essay questions',
+      );
+    }
+    if (result.submissionType === 'pdf') {
+      throw new BadRequestException(
+        'AI insights are not available for PDF submissions',
+      );
+    }
+
+    if (
+      !regenerate &&
+      result.aiInsights &&
+      result.aiInsights.generationStatus === 'completed'
+    ) {
+      return result.aiInsights;
+    }
+
+    const questionDef = (module?.finalAssessment?.questions || [])[
+      questionIndex
+    ];
+
+    const insights = await this.groqEssayInsightsService.generateEssayInsights({
+      essayText: result.studentAnswer || '',
+      questionText: result.questionText,
+      rubric: questionDef?.rubric,
+      moduleTitle: module?.title,
+    });
+
+    enrollment.finalAssessmentResults = results.map((r: any, i: number) =>
+      i === questionIndex ? { ...r, aiInsights: insights } : r,
+    ) as any;
+
+    await enrollment.save();
+
+    return insights;
+  }
+
+  // ---------------------------------------------------------------------------
   // Get all final-assessment submissions for modules this instructor teaches
   // ---------------------------------------------------------------------------
   async getInstructorSubmissions(
@@ -1720,20 +1794,48 @@ export class ModuleEnrollmentsService {
       status?: 'pending' | 'passed' | 'failed' | 'all';
     },
   ): Promise<any[]> {
-    // 1. Resolve which modules belong to this instructor
     const moduleQuery: any = {
       instructorIds: new Types.ObjectId(instructorId),
     };
     if (filters.moduleId) {
       moduleQuery._id = new Types.ObjectId(filters.moduleId);
     }
+    return this.buildSubmissionRows(moduleQuery, filters);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Get all final-assessment submissions across ALL modules (admin, view-only)
+  // ---------------------------------------------------------------------------
+  async getAdminSubmissions(filters: {
+    moduleId?: string;
+    instructorId?: string;
+    submissionType?: 'essay' | 'mcq' | 'all';
+    status?: 'pending' | 'passed' | 'failed' | 'all';
+  }): Promise<any[]> {
+    const moduleQuery: any = {};
+    if (filters.moduleId) {
+      moduleQuery._id = new Types.ObjectId(filters.moduleId);
+    }
+    if (filters.instructorId) {
+      moduleQuery.instructorIds = new Types.ObjectId(filters.instructorId);
+    }
+    return this.buildSubmissionRows(moduleQuery, filters);
+  }
+
+  // Shared row-building logic for instructor and admin submission listings
+  private async buildSubmissionRows(
+    moduleQuery: any,
+    filters: {
+      submissionType?: 'essay' | 'mcq' | 'all';
+      status?: 'pending' | 'passed' | 'failed' | 'all';
+    },
+  ): Promise<any[]> {
     const modules = await this.moduleModel
       .find(moduleQuery)
       .select('_id title level');
     const moduleMap = new Map(modules.map((m) => [m._id.toString(), m]));
     if (moduleMap.size === 0) return [];
 
-    // 2. Build enrollment query  only enrollments that have been attempted
     const enrollmentQuery: any = {
       moduleId: {
         $in: Array.from(moduleMap.keys()).map((id) => new Types.ObjectId(id)),
@@ -1754,7 +1856,6 @@ export class ModuleEnrollmentsService {
       .populate('studentId', 'firstName lastName email')
       .sort({ essaySubmittedAt: -1, updatedAt: -1 });
 
-    // 3. Shape response rows
     const rows: any[] = [];
     for (const enrollment of enrollments) {
       const student = enrollment.studentId as any;
@@ -1768,7 +1869,6 @@ export class ModuleEnrollmentsService {
       if (hasEssay && hasMcq) submissionType = 'mixed';
       else if (hasEssay) submissionType = 'essay';
 
-      // Apply submission type filter
       if (filters.submissionType && filters.submissionType !== 'all') {
         if (filters.submissionType === 'essay' && !hasEssay) continue;
         if (filters.submissionType === 'mcq' && hasEssay && !hasMcq) continue;

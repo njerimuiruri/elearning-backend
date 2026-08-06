@@ -68,6 +68,51 @@ export class LessonProgress {
   lastAnswers?: Record<string, string>;
 }
 
+// AI-generated summary/insights for an essay submission
+export class EssayAiInsights {
+  @Prop()
+  summary?: string;
+
+  @Prop([String])
+  keyTakeaways?: string[];
+
+  @Prop([String])
+  mainPoints?: string[];
+
+  @Prop([String])
+  keyThemes?: string[];
+
+  @Prop([String])
+  suggestedKeywords?: string[];
+
+  @Prop([String])
+  improvementSuggestions?: string[];
+
+  @Prop({ enum: ['yes', 'partial', 'no'] })
+  addressesRequirements?: string;
+
+  @Prop()
+  addressesRequirementsRationale?: string;
+
+  @Prop()
+  wordCount?: number;
+
+  @Prop()
+  readingTimeMinutes?: number;
+
+  @Prop({ enum: ['pending', 'completed', 'failed'], default: 'pending' })
+  generationStatus?: string;
+
+  @Prop()
+  generatedAt?: Date;
+
+  @Prop()
+  generationError?: string;
+
+  @Prop()
+  modelUsed?: string;
+}
+
 // Assessment result per attempt
 export class AssessmentResult {
   @Prop({ required: true, default: 0 })
@@ -132,6 +177,11 @@ export class AssessmentResult {
 
   @Prop()
   aiWeaknesses?: string;
+
+  // AI-generated summary/insights (read-only review aid, distinct from the
+  // auto-grading fields above which are unused/legacy)
+  @Prop({ type: Object, default: null })
+  aiInsights?: EssayAiInsights;
 }
 
 @Schema({ timestamps: true })
