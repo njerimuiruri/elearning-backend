@@ -822,9 +822,9 @@ export class AdminController {
   }
 
   @Post('certificates/issue-all')
-  @ApiOperation({ summary: 'Issue certificates for all pending students at a given level' })
-  async issueAllCertificates(@Body() body: { level: string }) {
-    return this.adminService.issueAllCertificates(body.level || 'beginner');
+  @ApiOperation({ summary: 'Issue certificates for all pending students at a given level (optionally scoped to a category)' })
+  async issueAllCertificates(@Body() body: { level: string; categoryId?: string }) {
+    return this.adminService.issueAllCertificates(body.level || 'beginner', body.categoryId);
   }
 
   @Post('certificates/reset')

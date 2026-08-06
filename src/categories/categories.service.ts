@@ -3,7 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Category } from '../schemas/category.schema';
 import { User } from '../schemas/user.schema';
-import { Module } from '../schemas/module.schema';
+import { Module, ModuleStatus } from '../schemas/module.schema';
 import { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto';
 
 @Injectable()
@@ -73,8 +73,8 @@ export class CategoryService {
       isActive: true,
       categoryId: new Types.ObjectId(categoryId),
       $or: [
-        { status: { $in: ['PUBLISHED', 'APPROVED'] } },
-        { status: 'DRAFT', createdByRole: 'admin' },
+        { status: { $in: [ModuleStatus.PUBLISHED, ModuleStatus.APPROVED] } },
+        { status: ModuleStatus.DRAFT, createdByRole: 'admin' },
       ],
     };
 

@@ -4556,6 +4556,22 @@ export class AdminService {
       }
     }
 
+    // Resolve category names for every category referenced above, so the
+    // frontend can group/tab certificates by category rather than pooling
+    // every category's completers into a single set of level tabs.
+    const referencedCategoryIds = [...new Set(
+      [...studentLevelMap.values()].map((entry) => entry.categoryId),
+    )].filter((id) => id !== 'uncategorized' && Types.ObjectId.isValid(id));
+    const categoryDocs = referencedCategoryIds.length
+      ? await this.categoryModel
+          .find({ _id: { $in: referencedCategoryIds } })
+          .select('_id name')
+          .lean()
+      : [];
+    const categoryNameMap = new Map<string, string>(
+      categoryDocs.map((c) => [(c._id as any).toString(), c.name]),
+    );
+
     const result: any[] = [];
     for (const [, entry] of studentLevelMap) {
       const requiredCount = modulesPerCategoryLevel.get(`${entry.categoryId}_${entry.level}`) || 0;
@@ -4577,6 +4593,8 @@ export class AdminService {
         email: student?.email || '',
         avatar: student?.profileImage || '',
         level: entry.level,
+        categoryId: entry.categoryId,
+        categoryName: categoryNameMap.get(entry.categoryId) || 'Uncategorized',
         completedModules: entry.enrollments.length,
         totalModules: requiredCount,
         completedDate: entry.latestCompletedDate,
@@ -4671,9 +4689,11 @@ export class AdminService {
     return { success: true, message: 'Certificate reset to pending' };
   }
 
-  async issueAllCertificates(level: string) {
+  async issueAllCertificates(level: string, categoryId?: string) {
     const result = await this.getModuleCertificates(level);
-    const pending = (result.data || []).filter((s: any) => s.status === 'pending');
+    const pending = (result.data || []).filter(
+      (s: any) => s.status === 'pending' && (!categoryId || s.categoryId === categoryId),
+    );
     let issued = 0;
     let failed = 0;
     const details: any[] = [];
