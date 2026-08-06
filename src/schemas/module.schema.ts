@@ -413,6 +413,11 @@ export class Question {
 
   @Prop()
   rubric?: string;
+
+  // How the student answers this question. 'pdf' shows a file-upload control
+  // instead of a text box, and stores the uploaded document's URL as the answer.
+  @Prop({ enum: ['text', 'pdf'], default: 'text' })
+  submissionType?: string;
 }
 
 // ─────────────────────────────────────────

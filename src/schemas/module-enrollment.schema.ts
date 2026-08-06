@@ -85,6 +85,11 @@ export class AssessmentResult {
   @Prop({ required: true })
   studentAnswer: string;
 
+  // Mirrors the question's submissionType at time of submission ('text' | 'pdf').
+  // When 'pdf', studentAnswer holds the uploaded document's URL, not free text.
+  @Prop({ default: 'text' })
+  submissionType?: string;
+
   @Prop()
   correctAnswer?: string;
 

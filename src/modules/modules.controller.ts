@@ -22,6 +22,7 @@ import {
 } from './dto/create-module.dto';
 import { UpdateModuleDto } from './dto/update-module.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../decorators/roles.decorator';
 import { UserRole } from '../schemas/user.schema';
@@ -40,21 +41,28 @@ export class ModulesController {
   }
 
   // ── Get all published modules with filters ────────────────────────────────
+  // Stays publicly browsable (marketing/catalog), but a logged-in non-staff
+  // user only sees modules for categories they belong to / can purchase.
   @Get()
+  @UseGuards(OptionalJwtAuthGuard)
   async getAllPublishedModules(
+    @Request() req,
     @Query('category') category?: string,
     @Query('level') level?: ModuleLevel,
     @Query('search') search?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
-    return await this.modulesService.getAllPublishedModules({
-      category,
-      level,
-      search,
-      page: page ? parseInt(page) : undefined,
-      limit: limit ? parseInt(limit) : undefined,
-    });
+    return await this.modulesService.getAllPublishedModules(
+      {
+        category,
+        level,
+        search,
+        page: page ? parseInt(page) : undefined,
+        limit: limit ? parseInt(limit) : undefined,
+      },
+      req.user,
+    );
   }
 
   // ── Get instructor's modules ──────────────────────────────────────────────
@@ -102,8 +110,9 @@ export class ModulesController {
   }
 
   @Get(':id')
-  async getModuleById(@Param('id') id: string) {
-    return await this.modulesService.getModuleById(id);
+  @UseGuards(OptionalJwtAuthGuard)
+  async getModuleById(@Param('id') id: string, @Request() req) {
+    return await this.modulesService.getModuleById(id, req.user);
   }
 
   // ── Update module metadata ────────────────────────────────────────────────

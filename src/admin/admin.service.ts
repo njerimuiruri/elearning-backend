@@ -4434,18 +4434,22 @@ export class AdminService {
     moduleQuery.status = ModuleStatus.PUBLISHED;
     moduleQuery.isActive = { $ne: false };
 
-    const modules = await this.moduleModel.find(moduleQuery).select('_id title level').lean();
+    const modules = await this.moduleModel.find(moduleQuery).select('_id title level categoryId').lean();
     const moduleIds = modules.map((m) => m._id);
 
     if (moduleIds.length === 0) return { success: true, data: [] };
 
-    // Count required modules per level and map moduleId → level
-    const modulesPerLevel = new Map<string, number>();
-    const moduleIdToLevel = new Map<string, string>();
+    // Count required modules per (category + level) — a student is only held to the
+    // curriculum of the category/course they're actually enrolled in, not every module
+    // that happens to share the same level across unrelated courses.
+    const modulesPerCategoryLevel = new Map<string, number>();
+    const moduleIdToInfo = new Map<string, { level: string; categoryId: string }>();
     for (const m of modules) {
       const lvl = (m.level as string) || 'beginner';
-      modulesPerLevel.set(lvl, (modulesPerLevel.get(lvl) || 0) + 1);
-      moduleIdToLevel.set((m._id as any).toString(), lvl);
+      const catId = (m.categoryId as any)?.toString() || 'uncategorized';
+      const key = `${catId}_${lvl}`;
+      modulesPerCategoryLevel.set(key, (modulesPerCategoryLevel.get(key) || 0) + 1);
+      moduleIdToInfo.set((m._id as any).toString(), { level: lvl, categoryId: catId });
     }
 
     const enrollments = await this.moduleEnrollmentModel
@@ -4454,25 +4458,30 @@ export class AdminService {
         $or: [{ isCompleted: true }, { progress: 100 }],
       })
       .populate('studentId', 'fullName firstName lastName email profileImage')
-      .populate('moduleId', 'title level')
+      .populate('moduleId', 'title level categoryId')
       .lean();
 
-    // Group by (studentId + level) so each tab gets accurate completion counts
+    // Group by (studentId + category + level) so each student is measured against the
+    // curriculum of their own course, not modules from unrelated categories
     const studentLevelMap = new Map<string, any>();
     for (const e of enrollments) {
       const sid = (e.studentId as any)?._id?.toString() || (e.studentId as any)?.toString();
       if (!sid) continue;
 
-      const modLevel: string =
-        (e.moduleId as any)?.level ||
-        moduleIdToLevel.get((e.moduleId as any)?._id?.toString() || (e.moduleId as any)?.toString() || '') ||
-        'beginner';
-      const key = `${sid}_${modLevel}`;
+      const modIdStr = (e.moduleId as any)?._id?.toString() || (e.moduleId as any)?.toString() || '';
+      const info = moduleIdToInfo.get(modIdStr) || {
+        level: (e.moduleId as any)?.level || 'beginner',
+        categoryId: (e.moduleId as any)?.categoryId?.toString() || 'uncategorized',
+      };
+      const modLevel = info.level;
+      const modCategoryId = info.categoryId;
+      const key = `${sid}_${modCategoryId}_${modLevel}`;
 
       if (!studentLevelMap.has(key)) {
         studentLevelMap.set(key, {
           studentId: sid,
           level: modLevel,
+          categoryId: modCategoryId,
           student: e.studentId,
           enrollments: [],
           latestEnrollmentId: (e._id as any).toString(),
@@ -4504,8 +4513,9 @@ export class AdminService {
     // The certificateEarned flag on enrollments can fall out of sync; the
     // ModuleCertificate document is always created when a cert is issued, so it is
     // the definitive record.
-    const studentIdsToCheck = [...studentLevelMap.keys()]
-      .map((key) => key.split('_')[0])
+    const studentIdsToCheck = [...new Set(
+      [...studentLevelMap.values()].map((entry) => entry.studentId),
+    )]
       .filter((sid) => Types.ObjectId.isValid(sid))
       .map((sid) => new Types.ObjectId(sid));
 
@@ -4514,10 +4524,31 @@ export class AdminService {
         .find({ studentId: { $in: studentIdsToCheck } })
         .lean();
 
+      // Resolve each cert's module → categoryId (looked up independently of the
+      // published/active module list above, since a cert's module may since have
+      // been unpublished or deleted)
+      const certModuleIds = issuedCerts.map((c) => c.moduleId).filter(Boolean);
+      const certModules = certModuleIds.length
+        ? await this.moduleModel.find({ _id: { $in: certModuleIds } }).select('_id categoryId').lean()
+        : [];
+      const certModuleCategory = new Map<string, string>();
+      for (const m of certModules) {
+        certModuleCategory.set((m._id as any).toString(), (m.categoryId as any)?.toString() || 'uncategorized');
+      }
+
       for (const cert of issuedCerts) {
-        const key = `${(cert.studentId as any).toString()}_${cert.moduleLevel}`;
-        if (studentLevelMap.has(key)) {
-          const entry = studentLevelMap.get(key);
+        const sid = (cert.studentId as any).toString();
+        const catId = certModuleCategory.get((cert.moduleId as any)?.toString() || '') || 'uncategorized';
+        const key = `${sid}_${catId}_${cert.moduleLevel}`;
+        let entry = studentLevelMap.get(key);
+        if (!entry) {
+          // Fall back to matching by student + level alone in case the category
+          // couldn't be resolved (e.g. the module was deleted since the cert was issued)
+          entry = [...studentLevelMap.values()].find(
+            (e) => e.studentId === sid && e.level === cert.moduleLevel,
+          );
+        }
+        if (entry) {
           entry.certificateEarned = true;
           entry.certificatePublicId = entry.certificatePublicId || cert.publicId;
           entry.certificateIssuedAt = entry.certificateIssuedAt || cert.issuedDate;
@@ -4527,8 +4558,8 @@ export class AdminService {
 
     const result: any[] = [];
     for (const [, entry] of studentLevelMap) {
-      const requiredCount = modulesPerLevel.get(entry.level) || 0;
-      // Only include students who completed ALL modules at their level
+      const requiredCount = modulesPerCategoryLevel.get(`${entry.categoryId}_${entry.level}`) || 0;
+      // Only include students who completed ALL modules in their own course at this level
       if (entry.enrollments.length < requiredCount) continue;
 
       const student = entry.student as any;
@@ -4539,7 +4570,7 @@ export class AdminService {
         'Unknown Student';
 
       result.push({
-        id: `${entry.studentId}_${entry.level}`,
+        id: `${entry.studentId}_${entry.categoryId}_${entry.level}`,
         studentId: entry.studentId,
         enrollmentId: entry.latestEnrollmentId,
         name,

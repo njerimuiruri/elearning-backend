@@ -294,8 +294,12 @@ export class ModuleEnrollmentsService {
     );
   }
 
-  // Get enrollment details
-  async getEnrollmentById(enrollmentId: string): Promise<ModuleEnrollment> {
+  // Get enrollment details  owner or admin only
+  async getEnrollmentById(
+    enrollmentId: string,
+    requesterId: string,
+    requesterRole?: string,
+  ): Promise<ModuleEnrollment> {
     if (!Types.ObjectId.isValid(enrollmentId)) {
       throw new BadRequestException('Invalid enrollment ID');
     }
@@ -310,6 +314,13 @@ export class ModuleEnrollmentsService {
       });
 
     if (!enrollment) {
+      throw new NotFoundException('Enrollment not found');
+    }
+
+    if (
+      requesterRole !== 'admin' &&
+      String(enrollment.studentId) !== String(requesterId)
+    ) {
       throw new NotFoundException('Enrollment not found');
     }
 
@@ -1302,6 +1313,7 @@ export class ModuleEnrollmentsService {
             questionText: q.text,
             questionType: q.type,
             studentAnswer: answer?.answer || '',
+            submissionType: q.submissionType || 'text',
             maxPoints: q.points,
             pointsEarned: 0,
             isCorrect: false,

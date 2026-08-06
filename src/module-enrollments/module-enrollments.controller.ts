@@ -117,11 +117,18 @@ export class ModuleEnrollmentsController {
     return { success: true, data };
   }
 
-  // Get enrollment details
+  // Get enrollment details (owner or admin only)
   @Get(':enrollmentId')
   @UseGuards(JwtAuthGuard)
-  async getEnrollmentById(@Param('enrollmentId') enrollmentId: string) {
-    return await this.enrollmentsService.getEnrollmentById(enrollmentId);
+  async getEnrollmentById(
+    @Param('enrollmentId') enrollmentId: string,
+    @Request() req,
+  ) {
+    return await this.enrollmentsService.getEnrollmentById(
+      enrollmentId,
+      this.getUserId(req),
+      req.user?.role,
+    );
   }
 
   // Track slide progress (engagement: time spent + scroll)

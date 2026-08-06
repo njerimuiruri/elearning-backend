@@ -406,16 +406,9 @@ export class CategoryAccessControlService {
       return allCategories.map((cat) => cat._id.toString());
     }
 
-    // Get all free categories
-    const freeCategories = await this.categoryModel.find({
-      accessType: 'free',
-      isActive: true,
-    });
-
+    // "Free" categories are only free for fellows explicitly assigned to
+    // them  they are NOT open to every user (see checkCategoryAccess above).
     const accessibleIds = new Set<string>();
-
-    // Add free categories
-    freeCategories.forEach((cat) => accessibleIds.add(cat._id.toString()));
 
     // Add fellow-assigned categories
     if (user.fellowData?.assignedCategories) {

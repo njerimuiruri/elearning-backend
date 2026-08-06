@@ -14,10 +14,12 @@ import {
 } from '../schemas/module-enrollment.schema';
 import { ActivityLog, ActivityLogSchema } from '../schemas/activity-log.schema';
 import { CommonModule } from '../common/common.module';
+import { CategoriesModule } from '../categories/categories.module';
 
 @Module({
   imports: [
     CommonModule,
+    CategoriesModule,
     MongooseModule.forFeature([
       { name: ModuleSchema.name, schema: ModuleSchemaDefinition },
       { name: Category.name, schema: CategorySchema },

@@ -13,9 +13,10 @@ import {
   AssessmentReviewStatus,
 } from '../schemas/module.schema';
 import { Category } from '../schemas/category.schema';
-import { User } from '../schemas/user.schema';
+import { User, UserRole } from '../schemas/user.schema';
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
 import { ActivityLog, ActivityType } from '../schemas/activity-log.schema';
+import { CategoryAccessControlService } from '../categories/access-control.service';
 import {
   CreateModuleDto,
   CreateModuleLessonDto,
@@ -59,7 +60,112 @@ export class ModulesService {
     private moduleEnrollmentModel: Model<ModuleEnrollment>,
     @InjectModel(ActivityLog.name) private activityLogModel: Model<ActivityLog>,
     private emailService: EmailService,
+    private categoryAccessControlService: CategoryAccessControlService,
   ) {}
+
+  // ── Category isolation helpers ─────────────────────────────────────────────
+  // A "requesting user" that is neither admin nor instructor only sees content
+  // for categories they are actually enrolled in (fellow assignment or
+  // purchase). Categories that can be self-serve purchased into (paid /
+  // restricted / tiered-pricing) still surface as discoverable/locked so users
+  // can find and buy into new programmes, but plain "free" categories (which
+  // are exclusively granted via fellow assignment, no purchase path) are
+  // hidden entirely if the user isn't assigned  there's nothing to discover.
+  private isStaffRole(role?: string): boolean {
+    return role === UserRole.ADMIN || role === UserRole.INSTRUCTOR;
+  }
+
+  /** Category IDs a student/fellow may see in list views: assigned + purchased + purchasable. */
+  private async getVisibleCategoryIdsForUser(
+    userId: string,
+  ): Promise<Types.ObjectId[]> {
+    const user = await this.userModel
+      .findById(userId)
+      .select('fellowData.assignedCategories purchasedCategories')
+      .lean();
+
+    const assigned = (user?.fellowData?.assignedCategories || []).map((id) =>
+      id.toString(),
+    );
+    const purchased = (user?.purchasedCategories || []).map((id) =>
+      id.toString(),
+    );
+
+    const purchasable = await this.categoryModel
+      .find({
+        isActive: true,
+        $or: [
+          { accessType: { $in: ['paid', 'restricted'] } },
+          { hasTieredPricing: true },
+        ],
+      })
+      .select('_id')
+      .lean();
+
+    const visible = new Set<string>([
+      ...assigned,
+      ...purchased,
+      ...purchasable.map((c) => c._id.toString()),
+    ]);
+
+    return Array.from(visible).map((id) => new Types.ObjectId(id));
+  }
+
+  /** Whether a requesting user may view a module's full lesson/slide/quiz content. */
+  private async userHasModuleContentAccess(
+    module: any,
+    requestingUser?: { id?: string; _id?: any; role?: string },
+  ): Promise<boolean> {
+    if (!requestingUser) return false;
+
+    const userId = requestingUser.id || requestingUser._id?.toString();
+    if (!userId) return false;
+
+    if (requestingUser.role === UserRole.ADMIN) return true;
+
+    if (requestingUser.role === UserRole.INSTRUCTOR) {
+      const instructorIds = (module.instructorIds || []).map((i: any) =>
+        (i?._id || i).toString(),
+      );
+      if (instructorIds.includes(userId)) return true;
+      // Not the assigned instructor for this module  fall through to the
+      // same category-based check a student would get.
+    }
+
+    const category = module.categoryId as any;
+    const categoryId = category?._id?.toString() || category?.toString();
+    if (!categoryId) return false;
+
+    try {
+      const result = await this.categoryAccessControlService.checkCategoryAccess(
+        userId,
+        categoryId,
+      );
+      return result.allowed;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Strip lesson/slide/quiz content for users who don't have access yet  keep marketing metadata. */
+  private toModulePreview(module: any): any {
+    const obj = module.toObject ? module.toObject() : { ...module };
+    const lessons = this.getAllLessons(obj).map((l: any, i: number) => ({
+      _id: l._id,
+      title: l.title,
+      description: l.description,
+      duration: l.duration,
+      order: l.order ?? i,
+    }));
+
+    return {
+      ...obj,
+      lessons,
+      topics: [],
+      finalAssessment: undefined,
+      isContentLocked: true,
+    };
+  }
 
   // ── Helper: get all lessons (direct lessons first, fall back to topics) ──
   getAllLessons(module: any): any[] {
@@ -134,13 +240,16 @@ export class ModulesService {
   }
 
   // ── Get all published modules with filters ────────────────────────────────
-  async getAllPublishedModules(filters?: {
-    category?: string;
-    level?: ModuleLevel;
-    search?: string;
-    page?: number;
-    limit?: number;
-  }): Promise<{ modules: any[]; total: number; pages: number }> {
+  async getAllPublishedModules(
+    filters?: {
+      category?: string;
+      level?: ModuleLevel;
+      search?: string;
+      page?: number;
+      limit?: number;
+    },
+    requestingUser?: { id?: string; _id?: any; role?: string },
+  ): Promise<{ modules: any[]; total: number; pages: number }> {
     // Visible to students: published/approved modules AND admin-created drafts
     const statusFilter = {
       $or: [
@@ -160,6 +269,25 @@ export class ModulesService {
       }
     }
     if (filters?.level) baseQuery.level = filters.level;
+
+    // Category isolation: authenticated non-staff users only see modules for
+    // categories they belong to (or could purchase into). Anonymous visitors
+    // and admin/instructor callers keep the full public/management catalog.
+    const userId = requestingUser?.id || requestingUser?._id?.toString();
+    if (userId && !this.isStaffRole(requestingUser?.role)) {
+      const visibleCategoryIds = await this.getVisibleCategoryIdsForUser(userId);
+
+      if (baseQuery.categoryId) {
+        const requestedIsVisible = visibleCategoryIds.some((id) =>
+          id.equals(baseQuery.categoryId),
+        );
+        if (!requestedIsVisible) {
+          return { modules: [], total: 0, pages: 0 };
+        }
+      } else {
+        baseQuery.categoryId = { $in: visibleCategoryIds };
+      }
+    }
     if (filters?.search) {
       const searchAsNumber = parseInt(filters.search);
       const orConditions: any[] = [
@@ -272,14 +400,26 @@ export class ModulesService {
   }
 
   // ── Get module by ID ──────────────────────────────────────────────────────
-  async getModuleById(moduleId: string): Promise<Module> {
+  // Returns the full module (lessons/slides/quiz) only if the requester has
+  // access to its category; otherwise a stripped preview (title/description/
+  // lesson titles only) so marketing/catalog pages keep working for everyone.
+  async getModuleById(
+    moduleId: string,
+    requestingUser?: { id?: string; _id?: any; role?: string },
+  ): Promise<Module> {
     const module = await this.moduleModel
       .findById(moduleId)
       .populate('instructorIds', 'firstName lastName email avgRating')
-      .populate('categoryId', 'name price accessType');
+      .populate('categoryId', 'name price accessType hasTieredPricing');
 
     if (!module) throw new NotFoundException('Module not found');
-    return module;
+
+    const hasAccess = await this.userHasModuleContentAccess(
+      module,
+      requestingUser,
+    );
+
+    return hasAccess ? module : this.toModulePreview(module);
   }
 
   // ── Update module metadata ────────────────────────────────────────────────
@@ -931,12 +1071,13 @@ export class ModulesService {
 
     const saved = await module.save();
 
+    // TEMPORARILY DISABLED for Module 8 / DSS testing  re-enable once testing is done.
     // Notify all users enrolled in this category (fire-and-forget)
-    const categoryId = (module.categoryId as any)?._id?.toString() || module.categoryId?.toString();
-    const categoryName = (module.categoryId as any)?.name || 'your programme';
-    this.notifyEnrolledUsersInCategory(categoryId, module.title, categoryName).catch((err) =>
-      console.error('[publishModule] Email notification failed:', err),
-    );
+    // const categoryId = (module.categoryId as any)?._id?.toString() || module.categoryId?.toString();
+    // const categoryName = (module.categoryId as any)?.name || 'your programme';
+    // this.notifyEnrolledUsersInCategory(categoryId, module.title, categoryName).catch((err) =>
+    //   console.error('[publishModule] Email notification failed:', err),
+    // );
 
     return saved;
   }
