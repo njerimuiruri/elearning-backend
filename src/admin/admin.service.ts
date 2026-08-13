@@ -27,6 +27,7 @@ import {
 import { ModuleEnrollment } from '../schemas/module-enrollment.schema';
 import { ModuleCertificate } from '../schemas/module-certificate.schema';
 import { Category } from '../schemas/category.schema';
+import { StudentProgression } from '../schemas/student-progression.schema';
 import { Microgrant, MicrograntStatus } from '../schemas/microgrant.schema';
 import { BankPayment, BankPaymentStatus } from '../schemas/bank-payment.schema';
 import { EmailService } from '../common/services/email.service';
@@ -74,6 +75,8 @@ export class AdminService {
     @InjectModel(ModuleCertificate.name)
     private moduleCertificateModel: Model<ModuleCertificate>,
     @InjectModel(Category.name) private categoryModel: Model<Category>,
+    @InjectModel(StudentProgression.name)
+    private studentProgressionModel: Model<StudentProgression>,
     @InjectModel(Microgrant.name) private micrograntModel: Model<Microgrant>,
     @InjectModel(BankPayment.name) private bankPaymentModel: Model<BankPayment>,
     private emailService: EmailService,
@@ -3802,129 +3805,287 @@ export class AdminService {
   }
 
   /**
-   * GET /admin/fellows/progress  list all fellows with real progress data.
-   * Supports filters: status, category, cohort, risk, search, page, limit.
+   * Weighted overall-performance score for one fellow within one category,
+   * computed only from data already recorded on their module enrollments:
+   *   - module assessment quality      (45%)  avg finalAssessmentScore of completed modules
+   *   - module completion rate         (35%)  completedModules / totalModulesInCategory
+   *   - essay grading follow-through   (20%)  graded / submitted essay-containing modules
+   * A component with no underlying data is dropped and the remaining weights
+   * are renormalised — a fellow who hasn't reached an essay yet isn't penalised
+   * for it. A fellow with zero completed, scored modules gets no score at all
+   * ('insufficient_data') rather than a misleading number. This is deliberately
+   * separate from the Microgrants composite score, which also factors in login
+   * activity  see AdminService.scoreFellow.
+   */
+  private computeFellowPerformance(
+    enrollments: any[],
+    essayModuleIds: Set<string>,
+    totalModulesInCategory: number,
+    completedModules: number,
+  ) {
+    const completed = enrollments.filter((e) => e.isCompleted);
+    const scored = completed.filter((e) => (e.finalAssessmentScore ?? 0) > 0);
+    const assessmentQuality =
+      scored.length > 0
+        ? scored.reduce((s, e) => s + e.finalAssessmentScore, 0) / scored.length
+        : null;
+
+    const essayEnrollments = enrollments.filter((e) =>
+      essayModuleIds.has((e.moduleId as any).toString()),
+    );
+    const submittedEssays = essayEnrollments.filter((e) => !!e.essaySubmittedAt);
+    const gradedEssays = submittedEssays.filter((e) => !e.pendingInstructorReview);
+    const passedEssays = gradedEssays.filter((e) => e.finalAssessmentPassed);
+
+    const essay = {
+      totalEssayModules: essayModuleIds.size,
+      submitted: submittedEssays.length,
+      graded: gradedEssays.length,
+      pending: submittedEssays.length - gradedEssays.length,
+      passed: passedEssays.length,
+      passRate:
+        gradedEssays.length > 0
+          ? Math.round((passedEssays.length / gradedEssays.length) * 100)
+          : null,
+    };
+
+    if (completedModules < 1 || assessmentQuality === null) {
+      return {
+        essay,
+        overall: {
+          score: null,
+          category: 'insufficient_data',
+          components: [] as Array<{ key: string; label: string; weight: number; normalizedWeight: number; value: number }>,
+          explanation:
+            'Fewer than one completed module with a recorded assessment score  not enough data to score yet.',
+        },
+      };
+    }
+
+    const moduleCompletionPct =
+      totalModulesInCategory > 0
+        ? (completedModules / totalModulesInCategory) * 100
+        : 0;
+    const essayFollowThroughPct =
+      submittedEssays.length > 0
+        ? (gradedEssays.length / submittedEssays.length) * 100
+        : null;
+
+    const components: Array<{ key: string; label: string; weight: number; value: number }> = [
+      { key: 'assessmentQuality', label: 'Module assessment quality', weight: 45, value: Math.round(assessmentQuality) },
+      { key: 'moduleCompletion', label: 'Module completion rate', weight: 35, value: Math.round(moduleCompletionPct) },
+    ];
+    if (essayFollowThroughPct !== null) {
+      components.push({ key: 'essayFollowThrough', label: 'Essay grading follow-through', weight: 20, value: Math.round(essayFollowThroughPct) });
+    }
+
+    const totalWeight = components.reduce((s, c) => s + c.weight, 0);
+    const score = Math.round(
+      components.reduce((s, c) => s + c.value * (c.weight / totalWeight), 0),
+    );
+
+    const category =
+      score >= 85 ? 'outstanding' :
+      score >= 70 ? 'strong' :
+      score >= 55 ? 'satisfactory' : 'needs_improvement';
+
+    return {
+      essay,
+      overall: {
+        score,
+        category,
+        components: components.map((c) => ({
+          ...c,
+          normalizedWeight: Math.round((c.weight / totalWeight) * 100),
+        })),
+        explanation: `Weighted average of ${components.length} signal${components.length > 1 ? 's' : ''} recorded for this fellow in this category.`,
+      },
+    };
+  }
+
+  /**
+   * GET /admin/fellows/progress  fellows in one category (defaults to
+   * "AI for Climate Resilience") with category-scoped module totals, level
+   * (from StudentProgression), certificate status, essay grading progress,
+   * and an auditable overall performance score. Every value traces back to a
+   * stored record  nothing here is estimated.
    */
   async getFellowsProgress(filters: {
-    search?: string;
-    module?: string;
-    status?: string;
     categoryId?: string;
-    cohort?: string;
-    risk?: string;
-    page?: number;
-    limit?: number;
+    search?: string;
+    level?: string;
+    certificate?: string;
+    performanceCategory?: string;
   } = {}) {
-    const { search, module, status } = filters;
-    const pipeline: any[] = [];
+    const { search, level, certificate, performanceCategory } = filters;
 
-    if (module && module !== 'all' && Types.ObjectId.isValid(module)) {
-      pipeline.push({
-        $match: {
-          moduleId: new Types.ObjectId(module),
-        },
-      });
+    const category =
+      filters.categoryId && Types.ObjectId.isValid(filters.categoryId)
+        ? await this.categoryModel.findById(filters.categoryId).select('_id name').lean()
+        : await this.categoryModel
+            .findOne({ name: { $regex: 'AI for Climate Resilience', $options: 'i' } })
+            .select('_id name')
+            .lean();
+
+    if (!category) {
+      throw new NotFoundException('AI for Climate Resilience category not found');
+    }
+    const categoryId = category._id as Types.ObjectId;
+
+    const [modules, fellows] = await Promise.all([
+      this.moduleModel
+        .find({ categoryId, status: ModuleStatus.PUBLISHED, isActive: { $ne: false } })
+        .select('_id title order level finalAssessment.questions')
+        .lean(),
+      this.userModel
+        .find({
+          role: UserRole.STUDENT,
+          userType: 'fellow',
+          'fellowData.assignedCategories': categoryId,
+        })
+        .select('firstName lastName fullName email fellowData profileImage')
+        .lean(),
+    ]);
+
+    const totalModules = modules.length;
+    const moduleIds = modules.map((m) => m._id);
+    const essayModuleIds = new Set(
+      modules
+        .filter((m: any) => (m.finalAssessment?.questions || []).some((q: any) => q.type === 'essay'))
+        .map((m) => (m._id as any).toString()),
+    );
+    const moduleMeta = new Map(modules.map((m: any) => [(m._id as any).toString(), m]));
+    const fellowIds = fellows.map((f) => f._id as any);
+
+    const [enrollments, progressions, certificates] = await Promise.all([
+      this.moduleEnrollmentModel
+        .find({ studentId: { $in: fellowIds }, moduleId: { $in: moduleIds } })
+        .select(
+          'studentId moduleId progress isCompleted completedAt completedLessons totalLessons finalAssessmentPassed finalAssessmentScore pendingInstructorReview essaySubmittedAt',
+        )
+        .lean(),
+      this.studentProgressionModel
+        .find({ studentId: { $in: fellowIds }, categoryId })
+        .select('studentId currentLevel')
+        .lean(),
+      // Certificates are matched by categoryName (stored on the cert itself), not module
+      // lookup, so a cert for a since-unpublished module is still counted.
+      this.moduleCertificateModel
+        .find({ studentId: { $in: fellowIds }, categoryName: (category as any).name })
+        .select('studentId moduleLevel issuedDate publicId')
+        .lean(),
+    ]);
+
+    const enrollmentsByFellow = new Map<string, any[]>();
+    for (const e of enrollments) {
+      const sid = (e.studentId as any).toString();
+      if (!enrollmentsByFellow.has(sid)) enrollmentsByFellow.set(sid, []);
+      enrollmentsByFellow.get(sid)!.push(e);
     }
 
-    pipeline.push(
-      {
-        $lookup: {
-          from: 'users',
-          localField: 'studentId',
-          foreignField: '_id',
-          as: 'user',
-        },
-      },
-      {
-        $lookup: {
-          from: 'modules',
-          localField: 'moduleId',
-          foreignField: '_id',
-          as: 'module',
-        },
-      },
-      {
-        $match: {
-          'user.0.role': UserRole.STUDENT,
-          'user.0.userType': 'fellow',
-        },
-      },
-      {
-        $project: {
-          progress: 1,
-          isCompleted: 1,
-          completedLessons: 1,
-          totalLessons: 1,
-          finalAssessmentPassed: 1,
-          fullName: { $arrayElemAt: ['$user.fullName', 0] },
-          email: { $arrayElemAt: ['$user.email', 0] },
-          fellowId: { $arrayElemAt: ['$user.fellowData.fellowId', 0] },
-          cohort: { $arrayElemAt: ['$user.fellowData.cohort', 0] },
-          region: { $arrayElemAt: ['$user.fellowData.region', 0] },
-          track: { $arrayElemAt: ['$user.fellowData.track', 0] },
-          moduleId: { $arrayElemAt: ['$module._id', 0] },
-          moduleTitle: { $arrayElemAt: ['$module.title', 0] },
-          moduleOrder: { $arrayElemAt: ['$module.order', 0] },
-          moduleLevel: { $arrayElemAt: ['$module.level', 0] },
-          certificateEarned: 1,
-        },
-      },
+    const levelByFellow = new Map(
+      progressions.map((p: any) => [(p.studentId as any).toString(), p.currentLevel]),
     );
+
+    const certsByFellow = new Map<string, any[]>();
+    for (const c of certificates) {
+      const sid = (c.studentId as any).toString();
+      if (!certsByFellow.has(sid)) certsByFellow.set(sid, []);
+      certsByFellow.get(sid)!.push(c);
+    }
+
+    let results = fellows.map((fellow: any) => {
+      const sid = (fellow._id as any).toString();
+      const fellowEnrollments = enrollmentsByFellow.get(sid) || [];
+
+      const moduleList = fellowEnrollments
+        .map((e: any) => {
+          const mod = moduleMeta.get((e.moduleId as any).toString());
+          if (!mod) return null;
+          return {
+            moduleId: (e.moduleId as any).toString(),
+            title: (mod as any).title,
+            order: (mod as any).order || 0,
+            level: (mod as any).level,
+            progress: e.progress || 0,
+            isCompleted: !!e.isCompleted,
+            completedLessons: e.completedLessons || 0,
+            totalLessons: e.totalLessons || 0,
+            finalAssessmentPassed: !!e.finalAssessmentPassed,
+            finalAssessmentScore: e.finalAssessmentScore || 0,
+            completedAt: e.completedAt || null,
+          };
+        })
+        .filter(Boolean)
+        .sort((a: any, b: any) => a.order - b.order);
+
+      const completedModules = moduleList.filter((m: any) => m!.isCompleted).length;
+      const performance = this.computeFellowPerformance(
+        fellowEnrollments,
+        essayModuleIds,
+        totalModules,
+        completedModules,
+      );
+
+      const fellowCerts = certsByFellow.get(sid) || [];
+      const latestCert = [...fellowCerts].sort(
+        (a: any, b: any) => new Date(b.issuedDate).getTime() - new Date(a.issuedDate).getTime(),
+      )[0];
+
+      return {
+        studentId: sid,
+        fullName:
+          fellow.fullName ||
+          `${fellow.firstName || ''} ${fellow.lastName || ''}`.trim() ||
+          'Unnamed fellow',
+        email: fellow.email,
+        fellowIdCode: fellow.fellowData?.fellowId || null,
+        cohort: fellow.fellowData?.cohort || null,
+        region: fellow.fellowData?.region || null,
+        track: fellow.fellowData?.track || null,
+        profileImage: fellow.profileImage || null,
+        modules: moduleList,
+        totalModules,
+        completedModules,
+        overallProgress: totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0,
+        currentLevel: levelByFellow.get(sid) || 'beginner',
+        certificate: {
+          issued: fellowCerts.length > 0,
+          level: latestCert?.moduleLevel || null,
+          issuedAt: latestCert?.issuedDate || null,
+          publicId: latestCert?.publicId || null,
+        },
+        essayPerformance: performance.essay,
+        overallPerformance: performance.overall,
+      };
+    });
 
     if (search) {
-      pipeline.push({
-        $match: {
-          $or: [
-            { fullName: { $regex: search, $options: 'i' } },
-            { email: { $regex: search, $options: 'i' } },
-          ],
-        },
-      });
+      const q = search.toLowerCase();
+      results = results.filter(
+        (f) => f.fullName.toLowerCase().includes(q) || f.email?.toLowerCase().includes(q),
+      );
+    }
+    if (level && level !== 'all') {
+      results = results.filter((f) => f.currentLevel === level);
+    }
+    if (certificate === 'issued') {
+      results = results.filter((f) => f.certificate.issued);
+    } else if (certificate === 'not_issued') {
+      results = results.filter((f) => !f.certificate.issued);
+    }
+    if (performanceCategory && performanceCategory !== 'all') {
+      results = results.filter((f) => f.overallPerformance.category === performanceCategory);
     }
 
-    if (status && status !== 'all') {
-      const statusMatch: Record<string, any> = {
-        completed: { $or: [{ isCompleted: true }, { progress: 100 }] },
-        inprogress: { progress: { $gt: 0, $lt: 100 } },
-        notstarted: { $or: [{ progress: 0 }, { progress: { $exists: false } }] },
-      };
+    results.sort((a, b) => a.fullName.localeCompare(b.fullName));
 
-      if (statusMatch[status]) {
-        pipeline.push({ $match: statusMatch[status] });
-      }
-    }
-
-    pipeline.push(
-      {
-        $group: {
-          _id: '$email',
-          fullName: { $first: '$fullName' },
-          email: { $first: '$email' },
-          fellowId: { $first: '$fellowId' },
-          cohort: { $first: '$cohort' },
-          region: { $first: '$region' },
-          track: { $first: '$track' },
-          modules: {
-            $push: {
-              moduleId: '$moduleId',
-              title: '$moduleTitle',
-              order: '$moduleOrder',
-              level: '$moduleLevel',
-              progress: '$progress',
-              isCompleted: '$isCompleted',
-              completedLessons: '$completedLessons',
-              totalLessons: '$totalLessons',
-              finalAssessmentPassed: '$finalAssessmentPassed',
-            },
-          },
-          // true if ANY beginner enrollment for this fellow has certificateEarned set
-          certificateEarned: { $max: '$certificateEarned' },
-        },
-      },
-      { $sort: { fullName: 1 } },
-    );
-
-    return this.moduleEnrollmentModel.aggregate(pipeline);
+    return {
+      categoryId: categoryId.toString(),
+      categoryName: (category as any).name,
+      totalModulesInCategory: totalModules,
+      fellows: results,
+    };
   }
 
   async getFellowsProgressLegacy(filters: {
@@ -4044,7 +4205,10 @@ export class AdminService {
   }
 
   /**
-   * GET /admin/fellows/:id/progress  full progress detail for one fellow.
+   * GET /admin/fellows/:id/progress  full progress detail for one fellow,
+   * including per-module scores, per-essay grading detail with feedback, and
+   * the exact overall-performance breakdown (see computeFellowPerformance)
+   * so nothing is a black box.
    */
   async getFellowProgressDetail(fellowId: string) {
     const fellow = await this.userModel
@@ -4060,37 +4224,54 @@ export class AdminService {
     const assignedCategoryIds: Types.ObjectId[] =
       fellow.fellowData?.assignedCategories || [];
 
-    // Get all modules in assigned categories
+    // Only published, active modules count toward a fellow's curriculum.
     const modules = await this.moduleModel
-      .find({ categoryId: { $in: assignedCategoryIds } })
-      .select('_id title level categoryId')
+      .find({
+        categoryId: { $in: assignedCategoryIds },
+        status: ModuleStatus.PUBLISHED,
+        isActive: { $ne: false },
+      })
+      .select('_id title level order categoryId finalAssessment.questions')
       .lean();
 
-    // Get all enrollments for this fellow
+    // Full enrollment docs (no field limiting)  we need finalAssessmentResults,
+    // essaySubmittedAt and pendingInstructorReview for the essay breakdown below.
     const enrollments = await this.moduleEnrollmentModel
       .find({
         studentId: new Types.ObjectId(fellowId),
         moduleId: { $in: modules.map((m) => m._id) },
       })
-      .select(
-        'moduleId progress isCompleted completedAt lastAccessedAt finalAssessmentPassed finalAssessmentScore completedLessons totalLessons',
-      )
       .lean();
 
     const enrollmentMap = new Map(
       enrollments.map((e) => [(e.moduleId as any).toString(), e]),
     );
 
-    // Category names
-    const cats = await this.categoryModel
-      .find({ _id: { $in: assignedCategoryIds } })
-      .select('_id name')
-      .lean();
+    const [cats, progressions, certificates] = await Promise.all([
+      this.categoryModel
+        .find({ _id: { $in: assignedCategoryIds } })
+        .select('_id name')
+        .lean(),
+      this.studentProgressionModel
+        .find({ studentId: new Types.ObjectId(fellowId), categoryId: { $in: assignedCategoryIds } })
+        .select('categoryId currentLevel')
+        .lean(),
+      // Matched by categoryName (stored on the cert itself) so a cert for a
+      // since-unpublished module is still found.
+      this.moduleCertificateModel
+        .find({ studentId: new Types.ObjectId(fellowId) })
+        .select('moduleId moduleLevel categoryName issuedDate publicId')
+        .lean(),
+    ]);
     const catNames = new Map(
       cats.map((c) => [(c._id as any).toString(), (c as any).name]),
     );
+    const levelByCategory = new Map(
+      progressions.map((p: any) => [(p.categoryId as any).toString(), p.currentLevel]),
+    );
 
-    // Group modules by category with enrollment data
+    // Group modules by category  each category gets its own module list,
+    // essay-module set, and (via computeFellowPerformance) its own score.
     const categoriesMap = new Map<string, any>();
     for (const mod of modules) {
       const catId = (mod.categoryId as any).toString();
@@ -4098,14 +4279,23 @@ export class AdminService {
         categoriesMap.set(catId, {
           categoryId: catId,
           categoryName: catNames.get(catId) || 'Unknown',
-          modules: [],
+          currentLevel: levelByCategory.get(catId) || 'beginner',
+          modules: [] as any[],
+          essayModuleIds: new Set<string>(),
+          enrollmentsForPerf: [] as any[],
         });
       }
+      const entry = categoriesMap.get(catId);
       const enr = enrollmentMap.get((mod._id as any).toString());
-      categoriesMap.get(catId).modules.push({
+
+      if ((mod as any).finalAssessment?.questions?.some((q: any) => q.type === 'essay')) {
+        entry.essayModuleIds.add((mod._id as any).toString());
+      }
+      entry.modules.push({
         moduleId: (mod._id as any).toString(),
         title: (mod as any).title,
         level: (mod as any).level,
+        order: (mod as any).order || 0,
         status: !enr
           ? 'not_started'
           : enr.isCompleted
@@ -4119,28 +4309,56 @@ export class AdminService {
         lastAccessedAt: enr?.lastAccessedAt || null,
         completedAt: enr?.completedAt || null,
         assessmentPassed: enr?.finalAssessmentPassed || false,
-        assessmentScore: enr?.finalAssessmentScore || null,
+        // Only surface a score once the module is actually completed  a
+        // score of 0 from an in-progress attempt would otherwise look like
+        // a real, poor result rather than "not finished yet".
+        assessmentScore: enr?.isCompleted ? (enr?.finalAssessmentScore ?? null) : null,
       });
+      if (enr) entry.enrollmentsForPerf.push(enr);
     }
 
-    const categoriesWithProgress = Array.from(categoriesMap.values()).map(
-      (cat) => ({
-        ...cat,
-        totalModules: cat.modules.length,
-        completedModules: cat.modules.filter(
-          (m: any) => m.status === 'completed',
-        ).length,
-        progressPct:
-          cat.modules.length > 0
-            ? Math.round(
-                (cat.modules.filter((m: any) => m.status === 'completed')
-                  .length /
-                  cat.modules.length) *
-                  100,
-              )
-            : 0,
-      }),
-    );
+    // Per-question essay detail (all assigned categories) with feedback, for
+    // the "Essay Performance" panel on the detail page.
+    const moduleTitleById = new Map(modules.map((m: any) => [(m._id as any).toString(), m.title]));
+    const essays: any[] = [];
+    for (const e of enrollments) {
+      for (const result of (e.finalAssessmentResults || []) as any[]) {
+        if (result.questionType !== 'essay') continue;
+        essays.push({
+          moduleId: (e.moduleId as any).toString(),
+          moduleTitle: moduleTitleById.get((e.moduleId as any).toString()) || 'Untitled module',
+          questionText: result.questionText,
+          submittedAt: e.essaySubmittedAt || null,
+          status: e.pendingInstructorReview || !result.gradedAt ? 'pending' : 'graded',
+          score: result.gradedAt ? (e.finalAssessmentScore ?? null) : null,
+          passed: result.gradedAt ? !!e.finalAssessmentPassed : null,
+          feedback: result.instructorFeedback || null,
+          gradedAt: result.gradedAt || null,
+        });
+      }
+    }
+
+    const categoriesWithProgress = Array.from(categoriesMap.values()).map((cat) => {
+      const totalModules = cat.modules.length;
+      const completedModules = cat.modules.filter((m: any) => m.status === 'completed').length;
+      const performance = this.computeFellowPerformance(
+        cat.enrollmentsForPerf,
+        cat.essayModuleIds,
+        totalModules,
+        completedModules,
+      );
+      return {
+        categoryId: cat.categoryId,
+        categoryName: cat.categoryName,
+        currentLevel: cat.currentLevel,
+        modules: cat.modules.sort((a: any, b: any) => a.order - b.order),
+        totalModules,
+        completedModules,
+        progressPct: totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0,
+        essayPerformance: performance.essay,
+        overallPerformance: performance.overall,
+      };
+    });
 
     const totalModules = modules.length;
     const completedModules = enrollments.filter((e) => e.isCompleted).length;
@@ -4187,6 +4405,7 @@ export class AdminService {
         lastName: fellow.lastName,
         email: fellow.email,
         phoneNumber: fellow.phoneNumber,
+        profileImage: (fellow as any).profileImage || null,
         isActive: fellow.isActive,
         fellowData: fellow.fellowData,
       },
@@ -4202,6 +4421,14 @@ export class AdminService {
       totalDays,
       riskLevel,
       categories: categoriesWithProgress,
+      certificates: certificates.map((c: any) => ({
+        moduleId: (c.moduleId as any).toString(),
+        level: c.moduleLevel,
+        categoryName: c.categoryName,
+        issuedAt: c.issuedDate,
+        publicId: c.publicId,
+      })),
+      essays,
     };
   }
 

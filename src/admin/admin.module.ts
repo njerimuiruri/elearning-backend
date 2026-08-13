@@ -31,6 +31,10 @@ import {
   ModuleCertificateSchema,
 } from '../schemas/module-certificate.schema';
 import { Category, CategorySchema } from '../schemas/category.schema';
+import {
+  StudentProgression,
+  StudentProgressionSchema,
+} from '../schemas/student-progression.schema';
 import { Microgrant, MicrograntSchema } from '../schemas/microgrant.schema';
 import { BankPayment, BankPaymentSchema } from '../schemas/bank-payment.schema';
 import { EmailService } from '../common/services/email.service';
@@ -52,6 +56,7 @@ import { EmailQueueModule } from '../email-queue/email-queue.module';
       { name: ModuleEnrollment.name, schema: ModuleEnrollmentSchema },
       { name: ModuleCertificate.name, schema: ModuleCertificateSchema },
       { name: Category.name, schema: CategorySchema },
+      { name: StudentProgression.name, schema: StudentProgressionSchema },
       { name: Microgrant.name, schema: MicrograntSchema },
       { name: BankPayment.name, schema: BankPaymentSchema },
     ]),

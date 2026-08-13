@@ -267,18 +267,24 @@ export class AdminController {
 
   @Get('fellows/progress')
   @ApiOperation({ summary: 'List all fellows with module completion progress' })
-  @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'module', required: false, description: 'Module ObjectId' })
+  @ApiQuery({ name: 'categoryId', required: false })
   @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'level', required: false })
+  @ApiQuery({ name: 'certificate', required: false })
+  @ApiQuery({ name: 'performanceCategory', required: false })
   async getFellowsProgress(
-    @Query('status') status?: string,
-    @Query('module') module?: string,
+    @Query('categoryId') categoryId?: string,
     @Query('search') search?: string,
+    @Query('level') level?: string,
+    @Query('certificate') certificate?: string,
+    @Query('performanceCategory') performanceCategory?: string,
   ) {
     return this.adminService.getFellowsProgress({
-      status,
-      module,
+      categoryId,
       search,
+      level,
+      certificate,
+      performanceCategory,
     });
   }
 
