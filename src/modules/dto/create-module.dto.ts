@@ -34,6 +34,25 @@ export class ResourceDto {
 }
 
 // ─────────────────────────────────────────
+// Resource Group DTO (named group of resources within a lesson)
+// ─────────────────────────────────────────
+export class ResourceGroupDto {
+  @IsString()
+  @IsNotEmpty()
+  title!: string;
+
+  @IsOptional()
+  @IsNumber()
+  order?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResourceDto)
+  resources?: ResourceDto[];
+}
+
+// ─────────────────────────────────────────
 // Slide DTO
 // ─────────────────────────────────────────
 export class SlideDto {
@@ -173,6 +192,12 @@ export class CreateModuleLessonDto {
   @ValidateNested({ each: true })
   @Type(() => ResourceDto)
   lessonResources?: ResourceDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ResourceGroupDto)
+  resourceGroups?: ResourceGroupDto[];
 
   @IsOptional()
   @IsNumber()

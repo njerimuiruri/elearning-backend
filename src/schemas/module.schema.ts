@@ -127,6 +127,31 @@ export class LessonResource {
 }
 
 // ─────────────────────────────────────────
+// Resource Group  named grouping of resources within a lesson
+// (e.g. "Policy", "Literature", "Research Papers")
+// ─────────────────────────────────────────
+export class ResourceGroup {
+  @Prop({ required: true })
+  title!: string;
+
+  @Prop({ default: 0 })
+  order!: number;
+
+  @Prop({
+    type: [
+      {
+        url: String,
+        name: { type: String, default: 'Resource' },
+        description: String,
+        fileType: String,
+      },
+    ],
+    default: [],
+  })
+  resources!: LessonResource[];
+}
+
+// ─────────────────────────────────────────
 // ModuleLesson  direct child of a Module
 // Structure: Category → Module → Lesson → Slides
 // ─────────────────────────────────────────
@@ -204,6 +229,30 @@ export class ModuleLesson {
     default: [],
   })
   lessonResources!: LessonResource[];
+
+  // Resources organised into named groups (e.g. "Policy", "Literature", "Research Papers").
+  // Kept separate from the flat `lessonResources` list above for backward compatibility.
+  @Prop({
+    type: [
+      {
+        title: String,
+        order: { type: Number, default: 0 },
+        resources: {
+          type: [
+            {
+              url: String,
+              name: { type: String, default: 'Resource' },
+              description: String,
+              fileType: String,
+            },
+          ],
+          default: [],
+        },
+      },
+    ],
+    default: [],
+  })
+  resourceGroups!: ResourceGroup[];
 
   @Prop({ default: 0 })
   order!: number;
