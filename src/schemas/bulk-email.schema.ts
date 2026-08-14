@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export type BulkEmailDocument = BulkEmail & Document;
 
@@ -27,7 +27,7 @@ export enum BulkEmailFilterType {
 
 @Schema({ _id: false })
 export class BulkEmailRecipient {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;
 
   @Prop({ required: true })
@@ -84,7 +84,7 @@ export const BulkEmailCcBccSchema = SchemaFactory.createForClass(BulkEmailCcBcc)
 
 @Schema({ timestamps: true })
 export class BulkEmail extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   senderId: Types.ObjectId;
 
   @Prop({ required: true })
@@ -105,7 +105,7 @@ export class BulkEmail extends Document {
   filterType: BulkEmailFilterType;
 
   /** Optional category/cohort IDs used when filterType = BY_CATEGORY or BY_COHORT */
-  @Prop({ type: [Types.ObjectId], ref: 'Category', default: [] })
+  @Prop({ type: [SchemaTypes.ObjectId], ref: 'Category', default: [] })
   filterCategoryIds: Types.ObjectId[];
 
   /** Cohort names used when filterType = BY_COHORT */

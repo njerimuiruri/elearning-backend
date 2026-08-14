@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 /**
  * Append-only record of a single lesson being completed.
@@ -13,13 +13,13 @@ import { Document, Types } from 'mongoose';
  */
 @Schema({ timestamps: true })
 export class LessonCompletion extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'ModuleEnrollment', required: true, index: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'ModuleEnrollment', required: true, index: true })
   enrollmentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Module', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Module', required: true })
   moduleId: Types.ObjectId;
 
   @Prop({ required: true })

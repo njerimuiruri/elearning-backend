@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export enum CourseStatus {
   DRAFT = 'draft',
@@ -71,13 +71,13 @@ export class Lesson {
   @Prop({ type: [Question], default: [] })
   questions?: Question[];
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   lockedBy?: Types.ObjectId;
 
   @Prop()
   lockedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   lastEditedBy?: Types.ObjectId;
 
   @Prop()
@@ -145,7 +145,7 @@ export class Module {
   @Prop()
   duration: number; // in minutes
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   uploadedBy?: Types.ObjectId;
 
   @Prop({ type: [Lesson], default: [] })
@@ -160,13 +160,13 @@ export class Module {
   @Prop({ default: 0 })
   order: number;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   lockedBy?: Types.ObjectId;
 
   @Prop()
   lockedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   lastEditedBy?: Types.ObjectId;
 
   @Prop()
@@ -223,7 +223,7 @@ export class Course extends Document {
   category: string;
 
   // Support one or more instructors
-  @Prop({ type: [Types.ObjectId], ref: 'User', required: true })
+  @Prop({ type: [SchemaTypes.ObjectId], ref: 'User', required: true })
   instructorIds: Types.ObjectId[];
 
   @Prop({ default: 0 })
@@ -253,19 +253,19 @@ export class Course extends Document {
   @Prop()
   courseTemplate?: string; // Reference to course template
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   lockedBy?: Types.ObjectId;
 
   @Prop()
   lockedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   lastEditedBy?: Types.ObjectId;
 
   @Prop()
   lastEditedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   approvedBy?: Types.ObjectId;
 
   @Prop()

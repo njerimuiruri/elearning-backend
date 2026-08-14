@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 import * as crypto from 'crypto';
 
 class ModuleProgress {
@@ -60,7 +60,7 @@ class AssessmentResult {
   @Prop({ default: null })
   gradedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   gradedBy?: Types.ObjectId; // Instructor who graded
 
   // AI Evaluation Fields (for essay questions)
@@ -136,10 +136,10 @@ class CourseAttemptHistory {
 
 @Schema({ timestamps: true })
 export class Enrollment extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Course', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Course', required: true })
   courseId: Types.ObjectId;
 
   @Prop({ default: 0 })

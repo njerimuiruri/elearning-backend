@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 import * as crypto from 'crypto';
 
 // Per-slide progress tracking
@@ -156,7 +156,7 @@ export class AssessmentResult {
   @Prop()
   gradedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   gradedBy?: Types.ObjectId;
 
   // AI grading fields (for essay questions)
@@ -186,10 +186,10 @@ export class AssessmentResult {
 
 @Schema({ timestamps: true })
 export class ModuleEnrollment extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Module', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Module', required: true })
   moduleId: Types.ObjectId;
 
   // Progress tracking

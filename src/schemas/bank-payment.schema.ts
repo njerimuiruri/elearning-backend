@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export enum BankPaymentStatus {
   PAID = 'paid',
@@ -10,10 +10,10 @@ export enum BankPaymentStatus {
 
 @Schema({ timestamps: true })
 export class BankPayment extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   userId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Category', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Category', required: true })
   categoryId!: Types.ObjectId;
 
   @Prop({ required: true })

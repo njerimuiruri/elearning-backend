@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export type BulkReminderDocument = BulkReminder & Document;
 
@@ -14,7 +14,7 @@ export enum BulkReminderFilterType {
 
 @Schema({ timestamps: true })
 export class BulkReminder extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   senderId: Types.ObjectId;
 
   @Prop({ required: true, enum: ['instructor', 'admin'] })
@@ -23,13 +23,13 @@ export class BulkReminder extends Document {
   @Prop({ required: true })
   senderName: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Module', default: null })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Module', default: null })
   moduleId?: Types.ObjectId;
 
   @Prop({ type: String, default: null })
   moduleName?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Category', default: null })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Category', default: null })
   categoryId?: Types.ObjectId;
 
   @Prop({ type: String, default: null })

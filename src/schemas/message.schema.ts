@@ -1,15 +1,15 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class Message extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   senderId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   receiverId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Course' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Course' })
   courseId?: Types.ObjectId;
 
   @Prop({ type: Number })
@@ -27,7 +27,7 @@ export class Message extends Document {
   @Prop({ type: [String], default: [] })
   attachments?: string[];
 
-  @Prop({ type: Types.ObjectId, ref: 'Message' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Message' })
   replyTo?: Types.ObjectId;
 
   @Prop({ enum: ['text', 'file', 'system'], default: 'text' })

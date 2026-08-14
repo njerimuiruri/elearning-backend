@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export enum ModuleStatus {
   DRAFT = 'draft',
@@ -341,13 +341,13 @@ export class Lesson {
   @Prop({ default: 0 })
   order!: number;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   lockedBy?: Types.ObjectId;
 
   @Prop()
   lockedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   lastEditedBy?: Types.ObjectId;
 
   @Prop()
@@ -522,7 +522,7 @@ export class Module extends Document {
   @Prop()
   expectedOutput?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Category', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Category', required: true })
   declare categoryId: Types.ObjectId;
 
   @Prop({ enum: ModuleLevel, required: true })
@@ -531,7 +531,7 @@ export class Module extends Document {
   @Prop({ enum: ModuleStatus, default: ModuleStatus.DRAFT })
   declare status: ModuleStatus;
 
-  @Prop({ type: [Types.ObjectId], ref: 'User', default: [] })
+  @Prop({ type: [SchemaTypes.ObjectId], ref: 'User', default: [] })
   declare instructorIds: Types.ObjectId[];
 
   // ── NEW: Direct lessons (Category → Module → Lesson) ───────────────────
@@ -587,6 +587,23 @@ export class Module extends Document {
             fileType: String,
           },
         ],
+        resourceGroups: [
+          {
+            title: String,
+            order: { type: Number, default: 0 },
+            resources: {
+              type: [
+                {
+                  url: String,
+                  name: { type: String, default: 'Resource' },
+                  description: String,
+                  fileType: String,
+                },
+              ],
+              default: [],
+            },
+          },
+        ],
         order: { type: Number, default: 0 },
         duration: String,
         topics: { type: [String], default: [] },
@@ -608,7 +625,7 @@ export class Module extends Document {
 
   // ── Creator tracking ────────────────────────────────────────────────────
   /** The user (admin or instructor) who actually created the module record */
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   createdBy?: Types.ObjectId;
 
   /** 'admin' | 'instructor'  who created this module */
@@ -700,7 +717,7 @@ export class Module extends Document {
   declare targetAudience: string[];
 
   // ── Approval workflow ──────────────────────────────────────────────────
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   approvedBy?: Types.ObjectId;
 
   @Prop()
@@ -732,13 +749,13 @@ export class Module extends Document {
   declare totalRatings: number;
 
   // ── Lock management ────────────────────────────────────────────────────
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   lockedBy?: Types.ObjectId;
 
   @Prop()
   lockedAt?: Date;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   lastEditedBy?: Types.ObjectId;
 
   @Prop()

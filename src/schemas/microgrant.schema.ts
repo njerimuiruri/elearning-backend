@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export enum MicrograntStatus {
   PENDING   = 'pending',
@@ -10,10 +10,10 @@ export enum MicrograntStatus {
 
 @Schema({ timestamps: true })
 export class Microgrant extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Category', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Category', required: true })
   categoryId: Types.ObjectId;
 
   /** Financial amount in KES */
@@ -38,7 +38,7 @@ export class Microgrant extends Document {
     daysSinceLastLogin: number;
   };
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   issuedBy?: Types.ObjectId;
 
   @Prop({ default: null })

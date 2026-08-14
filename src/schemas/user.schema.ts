@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export enum StudentVerificationStatus {
   NONE = 'none',
@@ -68,7 +68,7 @@ class FellowData {
   @Prop({ enum: FellowshipStatus, default: FellowshipStatus.ACTIVE })
   fellowshipStatus: string;
 
-  @Prop([{ type: Types.ObjectId, ref: 'Category' }])
+  @Prop([{ type: SchemaTypes.ObjectId, ref: 'Category' }])
   assignedCategories: Types.ObjectId[];
 
   @Prop({ default: null })
@@ -201,7 +201,7 @@ export class User extends Document {
   fellowData: FellowData;
 
   // Category access control
-  @Prop([{ type: Types.ObjectId, ref: 'Category' }])
+  @Prop([{ type: SchemaTypes.ObjectId, ref: 'Category' }])
   purchasedCategories: Types.ObjectId[];
 
   // Student verification for tiered-pricing categories (e.g. Arin Publishing Academy)
@@ -209,19 +209,19 @@ export class User extends Document {
   studentVerification: StudentVerificationData;
 
   // Which category the student paid the student price for (to gate ID verification)
-  @Prop({ type: Types.ObjectId, ref: 'Category', default: null })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Category', default: null })
   pendingStudentCategoryId: Types.ObjectId;
 
   // Pay-later enrollments (enrolled without payment, gets Module 1 teaser only)
   @Prop([{
-    categoryId: { type: Types.ObjectId, ref: 'Category' },
+    categoryId: { type: SchemaTypes.ObjectId, ref: 'Category' },
     tier: { type: String, enum: ['student', 'non-student'] },
     enrolledAt: { type: Date, default: Date.now },
   }])
   payLaterEnrollments: Array<{ categoryId: Types.ObjectId; tier: string; enrolledAt: Date }>;
 
   // Categories from which admin has manually locked user access
-  @Prop([{ type: Types.ObjectId, ref: 'Category' }])
+  @Prop([{ type: SchemaTypes.ObjectId, ref: 'Category' }])
   lockedFromCategories: Types.ObjectId[];
 
   // Password management

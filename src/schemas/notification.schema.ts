@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export type NotificationDocument = Notification & Document;
 
@@ -20,7 +20,7 @@ export enum NotificationType {
 
 @Schema({ timestamps: true })
 export class Notification extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;
 
   @Prop({ required: true, enum: Object.values(NotificationType) })
@@ -38,15 +38,15 @@ export class Notification extends Document {
   @Prop({ type: String, default: null })
   link?: string;
 
-  @Prop({ type: Types.ObjectId, default: null })
+  @Prop({ type: SchemaTypes.ObjectId, default: null })
   relatedId?: Types.ObjectId;
 
   /** Optional: links reminder notifications to a specific module */
-  @Prop({ type: Types.ObjectId, ref: 'Module', default: null })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Module', default: null })
   moduleId?: Types.ObjectId;
 
   /** Optional: links reminder notifications to a specific category */
-  @Prop({ type: Types.ObjectId, ref: 'Category', default: null })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Category', default: null })
   categoryId?: Types.ObjectId;
 
   createdAt: Date;

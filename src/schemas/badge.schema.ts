@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export enum BadgeType {
   LEVEL_COMPLETION = 'level_completion',
@@ -13,19 +13,19 @@ export enum BadgeType {
 
 @Schema({ timestamps: true })
 export class Badge extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
   @Prop({ enum: BadgeType, required: true })
   badgeType: BadgeType;
 
-  @Prop({ type: Types.ObjectId, ref: 'Category' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Category' })
   categoryId?: Types.ObjectId;
 
   @Prop({ enum: ['beginner', 'intermediate', 'advanced'] })
   level?: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'Module' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Module' })
   moduleId?: Types.ObjectId;
 
   @Prop({ required: true })

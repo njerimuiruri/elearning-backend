@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 /**
  * Question Answer Schema - For student questions and instructor responses
@@ -8,19 +8,19 @@ import { Document, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class QuestionAnswer extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   instructorId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Course', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Course', required: true })
   courseId: Types.ObjectId;
 
   @Prop({ type: Number })
   moduleIndex?: number;
 
-  @Prop({ type: Types.ObjectId, ref: 'Lesson' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Lesson' })
   lessonId?: Types.ObjectId;
 
   // Question Details
@@ -98,7 +98,7 @@ export class QuestionAnswer extends Document {
   @Prop({ type: Date })
   readAt?: Date;
 
-  @Prop({ type: [Types.ObjectId], default: [] })
+  @Prop({ type: [SchemaTypes.ObjectId], default: [] })
   viewedBy: Types.ObjectId[];
 
   @Prop({ default: 0 })
@@ -132,7 +132,7 @@ export class QuestionAnswer extends Document {
   aiMetrics: Map<string, number>; // Additional AI metrics
 
   // Admin Tracking
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   resolvedBy?: Types.ObjectId;
 
   @Prop({ default: false })
@@ -144,7 +144,7 @@ export class QuestionAnswer extends Document {
   @Prop({ default: false })
   isPublic: boolean; // Can other students see this Q&A
 
-  @Prop({ type: [Types.ObjectId], default: [] })
+  @Prop({ type: [SchemaTypes.ObjectId], default: [] })
   helpfulVotes: Types.ObjectId[]; // Students who found this helpful
 
   @Prop({ default: 0 })

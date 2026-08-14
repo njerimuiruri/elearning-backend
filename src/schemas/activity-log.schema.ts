@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export enum ActivityType {
   USER_REGISTRATION = 'user_registration',
@@ -30,13 +30,13 @@ export class ActivityLog extends Document {
   @Prop({ required: true })
   message: string;
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   performedBy: Types.ObjectId; // Admin who performed the action
 
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   targetUser?: Types.ObjectId; // User affected by the action
 
-  @Prop({ type: Types.ObjectId, ref: 'Course' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Course' })
   targetCourse?: Types.ObjectId; // Course affected by the action
 
   @Prop({ type: Object })

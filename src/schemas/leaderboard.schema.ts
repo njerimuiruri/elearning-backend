@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export enum LeaderboardPeriod {
   WEEKLY = 'weekly',
@@ -8,7 +8,7 @@ export enum LeaderboardPeriod {
 }
 
 export class RankingEntry {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
   @Prop({ required: true })
@@ -32,7 +32,7 @@ export class RankingEntry {
 
 @Schema({ timestamps: true })
 export class Leaderboard extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'Category', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Category', required: true })
   categoryId: Types.ObjectId;
 
   @Prop({ enum: ['beginner', 'intermediate', 'advanced'] })

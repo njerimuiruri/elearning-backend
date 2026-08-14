@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 // Track completion per level
 export class LevelProgress {
@@ -27,10 +27,10 @@ export class LevelProgress {
 
 @Schema({ timestamps: true })
 export class StudentProgression extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Category', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Category', required: true })
   categoryId: Types.ObjectId;
 
   // Current level (beginner, intermediate, advanced)
@@ -55,7 +55,7 @@ export class StudentProgression extends Document {
   overallProgress: number; // Percentage
 
   // Completed module IDs (for quick lookup)
-  @Prop({ type: [Types.ObjectId], ref: 'Module', default: [] })
+  @Prop({ type: [SchemaTypes.ObjectId], ref: 'Module', default: [] })
   completedModuleIds: Types.ObjectId[];
 
   createdAt: Date;

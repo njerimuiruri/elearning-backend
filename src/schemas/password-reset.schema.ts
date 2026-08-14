@@ -1,9 +1,9 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class PasswordReset extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   userId: Types.ObjectId;
 
   @Prop({ required: true, unique: true })

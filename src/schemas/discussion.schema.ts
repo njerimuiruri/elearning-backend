@@ -1,8 +1,8 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 class Reply {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   authorId!: Types.ObjectId;
 
   @Prop({ required: true })
@@ -26,7 +26,7 @@ class Reply {
 }
 
 class LastReadEntry {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   userId!: Types.ObjectId;
 
   @Prop({ default: Date.now })
@@ -35,20 +35,20 @@ class LastReadEntry {
 
 @Schema({ timestamps: true })
 export class Discussion extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   studentId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Course' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Course' })
   courseId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Module' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Module' })
   moduleId?: Types.ObjectId;
 
   /** Optional: set when an instructor creates the thread. */
-  @Prop({ type: Types.ObjectId, ref: 'User' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User' })
   instructorId?: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   createdById!: Types.ObjectId;
 
   @Prop({ required: true, enum: ['student', 'instructor', 'admin'] })

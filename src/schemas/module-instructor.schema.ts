@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Types, Document } from 'mongoose';
+import { Types, Document, SchemaTypes } from 'mongoose';
 
 export enum ModuleInstructorRole {
   LEAD = 'lead',
@@ -19,7 +19,7 @@ export interface ModuleInstructorPermissions {
 
 @Schema({ _id: false })
 export class ModuleInstructor {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   instructorId: Types.ObjectId;
 
   @Prop({ enum: ModuleInstructorRole, required: true })

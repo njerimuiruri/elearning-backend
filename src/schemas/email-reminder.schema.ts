@@ -1,15 +1,15 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class EmailReminder extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Course', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Course', required: true })
   courseId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Enrollment', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Enrollment', required: true })
   enrollmentId: Types.ObjectId;
 
   @Prop({ required: true })

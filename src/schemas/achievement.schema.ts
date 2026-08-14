@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Types } from 'mongoose';
+import { Document, Types, SchemaTypes } from 'mongoose';
 
 export type AchievementType =
   | 'module_completion'
@@ -8,13 +8,13 @@ export type AchievementType =
 
 @Schema({ timestamps: true })
 export class Achievement extends Document {
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'User', required: true })
   studentId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Course', required: true })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Course', required: true })
   courseId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Enrollment' })
+  @Prop({ type: SchemaTypes.ObjectId, ref: 'Enrollment' })
   enrollmentId?: Types.ObjectId;
 
   @Prop({
