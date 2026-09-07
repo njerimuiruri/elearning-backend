@@ -15,7 +15,8 @@ import { NotificationType } from '../schemas/notification.schema';
 @Injectable()
 export class ReminderService {
   private readonly logger = new Logger(ReminderService.name);
-  private autoRemindersEnabled = true;
+  private autoRemindersEnabled = false; // Daily (9 AM) automatic inactivity reminders  disabled
+  private weeklyFellowRemindersEnabled = false; // Weekly (Monday) fellow deadline/inactivity reminders  disabled
   private reminderDelayDays = 7; // Course enrollments: 7 days
   private moduleReminderDelayDays = 4; // Module enrollments: 4 days
   private lastAutomaticRunAt: Date | null = null;
@@ -433,6 +434,7 @@ export class ReminderService {
   getReminderSettings() {
     return {
       autoRemindersEnabled: this.autoRemindersEnabled,
+      weeklyFellowRemindersEnabled: this.weeklyFellowRemindersEnabled,
       reminderDelayDays: this.reminderDelayDays,
       moduleReminderDelayDays: this.moduleReminderDelayDays,
     };
@@ -443,6 +445,7 @@ export class ReminderService {
    */
   updateReminderSettings(settings: {
     autoRemindersEnabled?: boolean;
+    weeklyFellowRemindersEnabled?: boolean;
     reminderDelayDays?: number;
     moduleReminderDelayDays?: number;
   }) {
@@ -450,6 +453,15 @@ export class ReminderService {
       this.autoRemindersEnabled = settings.autoRemindersEnabled;
       this.logger.log(
         `Auto reminders ${this.autoRemindersEnabled ? 'enabled' : 'disabled'}`,
+      );
+    }
+
+    if (settings.weeklyFellowRemindersEnabled !== undefined) {
+      this.weeklyFellowRemindersEnabled = settings.weeklyFellowRemindersEnabled;
+      this.logger.log(
+        `Weekly fellow deadline reminders ${
+          this.weeklyFellowRemindersEnabled ? 'enabled' : 'disabled'
+        }`,
       );
     }
 
@@ -527,6 +539,13 @@ export class ReminderService {
    */
   @Cron('0 8 * * 1') // Every Monday at 08:00
   async handleFellowDeadlineReminders() {
+    if (!this.weeklyFellowRemindersEnabled) {
+      this.logger.log(
+        'Weekly fellow deadline reminders are disabled. Skipping...',
+      );
+      return;
+    }
+
     this.logger.log('Running weekly fellow deadline reminder check…');
 
     const now = new Date();

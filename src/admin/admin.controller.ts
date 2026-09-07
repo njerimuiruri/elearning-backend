@@ -572,7 +572,9 @@ export class AdminController {
     @Body()
     settings: {
       autoRemindersEnabled?: boolean;
+      weeklyFellowRemindersEnabled?: boolean;
       reminderDelayDays?: number;
+      moduleReminderDelayDays?: number;
     },
   ) {
     return this.reminderService.updateReminderSettings(settings);
